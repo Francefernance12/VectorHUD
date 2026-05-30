@@ -12,21 +12,20 @@ Update this file after every meaningful implementation change.
 - Session 1A: Project scaffolding and framework initialization (TypeScript, Tailwind, Framer Motion, Zustand, and Tauri Plugins).
 
 ## In Progress
-- None.
+- Session 1B: Telemetry, Logging (Implement tracing and unified Frontend/Backend logs)
 
 ## Next Up
-Session,Unit Name,Focus,Goal
-1A,Foundation,Scaffolding,"Initialize Tauri, Git, and folder structure."
-1B,Telemetry,Logging,Implement tracing and unified Frontend/Backend logs.
-1C,Persistence,Data,Configure SQLite (tauri-plugin-sql) and local settings store.
-2A,Shell,UX/Windowing,"Implement transparent, ""Ghost"" window + Global Hotkey."
-2B,The Dock,Widget Menu,"Build the persistent, non-dismissible Widget Menu UI."
-3A,Core Logic,Drag/Resize,"Implement the ""Dumb Container"" for widget physics."
-3B,Pinning,State,"Implement seamless, click-through overlay pinning logic."
-4A,System Metrics,Hardware,Rust background thread for CPU/GPU polling events.
-4B,Media Capture,Capture,Screenshot/Recording buffer logic + Local file storage.
-5A,Integration,API/AI,OpenRouter/Notion connectivity + Secure credential storage.
-6A,Optimization,Cleanup,"Performance audit, bug squashing, and final build."
+| Session | Unit Name | Focus | Goal |
+| :--- | :--- | :--- | :--- |
+| 1C | Persistence | Data | Configure SQLite (tauri-plugin-sql) and local settings store. |
+| 2A | Shell | UX/Windowing | Implement transparent, "Ghost" window + Global Hotkey. |
+| 2B | The Dock | Widget Menu | Build the persistent, non-dismissible Widget Menu UI. |
+| 3A | Core Logic | Drag/Resize | Implement the "Dumb Container" for widget physics. |
+| 3B | Pinning | State | Implement seamless, click-through overlay pinning logic. |
+| 4A | System Metrics | Hardware | Rust background thread for CPU/GPU polling events. |
+| 4B | Media Capture | Capture | Screenshot/Recording buffer logic + Local file storage. |
+| 5A | Integration | API/AI | OpenRouter/Notion connectivity + Secure credential storage. |
+| 6A | Optimization | Cleanup | Performance audit, bug squashing, and final build. |
 
 ## Open Questions
 - What specific OCR library will we use for the developer quick-capture widget?

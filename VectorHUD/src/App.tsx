@@ -1,9 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import reactLogo from "./assets/react.svg";
 import { invoke } from "@tauri-apps/api/core";
+import { logger } from "./utils/logger";
 import "./App.css";
 
 function App() {
+  useEffect(() => {
+    logger.info("VectorHUD UI Booted");
+  }, []);
+
   const [greetMsg, setGreetMsg] = useState("");
   const [name, setName] = useState("");
 
