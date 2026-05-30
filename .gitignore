@@ -1,2 +1,47 @@
-.gemini/
+# Node.js
+node_modules/
+dist/
+dist-ssr/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Rust/Tauri
+**/src-tauri/target/
+**/src-tauri/gen/schemas/
+**/src-tauri/gen/artifacts/
+Cargo.lock
+
+# Database & Storage
+*.db
+*.db-journal
+*.sqlite
+*.sqlite-journal
+VectorHUD/src-tauri/storage/
+
+# Environment / Secrets
+.env
+.env.*
+!.env.example
+secrets.json
 gha-creds-*.json
+
+# Editors
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Gemini / Agent
+.gemini/
+MEMORY.md
