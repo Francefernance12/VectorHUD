@@ -17,6 +17,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: 'VectorHUD/package-lock.json'
           
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -26,10 +27,12 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
+          workspaces: VectorHUD/src-tauri
 
       - name: Install Frontend Dependencies
+        working-directory: ./VectorHUD
         run: npm install
 
       - name: Build Tauri App
+        working-directory: ./VectorHUD
         run: npm run tauri build

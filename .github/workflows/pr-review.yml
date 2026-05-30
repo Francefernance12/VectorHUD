@@ -15,11 +15,14 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: 'VectorHUD/package-lock.json'
           
       - name: Install Frontend Dependencies
+        working-directory: ./VectorHUD
         run: npm install
         
       - name: Build Frontend
+        working-directory: ./VectorHUD
         run: npm run build
 
   backend-checks:
@@ -35,10 +38,24 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
+          workspaces: VectorHUD/src-tauri
           
       - name: Run cargo fmt
+        working-directory: ./VectorHUD
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
         
       - name: Run cargo clippy
+        working-directory: ./VectorHUD
         run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+
+  ai-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Gemini Code Review
+        uses: sshnaidm/gemini-code-review-action@v2
+        with:
+          gemini-key: ${{ secrets.GEMINI_API_KEY }}
