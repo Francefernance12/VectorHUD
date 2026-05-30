@@ -1,0 +1,44 @@
+name: PR Review & Quality Gate
+
+on:
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  frontend-checks:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          
+      - name: Install Frontend Dependencies
+        run: npm install
+        
+      - name: Build Frontend
+        run: npm run build
+
+  backend-checks:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          
+      - name: Run cargo fmt
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+        
+      - name: Run cargo clippy
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings

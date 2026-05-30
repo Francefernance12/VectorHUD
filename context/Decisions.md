@@ -9,3 +9,7 @@ This document tracks all important decisions made throughout the lifecycle of th
 - **Decision:** Configure Tauri windows to be transparent and undecorated (`decorations: false`, `transparent: true`) to support the HUD overlay requirements.
 - **Decision:** Pre-emptively add `tauri-plugin-sql` and `tauri-plugin-store` to the backend to support the defined storage model.
 - **Decision:** Implement centralized logging using Rust's `tracing` ecosystem.
+
+## Architecture Decisions
+- **Decision:** Decided on SQLite for analytics and JSON for UI state to balance performance with maintainability.
+- **Decision:** Decided on an Event-Driven backend pattern to save CPU cycles.

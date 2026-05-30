@@ -3,10 +3,10 @@
 Update this file after every meaningful implementation change.
 
 ## Current Phase
-- Foundation.
+- CI/CD & Telemetry.
 
 ## Current Goal
-- Establish centralized logging and SQLite connection (Session 1B).
+- Set up GitHub workflows and plan the development cycle (Session 1B).
 
 ## Completed
 - Session 1A: Project scaffolding and framework initialization (TypeScript, Tailwind, Framer Motion, Zustand, and Tauri Plugins).
@@ -15,15 +15,25 @@ Update this file after every meaningful implementation change.
 - None.
 
 ## Next Up
-- Session 1B: Establish centralized logging and SQLite connection.
+Session,Unit Name,Focus,Goal
+1A,Foundation,Scaffolding,"Initialize Tauri, Git, and folder structure."
+1B,Telemetry,Logging,Implement tracing and unified Frontend/Backend logs.
+1C,Persistence,Data,Configure SQLite (tauri-plugin-sql) and local settings store.
+2A,Shell,UX/Windowing,"Implement transparent, ""Ghost"" window + Global Hotkey."
+2B,The Dock,Widget Menu,"Build the persistent, non-dismissible Widget Menu UI."
+3A,Core Logic,Drag/Resize,"Implement the ""Dumb Container"" for widget physics."
+3B,Pinning,State,"Implement seamless, click-through overlay pinning logic."
+4A,System Metrics,Hardware,Rust background thread for CPU/GPU polling events.
+4B,Media Capture,Capture,Screenshot/Recording buffer logic + Local file storage.
+5A,Integration,API/AI,OpenRouter/Notion connectivity + Secure credential storage.
+6A,Optimization,Cleanup,"Performance audit, bug squashing, and final build."
 
 ## Open Questions
 - What specific OCR library will we use for the developer quick-capture widget?
 - Do we want to implement custom window shadows, or rely on the OS compositor?
 
 ## Architecture Decisions
-- Decided on SQLite for analytics and JSON for UI state to balance performance with maintainability.
-- Decided on an Event-Driven backend pattern to save CPU cycles.
+- See [Decisions.md](./Decisions.md) for a comprehensive list of architectural and design decisions.
 
 ## Session Notes
-- Use the Gemini CLI in standard mode for execution, and its planning mode (if available) before starting a new Git branch.
+- Use the Gemini Antigravity in standard mode for execution, and its planning mode (if available) before starting a new Git branch.
