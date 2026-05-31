@@ -3,21 +3,21 @@
 Update this file after every meaningful implementation change.
 
 ## Current Phase
-- CI/CD & Telemetry.
+- Persistence & Data.
 
 ## Current Goal
-- Set up GitHub workflows and plan the development cycle (Session 1B).
+- Configure SQLite (tauri-plugin-sql) and local settings store (Session 1C).
 
 ## Completed
 - Session 1A: Project scaffolding and framework initialization (TypeScript, Tailwind, Framer Motion, Zustand, and Tauri Plugins).
+- Session 1B: Telemetry, Logging (Implement tracing and unified Frontend/Backend logs)
 
 ## In Progress
-- Session 1B: Telemetry, Logging (Implement tracing and unified Frontend/Backend logs)
+- Session 1C: Persistence, Data (Configure SQLite and local settings store).
 
 ## Next Up
 | Session | Unit Name | Focus | Goal |
 | :--- | :--- | :--- | :--- |
-| 1C | Persistence | Data | Configure SQLite (tauri-plugin-sql) and local settings store. |
 | 2A | Shell | UX/Windowing | Implement transparent, "Ghost" window + Global Hotkey. |
 | 2B | The Dock | Widget Menu | Build the persistent, non-dismissible Widget Menu UI. |
 | 3A | Core Logic | Drag/Resize | Implement the "Dumb Container" for widget physics. |

@@ -46,6 +46,33 @@ pub fn run() {
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(
+            tauri_plugin_sql::Builder::default()
+                .add_migrations("sqlite:vectorhud.db", vec![
+                    tauri_plugin_sql::Migration {
+                        version: 1,
+                        description: "create_initial_tables",
+                        sql: "
+                        CREATE TABLE IF NOT EXISTS widget_analytics (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            widget_name TEXT NOT NULL,
+                            action TEXT NOT NULL,
+                            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                        );
+                        CREATE TABLE IF NOT EXISTS capture_history (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            file_path TEXT NOT NULL,
+                            media_type TEXT NOT NULL,
+                            game_process TEXT,
+                            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                        );
+                        ",
+                        kind: tauri_plugin_sql::MigrationKind::Up,
+                    }
+                ])
+                .build()
+        )
         .invoke_handler(tauri::generate_handler![
             greet,
             commands::telemetry::frontend_log
