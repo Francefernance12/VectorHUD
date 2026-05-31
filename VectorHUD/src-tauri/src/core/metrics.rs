@@ -23,13 +23,13 @@ pub fn spawn_metrics_thread(app: AppHandle) {
             sys.refresh_memory();
 
             let cpu_usage = sys.global_cpu_usage();
-            
+
             let total_memory = sys.total_memory(); // bytes
-            let used_memory = sys.used_memory();   // bytes
-            
+            let used_memory = sys.used_memory(); // bytes
+
             let total_gb = total_memory as f32 / 1_073_741_824.0;
             let used_gb = used_memory as f32 / 1_073_741_824.0;
-            
+
             let ram_percent = if total_gb > 0.0 {
                 (used_gb / total_gb) * 100.0
             } else {
