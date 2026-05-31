@@ -13,3 +13,6 @@ This document tracks all important decisions made throughout the lifecycle of th
 ## Architecture Decisions
 - **Decision:** Decided on SQLite for analytics and JSON for UI state to balance performance with maintainability.
 - **Decision:** Decided on an Event-Driven backend pattern to save CPU cycles.
+
+## Session 2B: Shift-Left Workflow Optimization
+- **Decision:** Implemented a strict Git `pre-commit` hook via Husky to completely failproof the CI workflow. The hook locally enforces `cargo fmt --check` and `cargo clippy -D warnings` on the Rust backend prior to allowing any commits, eliminating broken GitHub Action pipelines caused by minor styling or linting violations.

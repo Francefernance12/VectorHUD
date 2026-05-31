@@ -1,0 +1,18 @@
+#!/usr/bin/env sh
+
+echo "========================================="
+echo "Running Pre-commit Checks (VectorHUD)..."
+echo "========================================="
+
+cd VectorHUD || exit 1
+npm run check:all
+
+if [ $? -ne 0 ]; then
+  echo "========================================="
+  echo "❌ Pre-commit checks failed!"
+  echo "Please fix formatting/linting errors before committing."
+  echo "========================================="
+  exit 1
+fi
+
+echo "✅ All checks passed!"

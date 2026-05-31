@@ -1,10 +1,12 @@
 import { useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { AnimatePresence } from "framer-motion";
 import { logger } from "./utils/logger";
 import { getDb } from "./utils/db";
 import { getSettingsStore, setSetting, getSetting } from "./utils/store";
 import { useShellStore } from "./store/shellStore";
+import { Dock } from "./components/Dock";
 import "./App.css";
 
 function App() {
@@ -40,30 +42,30 @@ function App() {
     };
   }, [setInteractive, toggleInteractive]);
 
-  // If not interactive (Ghost Mode), do not render any UI elements.
-  // In the future, we will render pinned widgets here.
-  if (!isInteractive) {
-    return null;
-  }
-
-  // Interactive Mode UI
   return (
-    <div 
-      className="w-screen h-screen bg-black/40 backdrop-blur-sm transition-all duration-300 flex items-center justify-center pointer-events-auto border-[10px] border-emerald-500/20"
-      onClick={(e) => {
-        // Only dismiss if they clicked directly on the backdrop, not on the widgets inside
-        if (e.target === e.currentTarget) {
-          setInteractive(false);
-        }
-      }}
-    >
-      <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-8 shadow-2xl flex flex-col items-center">
-        <h1 className="text-3xl font-bold text-white mb-4">VectorHUD Interactive Mode</h1>
-        <p className="text-zinc-400 text-center mb-6">
-          Press <span className="bg-zinc-800 px-2 py-1 rounded text-zinc-200 font-mono">Ctrl+Alt+O</span> to hide this overlay and return to your game.
-        </p>
+    <>
+      {/* Ghost Mode UI (Always rendered, but click-through) */}
+      <div className="w-screen h-screen pointer-events-none relative">
+        {/* Pinned Widgets will go here eventually */}
       </div>
-    </div>
+
+      {/* Interactive Overlay UI */}
+      <AnimatePresence>
+        {isInteractive && (
+          <div 
+            className="fixed inset-0 bg-overlay backdrop-blur-sm transition-all duration-300 pointer-events-auto border-[4px] border-accent-green/10 z-40"
+            onClick={(e) => {
+              // Only dismiss if they clicked directly on the backdrop, not on the widgets inside
+              if (e.target === e.currentTarget) {
+                setInteractive(false);
+              }
+            }}
+          >
+            <Dock />
+          </div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
