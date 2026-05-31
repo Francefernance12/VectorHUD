@@ -10,6 +10,7 @@ import { useWidgetStore } from "./store/widgetStore";
 import { Dock } from "./components/Dock";
 import { WidgetContainer } from "./components/WidgetContainer";
 import { DummyWidget } from "./components/widgets/DummyWidget";
+import { HardwareWidget } from "./components/widgets/HardwareWidget";
 import "./App.css";
 
 function App() {
@@ -84,7 +85,7 @@ function App() {
           {Object.keys(activeWidgets).map((id) => (
             <div key={id} className={isInteractive ? 'pointer-events-auto' : 'pointer-events-none'}>
               <WidgetContainer id={id}>
-                <DummyWidget />
+                {id === 'hardware-metrics' ? <HardwareWidget /> : <DummyWidget />}
               </WidgetContainer>
             </div>
           ))}
