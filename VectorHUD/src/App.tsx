@@ -29,11 +29,28 @@ function App() {
         await setSetting("last_boot", new Date().toISOString()); // Boot Store
         const lastBoot = await getSetting("last_boot", "unknown");
         logger.info(`Persistence verified. Last boot: ${lastBoot}`);
+
+        // Hydrate widget layout
+        const savedWidgets = await getSetting<Record<string, any>>("activeWidgets", {});
+        if (Object.keys(savedWidgets).length > 0) {
+          useWidgetStore.getState().setInitialState(savedWidgets as any);
+        }
       } catch (err) {
         logger.error(`Persistence verification failed: ${err}`);
       }
     };
     verifyPersistence();
+
+    // Subscribe to state changes and save to disk (debounced)
+    let saveTimeout: ReturnType<typeof setTimeout>;
+    const unsubscribeStore = useWidgetStore.subscribe((state) => {
+      clearTimeout(saveTimeout);
+      saveTimeout = setTimeout(() => {
+        setSetting("activeWidgets", state.activeWidgets).catch(err => {
+          logger.error(`Failed to save widget layout: ${err}`);
+        });
+      }, 500); // 500ms debounce
+    });
 
     // Start in Ghost Mode by explicitly telling Rust to ignore cursor events
     setInteractive(false);
@@ -53,6 +70,8 @@ function App() {
 
     return () => {
       unlisten.then((fn) => fn());
+      unsubscribeStore();
+      clearTimeout(saveTimeout);
     };
   }, [setInteractive, toggleInteractive]);
 

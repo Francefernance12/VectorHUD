@@ -31,12 +31,22 @@ interface WidgetState {
   bringToFront: (id: string) => void;
   updateWidgetBounds: (id: string, bounds: Partial<{x: number, y: number, width: number, height: number}>) => void;
   togglePin: (id: string) => void;
+  setInitialState: (widgets: Record<string, WidgetInstance>) => void;
 }
 
 export const useWidgetStore = create<WidgetState>((set) => ({
   activeWidgets: {},
   topZIndex: 10,
   
+  setInitialState: (widgets) => set((state) => {
+    // Calculate the highest z-index to avoid overlap issues
+    let highestZ = 10;
+    Object.values(widgets).forEach(w => {
+      if (w.zIndex > highestZ) highestZ = w.zIndex;
+    });
+    return { activeWidgets: widgets, topZIndex: highestZ };
+  }),
+
   toggleWidget: (id) => set((state) => {
     const isActive = !!state.activeWidgets[id];
     if (isActive) {

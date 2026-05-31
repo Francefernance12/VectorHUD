@@ -12,7 +12,8 @@
     "check:format": "cargo fmt --manifest-path src-tauri/Cargo.toml -- --check",
     "lint:rust": "cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings",
     "check:all": "npm run check:format && npm run lint:rust",
-    "prepare": "cd .. && husky"
+    "prepare": "cd .. && husky",
+    "test": "vitest run"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
@@ -29,14 +30,18 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.0",
     "@tauri-apps/cli": "^2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.6.0",
     "autoprefixer": "^10.5.0",
     "husky": "^9.1.7",
+    "jsdom": "^29.1.1",
     "postcss": "^8.5.15",
     "tailwindcss": "^4.3.0",
     "typescript": "^6.0.3",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vitest": "^4.1.7"
   }
 }
