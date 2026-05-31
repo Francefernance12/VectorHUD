@@ -10,10 +10,14 @@
 - Do not use `any`. Use strict interfaces for all widget props and state slices.
 - Use Framer Motion for smooth, hardware-accelerated transitions.
 
-## Rust
+## Rust & Tauri Backend
 - Use `Result<T, E>` for all commands exposed to the frontend.
 - Never use `.unwrap()` in production code. Handle errors gracefully and log them via `tracing`.
 - Keep the main thread unblocked. Offload media encoding and metrics polling to asynchronous background tasks using `tokio`.
+- **Tauri v2 Capabilities & Permissions**: Tauri v2 is strictly locked down by default.
+  - If spawning multiple windows, you must meticulously whitelist the window label (e.g. `"*"`) in `src-tauri/capabilities/default.json` and manually assign every required plugin capability.
+  - **SQL Plugins**: Simply adding `sql:default` is NOT enough to execute queries. You must explicitly whitelist `"sql:allow-execute"`, `"sql:allow-select"`, and `"sql:allow-load"` if your frontend needs to insert or read from the DB.
+  - **Filesystem & Assets**: If you want the frontend to read files from the local disk (e.g., using `convertFileSrc`), you MUST explicitly enable `assetProtocol` in `tauri.conf.json` and define a strict `scope` (like `["$PICTUREDIR/VectorHUD/**"]`). Missing scopes will cause images to render broken without throwing obvious frontend errors.
 
 ## Styling (Tactical / HUD)
 - Primary fonts: Monospace (JetBrains Mono or Fira Code).

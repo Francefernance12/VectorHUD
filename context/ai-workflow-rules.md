@@ -23,3 +23,8 @@ For every task, follow this loop:
 - Do not combine UI creation with heavy backend Rust logic in a single prompt.
 - Create dummy data for React widgets first to verify UI, then connect the Rust backend in a separate step.
 - Never modify existing, working widget logic to accommodate a new widget; use modular interfaces.
+
+## Communication & Debugging Principles
+- **Avoid Overconfidence:** Do not use phrases like "I know exactly what the problem is" or "I see exactly what is going on." Prove your understanding by referencing logs or documentation.
+- **Log Verification:** Make it a habit to check the backend (`vectorhud.log`) and frontend console logs when an error is reported. Rely on concrete error output rather than assumptions.
+- **Document Fixes:** When making security or database permission changes, always document the required whitelist/capability additions.

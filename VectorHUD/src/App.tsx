@@ -11,6 +11,7 @@ import { Dock } from "./components/Dock";
 import { WidgetContainer } from "./components/WidgetContainer";
 import { DummyWidget } from "./components/widgets/DummyWidget";
 import { HardwareWidget } from "./components/widgets/HardwareWidget";
+import { MediaCaptureWidget } from "./components/widgets/MediaCaptureWidget";
 import "./App.css";
 
 function App() {
@@ -65,12 +66,12 @@ function App() {
     });
 
     // Listen for the global shortcut event from Rust
-    const unlisten = listen("toggle-interactive-mode", () => {
+    const unlistenShortcut = listen("toggle-interactive-mode", () => {
       toggleInteractive();
     });
 
     return () => {
-      unlisten.then((fn) => fn());
+      unlistenShortcut.then((fn) => fn());
       unsubscribeStore();
       clearTimeout(saveTimeout);
     };
@@ -85,7 +86,9 @@ function App() {
           {Object.keys(activeWidgets).map((id) => (
             <div key={id} className={isInteractive ? 'pointer-events-auto' : 'pointer-events-none'}>
               <WidgetContainer id={id}>
-                {id === 'hardware-metrics' ? <HardwareWidget /> : <DummyWidget />}
+                {id === 'hardware-metrics' ? <HardwareWidget /> : 
+                 id === 'media-capture' ? <MediaCaptureWidget /> : 
+                 <DummyWidget />}
               </WidgetContainer>
             </div>
           ))}

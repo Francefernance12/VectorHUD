@@ -54,7 +54,7 @@ export function WidgetContainer({ id, children }: WidgetContainerProps) {
       }}
       className={`flex flex-col border rounded-xl overflow-hidden transition-colors ${
         instance.isPinned && !isInteractive 
-          ? 'bg-transparent border-transparent shadow-none' // Seamless when pinned in ghost mode
+          ? 'bg-black/60 backdrop-blur-md border-transparent shadow-none' // Semi-transparent when pinned in ghost mode
           : 'bg-surface border-border-wire shadow-2xl'
       }`}
     >
