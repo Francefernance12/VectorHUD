@@ -2,6 +2,7 @@ mod commands;
 mod core;
 
 use std::fs;
+use tauri::tray::TrayIconBuilder;
 use tauri::{Emitter, Manager};
 use tauri_plugin_global_shortcut::{Code, Modifiers, ShortcutState};
 use tracing_appender::rolling;
@@ -59,6 +60,26 @@ pub fn run() {
 
             #[cfg(desktop)]
             {
+                // Setup System Tray
+                let quit_i = tauri::menu::MenuItem::with_id(
+                    app,
+                    "quit",
+                    "Quit VectorHUD",
+                    true,
+                    None::<&str>,
+                )?;
+                let menu = tauri::menu::Menu::with_items(app, &[&quit_i])?;
+
+                let _tray = TrayIconBuilder::new()
+                    .icon(app.default_window_icon().unwrap().clone())
+                    .menu(&menu)
+                    .on_menu_event(|app, event| {
+                        if event.id.as_ref() == "quit" {
+                            app.exit(0);
+                        }
+                    })
+                    .build(app)?;
+
                 app.handle().plugin(
                     tauri_plugin_global_shortcut::Builder::new()
                         .with_shortcuts(["ctrl+alt+o"])?
@@ -84,10 +105,11 @@ pub fn run() {
             tauri_plugin_sql::Builder::default()
                 .add_migrations(
                     "sqlite:vectorhud.db",
-                    vec![tauri_plugin_sql::Migration {
-                        version: 1,
-                        description: "create_initial_tables",
-                        sql: "
+                    vec![
+                        tauri_plugin_sql::Migration {
+                            version: 1,
+                            description: "create_initial_tables",
+                            sql: "
                         CREATE TABLE IF NOT EXISTS widget_analytics (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
                             widget_name TEXT NOT NULL,
@@ -102,15 +124,31 @@ pub fn run() {
                             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
                         );
                         ",
-                        kind: tauri_plugin_sql::MigrationKind::Up,
-                    }],
+                            kind: tauri_plugin_sql::MigrationKind::Up,
+                        },
+                        tauri_plugin_sql::Migration {
+                            version: 2,
+                            description: "create_capture_history",
+                            sql: "
+                        CREATE TABLE IF NOT EXISTS capture_history (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            file_path TEXT NOT NULL,
+                            media_type TEXT NOT NULL,
+                            game_process TEXT,
+                            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                        );
+                        ",
+                            kind: tauri_plugin_sql::MigrationKind::Up,
+                        },
+                    ],
                 )
                 .build(),
         )
         .invoke_handler(tauri::generate_handler![
             greet,
             set_interactive_mode,
-            commands::telemetry::frontend_log
+            commands::telemetry::frontend_log,
+            core::capture::capture_screenshot
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
