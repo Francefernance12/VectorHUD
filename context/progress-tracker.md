@@ -3,22 +3,22 @@
 Update this file after every meaningful implementation change.
 
 ## Current Phase
-- Persistence & Data.
+- Shell & UX Windowing.
 
 ## Current Goal
-- Configure SQLite (tauri-plugin-sql) and local settings store (Session 1C).
+- Implement transparent, "Ghost" window + Global Hotkey (Session 2A).
 
 ## Completed
 - Session 1A: Project scaffolding and framework initialization (TypeScript, Tailwind, Framer Motion, Zustand, and Tauri Plugins).
 - Session 1B: Telemetry, Logging (Implement tracing and unified Frontend/Backend logs)
+- Session 1C: Persistence, Data (Configure SQLite and local settings store).
 
 ## In Progress
-- Session 1C: Persistence, Data (Configure SQLite and local settings store).
+- Session 2A: Shell (UX/Windowing - Implement transparent, "Ghost" window + Global Hotkey).
 
 ## Next Up
 | Session | Unit Name | Focus | Goal |
 | :--- | :--- | :--- | :--- |
-| 2A | Shell | UX/Windowing | Implement transparent, "Ghost" window + Global Hotkey. |
 | 2B | The Dock | Widget Menu | Build the persistent, non-dismissible Widget Menu UI. |
 | 3A | Core Logic | Drag/Resize | Implement the "Dumb Container" for widget physics. |
 | 3B | Pinning | State | Implement seamless, click-through overlay pinning logic. |
