@@ -1,5 +1,26 @@
 @import "tailwindcss";
 
+@theme {
+  --color-overlay: rgba(0, 0, 0, 0.4);
+  --color-surface: rgba(15, 15, 15, 0.8);
+  --color-primary: #E0E0E0;
+  --color-accent-green: #4AF626;
+  --color-accent-amber: #FFB000;
+  --color-border-wire: rgba(255, 255, 255, 0.15);
+  
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-sans: 'Inter', 'Geist', sans-serif;
+}
+
+:root {
+  --bg-overlay: rgba(0, 0, 0, 0.4);
+  --bg-surface: rgba(15, 15, 15, 0.8);
+  --text-primary: #E0E0E0;
+  --accent-green: #4AF626;
+  --accent-amber: #FFB000;
+  --border-wire: rgba(255, 255, 255, 0.15);
+}
+
 /* Ensure the absolute root of the document is completely transparent */
 html, body, #root {
   background-color: transparent !important;
@@ -8,4 +29,6 @@ html, body, #root {
   width: 100%;
   height: 100%;
   overflow: hidden;
+  font-family: var(--font-sans);
+  color: var(--text-primary);
 }
