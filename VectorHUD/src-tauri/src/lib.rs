@@ -148,6 +148,7 @@ pub fn run() {
             greet,
             set_interactive_mode,
             commands::telemetry::frontend_log,
+            commands::api::get_api_keys,
             core::capture::capture_screenshot
         ])
         .run(tauri::generate_context!())

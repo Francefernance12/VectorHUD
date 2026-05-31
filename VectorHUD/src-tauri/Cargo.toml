@@ -32,4 +32,5 @@ serde_json = "1"
 sysinfo = "0.39.3"
 xcap = { version = "0.9.6", features = ["image"] }
 chrono = "0.4.44"
+dotenvy = "0.15.7"
 

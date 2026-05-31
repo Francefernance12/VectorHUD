@@ -1,4 +1,4 @@
-import { Cpu, Camera, Volume2 } from 'lucide-react';
+import { Cpu, Camera, Volume2, MessageSquare, Edit3 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { WIDGETS, useWidgetStore } from '../store/widgetStore';
 import { DockItem } from './DockItem';
@@ -7,6 +7,8 @@ const iconMap: Record<string, any> = {
   'Cpu': Cpu,
   'Camera': Camera,
   'Volume2': Volume2,
+  'MessageSquare': MessageSquare,
+  'Edit3': Edit3,
 };
 
 export function Dock() {

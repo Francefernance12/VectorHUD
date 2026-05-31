@@ -18,6 +18,7 @@ Update this file after every meaningful implementation change.
 - Session 3B: Pinning (State - Implement seamless, click-through overlay pinning logic).
 - Session 4A: System Metrics (Hardware - Rust background thread for CPU/GPU polling events).
 - Session 4B: Media Capture (Capture - Screenshot logic + Local file storage + Unified Inline Gallery + SQLite capability fixes).
+- Session 5A: Integration (API/AI - OpenRouter connectivity, Notion syncing, credential handling logic).
 
 ## In Progress
 - N/A
@@ -25,7 +26,6 @@ Update this file after every meaningful implementation change.
 ## Next Up
 | Session | Unit Name | Focus | Goal |
 | :--- | :--- | :--- | :--- |
-| 5A | Integration | API/AI | OpenRouter/Notion connectivity + Secure credential storage. |
 | 6A | Optimization | Cleanup | Performance audit, bug squashing, and final build. |
 
 ## Open Questions

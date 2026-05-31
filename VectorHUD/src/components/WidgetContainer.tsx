@@ -4,6 +4,7 @@ import { X, GripHorizontal, Pin, PinOff } from 'lucide-react';
 import { useWidgetStore, WIDGETS } from '../store/widgetStore';
 import { useShellStore } from '../store/shellStore';
 
+
 interface WidgetContainerProps {
   id: string;
   children: ReactNode;
