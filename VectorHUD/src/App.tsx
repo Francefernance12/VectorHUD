@@ -2,11 +2,25 @@ import { useState, useEffect } from "react";
 import reactLogo from "./assets/react.svg";
 import { invoke } from "@tauri-apps/api/core";
 import { logger } from "./utils/logger";
+import { getDb } from "./utils/db";
+import { getSettingsStore, setSetting, getSetting } from "./utils/store";
 import "./App.css";
 
 function App() {
   useEffect(() => {
     logger.info("VectorHUD UI Booted");
+
+    const verifyPersistence = async () => {
+      try {
+        await getDb(); // Boot SQLite
+        await setSetting("last_boot", new Date().toISOString()); // Boot Store
+        const lastBoot = await getSetting("last_boot", "unknown");
+        logger.info(`Persistence verified. Last boot: ${lastBoot}`);
+      } catch (err) {
+        logger.error(`Persistence verification failed: ${err}`);
+      }
+    };
+    verifyPersistence();
   }, []);
 
   const [greetMsg, setGreetMsg] = useState("");
