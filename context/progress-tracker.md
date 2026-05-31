@@ -6,7 +6,7 @@ Update this file after every meaningful implementation change.
 - Core Logic & Widget Physics.
 
 ## Current Goal
-- Rust background thread for CPU/GPU polling events (Session 4A).
+- Screenshot/Recording buffer logic + Local file storage (Session 4B).
 
 ## Completed
 - Session 1A: Project scaffolding and framework initialization.
@@ -16,14 +16,14 @@ Update this file after every meaningful implementation change.
 - Session 2B: The Dock (Widget Menu UI).
 - Session 3A: Core Logic (Drag/Resize - Implement the "Dumb Container" for widget physics).
 - Session 3B: Pinning (State - Implement seamless, click-through overlay pinning logic).
+- Session 4A: System Metrics (Hardware - Rust background thread for CPU/GPU polling events).
 
 ## In Progress
-- Session 4A: System Metrics (Hardware - Rust background thread for CPU/GPU polling events).
+- Session 4B: Media Capture (Capture - Screenshot/Recording buffer logic + Local file storage).
 
 ## Next Up
 | Session | Unit Name | Focus | Goal |
 | :--- | :--- | :--- | :--- |
-| 4B | Media Capture | Capture | Screenshot/Recording buffer logic + Local file storage. |
 | 5A | Integration | API/AI | OpenRouter/Notion connectivity + Secure credential storage. |
 | 6A | Optimization | Cleanup | Performance audit, bug squashing, and final build. |
 

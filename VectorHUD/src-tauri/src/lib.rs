@@ -1,4 +1,5 @@
 mod commands;
+mod core;
 
 use std::fs;
 use tauri::{Emitter, Manager};
@@ -71,6 +72,9 @@ pub fn run() {
                         .build(),
                 )?;
             }
+
+            // Spawn the hardware telemetry thread
+            core::metrics::spawn_metrics_thread(app.handle().clone());
 
             Ok(())
         })
