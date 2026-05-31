@@ -1,7 +1,8 @@
 mod commands;
 
 use std::fs;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
+use tauri_plugin_global_shortcut::{Code, Modifiers, ShortcutState};
 use tracing_appender::rolling;
 use tracing_subscriber::EnvFilter;
 
@@ -9,6 +10,13 @@ use tracing_subscriber::EnvFilter;
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
+}
+
+#[tauri::command]
+fn set_interactive_mode(window: tauri::Window, interactive: bool) {
+    // If interactive is true, we DO NOT ignore cursor events.
+    // If interactive is false (ghost mode), we DO ignore cursor events.
+    let _ = window.set_ignore_cursor_events(!interactive);
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -47,6 +55,24 @@ pub fn run() {
                     .init();
                 tracing::warn!("Could not resolve AppData directory. Logging to console only.");
             }
+
+            #[cfg(desktop)]
+            {
+                app.handle().plugin(
+                    tauri_plugin_global_shortcut::Builder::new()
+                        .with_shortcuts(["ctrl+alt+o"])?
+                        .with_handler(|app, shortcut, event| {
+                            if event.state == ShortcutState::Pressed {
+                                if shortcut.matches(Modifiers::CONTROL | Modifiers::ALT, Code::KeyO)
+                                {
+                                    let _ = app.emit("toggle-interactive-mode", ());
+                                }
+                            }
+                        })
+                        .build(),
+                )?;
+            }
+
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
@@ -80,6 +106,7 @@ pub fn run() {
         )
         .invoke_handler(tauri::generate_handler![
             greet,
+            set_interactive_mode,
             commands::telemetry::frontend_log
         ])
         .run(tauri::generate_context!())
