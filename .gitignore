@@ -45,3 +45,5 @@ Thumbs.db
 # Gemini / Agent
 .gemini/
 MEMORY.md
+
+/private

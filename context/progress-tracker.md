@@ -3,25 +3,25 @@
 Update this file after every meaningful implementation change.
 
 ## Current Phase
-- The Dock & Widget Menu.
+- Core Logic & Widget Physics.
 
 ## Current Goal
-- Build the persistent, non-dismissible Widget Menu UI (Session 2B).
+- Implement seamless, click-through overlay pinning logic (Session 3B).
 
 ## Completed
-- Session 1A: Project scaffolding and framework initialization (TypeScript, Tailwind, Framer Motion, Zustand, and Tauri Plugins).
-- Session 1B: Telemetry, Logging (Implement tracing and unified Frontend/Backend logs)
-- Session 1C: Persistence, Data (Configure SQLite and local settings store).
-- Session 2A: Shell (UX/Windowing - Implement transparent, "Ghost" window + Global Hotkey).
+- Session 1A: Project scaffolding and framework initialization.
+- Session 1B: Telemetry, Logging.
+- Session 1C: Persistence, Data.
+- Session 2A: Shell (UX/Windowing - Transparent Ghost window + Global Hotkey).
+- Session 2B: The Dock (Widget Menu UI).
+- Session 3A: Core Logic (Drag/Resize - Implement the "Dumb Container" for widget physics).
 
 ## In Progress
-- Session 2B: The Dock (Widget Menu - Build the persistent, non-dismissible Widget Menu UI).
+- Session 3B: Pinning (State - Implement seamless, click-through overlay pinning logic).
 
 ## Next Up
 | Session | Unit Name | Focus | Goal |
 | :--- | :--- | :--- | :--- |
-| 3A | Core Logic | Drag/Resize | Implement the "Dumb Container" for widget physics. |
-| 3B | Pinning | State | Implement seamless, click-through overlay pinning logic. |
 | 4A | System Metrics | Hardware | Rust background thread for CPU/GPU polling events. |
 | 4B | Media Capture | Capture | Screenshot/Recording buffer logic + Local file storage. |
 | 5A | Integration | API/AI | OpenRouter/Notion connectivity + Secure credential storage. |
