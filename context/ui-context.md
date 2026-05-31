@@ -7,7 +7,7 @@ Tactical / HUD environment. The overlay feels like a developer tool or an aerona
 | Role | CSS Variable | Value |
 | --- | --- | --- |
 | Overlay Backdrop | `--bg-overlay` | `rgba(0, 0, 0, 0.4)` |
-| Widget Surface | `--bg-surface` | `rgba(15, 15, 15, 0.8)` |
+| Widget Surface | `--bg-surface` | `#0F0F0F` |
 | Primary Text | `--text-primary` | `#E0E0E0` |
 | Accent (Terminal) | `--accent-green` | `#4AF626` |
 | Accent (Warning) | `--accent-amber` | `#FFB000` |
@@ -22,4 +22,5 @@ Tactical / HUD environment. The overlay feels like a developer tool or an aerona
 ## Layout Patterns
 - **Widget Menu:** A fixed dock at the bottom or top center of the screen containing toggleable icons for each widget.
 - **Widget Container:** A resizable box with a draggable header (only visible when unpinned).
-- **Pinning:** Clicking the "Pin" icon removes the widget border and background blur, leaving only the data floating on screen.
+- **Pinning:** Clicking the "Pin" icon hides the container's border and header, leaving only the data floating on screen.
+- **Solid Backgrounds:** Widgets use solid backgrounds for readability against busy gaming scenes (glassmorphism removed).

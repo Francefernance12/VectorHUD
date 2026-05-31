@@ -2,7 +2,7 @@
 
 @theme {
   --color-overlay: rgba(0, 0, 0, 0.4);
-  --color-surface: rgba(15, 15, 15, 0.8);
+  --color-surface: #0F0F0F;
   --color-primary: #E0E0E0;
   --color-accent-green: #4AF626;
   --color-accent-amber: #FFB000;
@@ -14,7 +14,7 @@
 
 :root {
   --bg-overlay: rgba(0, 0, 0, 0.4);
-  --bg-surface: rgba(15, 15, 15, 0.8);
+  --bg-surface: #0F0F0F;
   --text-primary: #E0E0E0;
   --accent-green: #4AF626;
   --accent-amber: #FFB000;
@@ -32,3 +32,5 @@ html, body, #root {
   font-family: var(--font-sans);
   color: var(--text-primary);
 }
+
+
