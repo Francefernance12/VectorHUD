@@ -11,12 +11,25 @@ pub async fn capture_screenshot(window: tauri::Window, app: AppHandle) -> Result
     // Give Windows compositor a split second to remove the window visually
     tokio::time::sleep(std::time::Duration::from_millis(150)).await;
 
-    // 1. Get the primary monitor
+    // 1. Get the current monitor based on cursor position
+    let cursor_pos = app
+        .cursor_position()
+        .map_err(|e| format!("Failed to get cursor: {}", e))?;
     let monitors = Monitor::all().map_err(|e| format!("Failed to get monitors: {}", e))?;
-    let primary_monitor = monitors.into_iter().next().ok_or("No monitors found")?;
+
+    let target_monitor = monitors
+        .into_iter()
+        .find(|m| {
+            let x = m.x().unwrap_or(0) as f64;
+            let y = m.y().unwrap_or(0) as f64;
+            let w = m.width().unwrap_or(0) as f64;
+            let h = m.height().unwrap_or(0) as f64;
+            cursor_pos.x >= x && cursor_pos.x <= x + w && cursor_pos.y >= y && cursor_pos.y <= y + h
+        })
+        .unwrap_or_else(|| Monitor::all().unwrap().into_iter().next().unwrap());
 
     // 2. Capture the screen
-    let image = primary_monitor
+    let image = target_monitor
         .capture_image()
         .map_err(|e| format!("Capture failed: {}", e))?;
 
@@ -48,4 +61,17 @@ pub async fn capture_screenshot(window: tauri::Window, app: AppHandle) -> Result
 
     // 7. Return the absolute path
     Ok(file_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub async fn check_file_exists(path: String) -> Result<bool, String> {
+    Ok(std::path::Path::new(&path).exists())
+}
+
+#[tauri::command]
+pub async fn delete_capture(path: String) -> Result<(), String> {
+    if std::path::Path::new(&path).exists() {
+        fs::remove_file(&path).map_err(|e| format!("Failed to delete file: {}", e))?;
+    }
+    Ok(())
 }

@@ -62,8 +62,22 @@ function App() {
       toggleInteractive();
     });
 
+    // Dismiss overlay when clicking on another monitor (window loses focus)
+    const unlistenFocusLoss = listen("window-lost-focus", () => {
+      setInteractive(false);
+    });
+
+    const handleBlur = () => {
+      if (useShellStore.getState().isInteractive) {
+        setInteractive(false);
+      }
+    };
+    window.addEventListener('blur', handleBlur);
+
     return () => {
       unlistenShortcut.then((fn) => fn());
+      unlistenFocusLoss.then((fn) => fn());
+      window.removeEventListener('blur', handleBlur);
       unsubscribeStore();
       clearTimeout(saveTimeout);
     };
@@ -96,7 +110,7 @@ function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-overlay backdrop-blur-sm transition-all duration-300 pointer-events-auto border-[4px] border-accent-green/10 z-40"
+            className="fixed inset-0 bg-overlay backdrop-blur-sm transition-all duration-300 pointer-events-auto z-40"
             onClick={(e) => {
               // Only dismiss if they clicked directly on the backdrop, not on the widgets inside
               if (e.target === e.currentTarget) {

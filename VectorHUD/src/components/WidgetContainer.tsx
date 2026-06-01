@@ -134,7 +134,7 @@ export function WidgetContainer({ id, children }: WidgetContainerProps) {
           className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize z-50 flex items-end justify-end p-[2px]"
         >
           {/* Stylized dots for the resizer */}
-          <div className="w-0 h-0 border-solid border-r-[8px] border-b-[8px] border-r-transparent border-b-accent-green opacity-50 hover:opacity-100 transition-opacity" />
+          <div className="w-0 h-0 border-solid border-r-[8px] border-b-[8px] border-r-transparent border-b-accent-green opacity-50 hover:opacity-100 transition-opacity -rotate-90" />
         </div>
       )}
     </motion.div>
