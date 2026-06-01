@@ -11,6 +11,10 @@ Use a session-based branching model to track AI iterations clearly.
 - `Session-2A-UI-Dock` — Building the master widget menu.
 Merge into `main` only when the unit is complete, tested, and verified.
 
+## Pre-commit Hooks & CI
+- A Husky pre-commit hook is configured to enforce `npm run check:format` (running `cargo fmt --check`) and `npm run lint:rust` (running `cargo clippy -D warnings`).
+- **Never bypass the pre-commit hooks** with `--no-verify` unless absolutely critical. We rely on this strict local enforcement to prevent broken GitHub Action pipelines.
+
 ## Step-by-Step Implementation Process
 For every task, follow this loop:
 1. **Plan:** Read the relevant context. Define the specific boundaries of the current Session branch.
