@@ -3,10 +3,10 @@
 Update this file after every meaningful implementation change.
 
 ## Current Phase
-- Hardening, Security, and Settings (Session 6).
+- UI Polish and Quality of Life (Session 7).
 
 ## Current Goal
-- Ready for Session 6B (Settings Menu & API Configuration UI).
+- Ready for Session 7A (The Dock Expansion, Interactable Pins, Scrollbars).
 
 ## Completed
 - Session 1A: Project scaffolding and framework initialization.
@@ -20,23 +20,20 @@ Update this file after every meaningful implementation change.
 - Session 4B: Media Capture (Capture - Screenshot logic + Local file storage + Unified Inline Gallery + SQLite capability fixes).
 - Session 5A: Integration (API/AI - OpenRouter connectivity, Notion syncing, credential handling logic).
 - Session 6A: Enhancement (Performance - Zustand `useShallow` re-render fix, `sysinfo` targeted booting, React Error boundaries, Autostart).
+- Session 6B: Settings (UI & Auth) - Building a settings modal and secure Rust-based credential storage.
 
 ## In Progress
-- N/A
+- Session 7A: UI Polish - Expandable dock, pin toggles (interactable), custom scrollbars.
 
 ## Next Up
 | Session | Unit Name | Focus | Goal |
 | :--- | :--- | :--- | :--- |
-| 6B | Settings | UI & Auth | Build a settings modal to input API keys and store them securely via Rust. |
 | 7A | UI Polish | The Dock | Expandable dock, pin toggles (interactable), custom scrollbars. |
 | 7B | Capture+ | Media | 30s rolling video buffer, standard recording, mic toggling. |
 | 8A | Audio Hub | Mixer | Hook Core Audio API for app-specific volume, mic/output switcher, music player. |
 | 8B | Metrics+ | Hardware | GPU, VRAM, and FPS polling; Timer utility. |
 | 9A | AI+Notion | Integrations | Chat history SQLite DB, Notion floating checklists. |
 | 10A | Scaling | Architecture | Developer plugin architecture abstraction and theming system. |
-
-## Open Questions
-- What encryption strategy should be used for the Machine ID in Session 6B?
 
 ## Architecture Decisions
 - See [Decisions.md](./Decisions.md) for a comprehensive list of architectural and design decisions.

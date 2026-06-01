@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { getDb } from '../../utils/db';
 import { logger } from '../../utils/logger';
-import { ApiKeys, CaptureHistory, getErrorMessage } from '../../types';
+import { CaptureHistory, getErrorMessage } from '../../types';
+import { useSettingsStore } from '../../store/settingsStore';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -21,7 +22,7 @@ export function OpenRouterWidget() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [selectedModel, setSelectedModel] = useState(MODELS[0].id);
+  const openRouterModel = useSettingsStore(state => state.openRouterModel);
   const [attachedImagePath, setAttachedImagePath] = useState<string | null>(null);
   
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -79,9 +80,17 @@ export function OpenRouterWidget() {
     setIsTyping(true);
 
     try {
-      const keys = await invoke<ApiKeys>('get_api_keys');
-      if (!keys.openrouter) {
-        throw new Error("OpenRouter API key missing from .env");
+      const db = await getDb();
+      const orResult = await db.select<{ encrypted_value: string }[]>(
+        "SELECT encrypted_value FROM user_credentials WHERE id = 'openrouter_key'"
+      );
+      if (orResult.length === 0) {
+        throw new Error("OpenRouter API key is not configured. Please add it in Settings.");
+      }
+      const openRouterKey = await invoke<string>('decrypt_data', { encoded: orResult[0].encrypted_value });
+
+      if (!openRouterKey) {
+        throw new Error("OpenRouter API key is invalid.");
       }
 
       // Convert messages for API payload
@@ -104,13 +113,13 @@ export function OpenRouterWidget() {
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${keys.openrouter}`,
+          'Authorization': `Bearer ${openRouterKey}`,
           'HTTP-Referer': 'http://localhost:1420', // Required by OpenRouter
           'X-Title': 'VectorHUD', // Required by OpenRouter
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: selectedModel,
+          model: openRouterModel,
           messages: apiMessages
         })
       });
@@ -140,13 +149,9 @@ export function OpenRouterWidget() {
     <div className="flex flex-col h-full text-text-primary font-mono text-sm p-4 space-y-4">
       {/* Header Controls */}
       <div className="flex gap-2 mb-2">
-        <select 
-          value={selectedModel}
-          onChange={(e) => setSelectedModel(e.target.value)}
-          className="flex-1 bg-black border border-border-wire rounded-sm p-2 outline-none text-xs"
-        >
-          {MODELS.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-        </select>
+        <div className="flex-1 bg-black/50 border border-border-wire rounded-sm p-2 text-xs truncate text-zinc-400">
+          Model: {openRouterModel} (Change in Settings)
+        </div>
         <button 
           onClick={handleAttachScreenshot}
           className="bg-black border border-border-wire rounded-sm p-2 hover:bg-white/5 hover:text-accent-amber transition-colors"

@@ -210,6 +210,18 @@ pub fn run() {
                         ",
                             kind: tauri_plugin_sql::MigrationKind::Up,
                         },
+                        tauri_plugin_sql::Migration {
+                            version: 3,
+                            description: "create_user_credentials",
+                            sql: "
+                        CREATE TABLE IF NOT EXISTS user_credentials (
+                            id TEXT PRIMARY KEY,
+                            encrypted_value TEXT NOT NULL,
+                            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                        );
+                        ",
+                            kind: tauri_plugin_sql::MigrationKind::Up,
+                        },
                     ],
                 )
                 .build(),
@@ -217,11 +229,14 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             set_interactive_mode,
             commands::telemetry::frontend_log,
-            commands::api::get_api_keys,
             commands::api::sync_to_notion,
+            commands::api::save_local_note,
+            commands::api::open_notes_folder,
             core::capture::capture_screenshot,
             core::capture::check_file_exists,
-            core::capture::delete_capture
+            core::capture::delete_capture,
+            core::auth::encrypt_data,
+            core::auth::decrypt_data
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
