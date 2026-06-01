@@ -32,3 +32,4 @@ For every task, follow this loop:
 - **Avoid Overconfidence:** Do not use phrases like "I know exactly what the problem is" or "I see exactly what is going on." Prove your understanding by referencing logs or documentation.
 - **Log Verification:** Make it a habit to check the backend (`vectorhud.log`) and frontend console logs when an error is reported. Rely on concrete error output rather than assumptions.
 - **Document Fixes:** When making security or database permission changes, always document the required whitelist/capability additions.
+- **Terminal Execution:** The user's system runs PowerShell. Do NOT use `&&` to chain terminal commands, as this will fail. Use `;` instead, or run commands sequentially in separate calls.
