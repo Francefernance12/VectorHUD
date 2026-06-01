@@ -19,6 +19,12 @@ Tauri uses an asynchronous Inter-Process Communication (IPC) bridge.
 3. React invokes the Rust command `log_frontend_error(message, stack_trace)`.
 4. Rust receives the payload and writes it to `overlay-daily.log` via the `tracing-appender` crate.
 
+## External Integration Flow (OpenRouter / Notion)
+1. User interacts with an AI widget (e.g. types a chat message).
+2. The React component sets a loading state and calls the external API directly using `fetch`.
+3. Due to Tauri v2 defaults, this fetch will fail unless the domain is whitelisted in `tauri.conf.json` under the `security.csp` `connect-src` directive.
+4. The response streams back to React, updating the component's state iteratively.
+
 ## Database Flow
 1. At the end of a session, Zustand packages the session analytics.
 2. React invokes `save_session_analytics(data)`.

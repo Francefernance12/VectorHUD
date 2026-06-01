@@ -23,3 +23,13 @@ Stores metadata about screenshots and rolling buffer captures.
 | `media_type` | TEXT NOT NULL | 'image' or 'video' |
 | `game_process` | TEXT | Optional: name of the game process focused during capture |
 | `timestamp` | DATETIME DEFAULT CURRENT_TIMESTAMP | When the capture was saved |
+
+## Table: `user_credentials` (Planned for Session 6B)
+Securely stores encrypted API keys and tokens for external integrations.
+
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `id` | INTEGER PRIMARY KEY AUTOINCREMENT | Unique record ID |
+| `service` | TEXT NOT NULL UNIQUE | The integration service (e.g., 'openrouter', 'notion') |
+| `encrypted_token` | TEXT NOT NULL | The API key, encrypted via Rust using the Machine ID |
+| `updated_at` | DATETIME DEFAULT CURRENT_TIMESTAMP | When the key was last saved |

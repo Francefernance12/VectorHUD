@@ -22,3 +22,8 @@ This document tracks all important decisions made throughout the lifecycle of th
 - **Reasoning:** Spawning secondary Tauri v2 windows drastically complicates security permissions (`capabilities/default.json` lockdown issues where plugins crash in new windows), introduces multi-monitor tracking bugs (DWM invisible borders), and degrades the single-page seamless experience.
 - **Decision:** HUD components must keep all state and display logic encapsulated within the primary React DOM to guarantee cross-platform consistency.
 - **Decision:** Explicitly whitelist all SQL commands (`sql:allow-execute`, `sql:allow-select`, etc.) in `capabilities/default.json` and enable `assetProtocol` with a strict scope (`$PICTUREDIR/VectorHUD/**`) in `tauri.conf.json`. Tauri v2's strict default security otherwise blocks DB querying and silently breaks `convertFileSrc` image loading.
+
+## Session 6A: Performance & Enhancements
+- **Decision:** Use Zustand's `useShallow` hook for the active widget subscriptions in the `App.tsx` container to prevent 60FPS full-DOM re-renders during widget drag events.
+- **Decision:** In `metrics.rs`, avoid `System::new_all()` on boot and instead use `System::new()` followed by specific memory/cpu refresh calls to avoid scanning disks, network adapters, and peripheral devices, drastically cutting down boot time and background CPU usage.
+- **Decision:** Implemented global React `ErrorBoundary` wrappers around widgets so an individual widget crashing (e.g. invalid API call) won't take down the entire HUD.
