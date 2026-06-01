@@ -1,10 +1,9 @@
-import { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { AnimatePresence, motion } from "framer-motion";
 import { logger } from "./utils/logger";
 import { getDb } from "./utils/db";
-import { getSettingsStore, setSetting, getSetting } from "./utils/store";
+import { setSetting, getSetting } from "./utils/store";
 import { useShellStore } from "./store/shellStore";
 import { useWidgetStore } from "./store/widgetStore";
 import { Dock } from "./components/Dock";
@@ -12,6 +11,8 @@ import { WidgetContainer } from "./components/WidgetContainer";
 import { DummyWidget } from "./components/widgets/DummyWidget";
 import { HardwareWidget } from "./components/widgets/HardwareWidget";
 import { MediaCaptureWidget } from "./components/widgets/MediaCaptureWidget";
+import { OpenRouterWidget } from "./components/widgets/OpenRouterWidget";
+import { NotionCaptureWidget } from "./components/widgets/NotionCaptureWidget";
 import "./App.css";
 
 function App() {
@@ -20,8 +21,6 @@ function App() {
   const setInteractive = useShellStore((state) => state.setInteractive);
   
   const activeWidgets = useWidgetStore((state) => state.activeWidgets);
-  const [containerRect, setContainerRect] = useState({ top: 0, left: 0, right: 0, bottom: 0 });
-
   useEffect(() => {
     logger.info("VectorHUD UI Booted");
 
@@ -57,13 +56,6 @@ function App() {
     // Start in Ghost Mode by explicitly telling Rust to ignore cursor events
     setInteractive(false);
 
-    // Set screen bounds for dragging
-    setContainerRect({
-      top: 0,
-      left: 0,
-      right: window.innerWidth,
-      bottom: window.innerHeight,
-    });
 
     // Listen for the global shortcut event from Rust
     const unlistenShortcut = listen("toggle-interactive-mode", () => {
@@ -88,6 +80,8 @@ function App() {
               <WidgetContainer id={id}>
                 {id === 'hardware-metrics' ? <HardwareWidget /> : 
                  id === 'media-capture' ? <MediaCaptureWidget /> : 
+                 id === 'ai-chat' ? <OpenRouterWidget /> :
+                 id === 'quick-notes' ? <NotionCaptureWidget /> :
                  <DummyWidget />}
               </WidgetContainer>
             </div>

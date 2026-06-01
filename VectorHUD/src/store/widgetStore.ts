@@ -12,6 +12,8 @@ export const WIDGETS: WidgetDefinition[] = [
   { id: 'hardware-metrics', label: 'Hardware', iconName: 'Cpu', defaultWidth: 300, defaultHeight: 400 },
   { id: 'media-capture', label: 'Media', iconName: 'Camera', defaultWidth: 400, defaultHeight: 300 },
   { id: 'audio-mixer', label: 'Audio', iconName: 'Volume2', defaultWidth: 350, defaultHeight: 500 },
+  { id: 'ai-chat', label: 'AI Vision', iconName: 'MessageSquare', defaultWidth: 450, defaultHeight: 550 },
+  { id: 'quick-notes', label: 'Notion', iconName: 'Edit3', defaultWidth: 350, defaultHeight: 400 },
 ];
 
 export interface WidgetInstance {
@@ -38,7 +40,7 @@ export const useWidgetStore = create<WidgetState>((set) => ({
   activeWidgets: {},
   topZIndex: 10,
   
-  setInitialState: (widgets) => set((state) => {
+  setInitialState: (widgets) => set(() => {
     // Calculate the highest z-index to avoid overlap issues
     let highestZ = 10;
     Object.values(widgets).forEach(w => {
