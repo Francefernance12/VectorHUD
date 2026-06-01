@@ -6,8 +6,10 @@ import { getDb } from "./utils/db";
 import { setSetting, getSetting } from "./utils/store";
 import { useShellStore } from "./store/shellStore";
 import { useWidgetStore } from "./store/widgetStore";
+import { useShallow } from 'zustand/react/shallow';
 import { Dock } from "./components/Dock";
 import { WidgetContainer } from "./components/WidgetContainer";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { DummyWidget } from "./components/widgets/DummyWidget";
 import { HardwareWidget } from "./components/widgets/HardwareWidget";
 import { MediaCaptureWidget } from "./components/widgets/MediaCaptureWidget";
@@ -20,7 +22,7 @@ function App() {
   const toggleInteractive = useShellStore((state) => state.toggleInteractive);
   const setInteractive = useShellStore((state) => state.setInteractive);
   
-  const activeWidgets = useWidgetStore((state) => state.activeWidgets);
+  const activeWidgetIds = useWidgetStore(useShallow((state) => Object.keys(state.activeWidgets)));
   useEffect(() => {
     logger.info("VectorHUD UI Booted");
 
@@ -32,9 +34,9 @@ function App() {
         logger.info(`Persistence verified. Last boot: ${lastBoot}`);
 
         // Hydrate widget layout
-        const savedWidgets = await getSetting<Record<string, any>>("activeWidgets", {});
+        const savedWidgets = await getSetting<Record<string, ReturnType<typeof useWidgetStore.getState>['activeWidgets'][string]>>("activeWidgets", {} as Record<string, ReturnType<typeof useWidgetStore.getState>['activeWidgets'][string]>);
         if (Object.keys(savedWidgets).length > 0) {
-          useWidgetStore.getState().setInitialState(savedWidgets as any);
+          useWidgetStore.getState().setInitialState(savedWidgets);
         }
       } catch (err) {
         logger.error(`Persistence verification failed: ${err}`);
@@ -74,10 +76,27 @@ function App() {
     };
     window.addEventListener('blur', handleBlur);
 
+    // Global error handlers for crash reporting — forward uncaught JS errors to Rust logger
+    const handleGlobalError = (event: ErrorEvent) => {
+      logger.error(
+        `[UNCAUGHT] ${event.message} at ${event.filename}:${event.lineno}:${event.colno}`
+      );
+    };
+
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const reason = event.reason instanceof Error ? event.reason.message : String(event.reason);
+      logger.error(`[UNHANDLED_REJECTION] ${reason}`);
+    };
+
+    window.addEventListener('error', handleGlobalError);
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
     return () => {
       unlistenShortcut.then((fn) => fn());
       unlistenFocusLoss.then((fn) => fn());
       window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('error', handleGlobalError);
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
       unsubscribeStore();
       clearTimeout(saveTimeout);
     };
@@ -85,18 +104,19 @@ function App() {
 
   return (
     <>
-      {/* Widget Layer (Always rendered, sits beneath the interactive overlay so it gets dimmed, OR we can put it above.
-          Let's put it ABOVE the overlay so the widgets are always bright and interactive! ) */}
+      {/* Widget Layer (Always rendered above the overlay so widgets stay bright and interactive) */}
       <div className="fixed inset-0 z-50 pointer-events-none overflow-hidden" id="widget-bounds">
         <AnimatePresence>
-          {Object.keys(activeWidgets).map((id) => (
+          {activeWidgetIds.map((id) => (
             <div key={id} className={isInteractive ? 'pointer-events-auto' : 'pointer-events-none'}>
               <WidgetContainer id={id}>
-                {id === 'hardware-metrics' ? <HardwareWidget /> : 
-                 id === 'media-capture' ? <MediaCaptureWidget /> : 
-                 id === 'ai-chat' ? <OpenRouterWidget /> :
-                 id === 'quick-notes' ? <NotionCaptureWidget /> :
-                 <DummyWidget />}
+                <ErrorBoundary>
+                  {id === 'hardware-metrics' ? <HardwareWidget /> : 
+                   id === 'media-capture' ? <MediaCaptureWidget /> : 
+                   id === 'ai-chat' ? <OpenRouterWidget /> :
+                   id === 'quick-notes' ? <NotionCaptureWidget /> :
+                   <DummyWidget />}
+                </ErrorBoundary>
               </WidgetContainer>
             </div>
           ))}

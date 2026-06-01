@@ -4,13 +4,7 @@ import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { Trash2 } from 'lucide-react';
 import { getDb, executeQuery } from '../../utils/db';
 import { logger } from '../../utils/logger';
-
-interface CaptureHistory {
-  id: number;
-  file_path: string;
-  media_type: string;
-  timestamp: string;
-}
+import { CaptureHistory } from '../../types';
 
 export function MediaCaptureWidget() {
   const [captures, setCaptures] = useState<CaptureHistory[]>([]);

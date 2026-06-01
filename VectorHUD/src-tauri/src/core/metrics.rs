@@ -1,4 +1,6 @@
 use serde::Serialize;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 use sysinfo::System;
 use tauri::{AppHandle, Emitter};
@@ -11,13 +13,24 @@ pub struct HardwareMetrics {
     pub ram_used_gb: f32,
 }
 
-pub fn spawn_metrics_thread(app: AppHandle) {
+/// Spawns a background thread that polls system hardware metrics every 1 second
+/// and emits them to the frontend. The thread will cleanly exit when `shutdown`
+/// is set to `true` (triggered on application exit).
+pub fn spawn_metrics_thread(app: AppHandle, shutdown: Arc<AtomicBool>) {
     std::thread::spawn(move || {
-        let mut sys = System::new_all();
+        tracing::info!("Hardware metrics thread started (polling every 1s)");
+        let mut sys = System::new();
         // Initial refresh
-        sys.refresh_all();
+        sys.refresh_cpu_usage();
+        sys.refresh_memory();
 
         loop {
+            // Check if the application has requested shutdown
+            if shutdown.load(Ordering::Relaxed) {
+                tracing::info!("Hardware metrics thread received shutdown signal — exiting");
+                break;
+            }
+
             // Refresh CPU and memory
             sys.refresh_cpu_usage();
             sys.refresh_memory();

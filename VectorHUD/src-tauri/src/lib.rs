@@ -2,17 +2,13 @@ mod commands;
 mod core;
 
 use std::fs;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use tauri::tray::TrayIconBuilder;
-use tauri::{Emitter, Manager};
+use tauri::{Emitter, Manager, RunEvent};
 use tauri_plugin_global_shortcut::{Code, Modifiers, ShortcutState};
 use tracing_appender::rolling;
 use tracing_subscriber::EnvFilter;
-
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
 
 #[tauri::command]
 fn set_interactive_mode(window: tauri::Window, interactive: bool) {
@@ -23,8 +19,12 @@ fn set_interactive_mode(window: tauri::Window, interactive: bool) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Shared shutdown flag for background threads
+    let shutdown_flag = Arc::new(AtomicBool::new(false));
+    let shutdown_flag_for_exit = shutdown_flag.clone();
+
     tauri::Builder::default()
-        .setup(|app| {
+        .setup(move |app| {
             if let Ok(app_data_dir) = app.path().app_data_dir() {
                 let log_dir = app_data_dir.join("logs");
                 if !log_dir.exists() {
@@ -79,6 +79,12 @@ pub fn run() {
                         }
                     })
                     .build(app)?;
+
+                // Register autostart plugin (boots app on Windows login)
+                app.handle().plugin(tauri_plugin_autostart::init(
+                    tauri_plugin_autostart::MacosLauncher::AppleScript,
+                    Some(vec![]),
+                ))?;
 
                 app.handle().plugin(
                     tauri_plugin_global_shortcut::Builder::new()
@@ -156,8 +162,8 @@ pub fn run() {
                 }
             }
 
-            // Spawn the hardware telemetry thread
-            core::metrics::spawn_metrics_thread(app.handle().clone());
+            // Spawn the hardware telemetry thread with shutdown signal
+            core::metrics::spawn_metrics_thread(app.handle().clone(), shutdown_flag.clone());
 
             Ok(())
         })
@@ -188,9 +194,11 @@ pub fn run() {
                         ",
                             kind: tauri_plugin_sql::MigrationKind::Up,
                         },
+                        // Migration v2 is a no-op: capture_history was already created in v1.
+                        // Kept for compatibility with databases that already ran this migration.
                         tauri_plugin_sql::Migration {
                             version: 2,
-                            description: "create_capture_history",
+                            description: "noop_capture_history_already_exists",
                             sql: "
                         CREATE TABLE IF NOT EXISTS capture_history (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -207,7 +215,6 @@ pub fn run() {
                 .build(),
         )
         .invoke_handler(tauri::generate_handler![
-            greet,
             set_interactive_mode,
             commands::telemetry::frontend_log,
             commands::api::get_api_keys,
@@ -216,6 +223,12 @@ pub fn run() {
             core::capture::check_file_exists,
             core::capture::delete_capture
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(move |_app_handle, event| {
+            if let RunEvent::Exit = event {
+                tracing::info!("Application exit requested — signaling background threads to stop");
+                shutdown_flag_for_exit.store(true, Ordering::Relaxed);
+            }
+        });
 }
