@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { getDb } from '../../utils/db';
 import { logger } from '../../utils/logger';
+import { ApiKeys, CaptureHistory, getErrorMessage } from '../../types';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -9,16 +10,10 @@ interface Message {
   image?: string; // base64 data url
 }
 
-interface ApiKeys {
-  openrouter?: string;
-  notion_token?: string;
-  notion_db_id?: string;
-}
-
 const MODELS = [
-  { id: 'deepseek/deepseek-v4-flash', name: 'DeepSeek V4 Flash' },
-  { id: 'anthropic/claude-sonnet-4.6', name: 'Claude Sonnet Latest' },
-  { id: 'google/gemini-3.5-flash', name: 'Gemini 3.5 Flash' },
+  { id: 'deepseek/deepseek-chat-v3-0324', name: 'DeepSeek V3' },
+  { id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4' },
+  { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
   { id: 'openai/gpt-4o', name: 'GPT-4o' },
 ];
 
@@ -38,7 +33,7 @@ export function OpenRouterWidget() {
   const handleAttachScreenshot = async () => {
     try {
       const db = await getDb();
-      const res = await db.select<any[]>('SELECT file_path FROM capture_history WHERE media_type = ? ORDER BY timestamp DESC LIMIT 1', ['screenshot']);
+      const res = await db.select<CaptureHistory[]>('SELECT file_path FROM capture_history WHERE media_type = ? ORDER BY timestamp DESC LIMIT 1', ['screenshot']);
       if (res.length > 0) {
         setAttachedImagePath(res[0].file_path);
         logger.info(`Attached screenshot: ${res[0].file_path}`);
@@ -46,7 +41,7 @@ export function OpenRouterWidget() {
         logger.warn("No recent screenshots found to attach.");
       }
     } catch (err) {
-      logger.error(`Failed to attach screenshot: ${err}`);
+      logger.error(`Failed to attach screenshot: ${getErrorMessage(err)}`);
     }
   };
 
@@ -71,7 +66,7 @@ export function OpenRouterWidget() {
       try {
         base64Image = await getBase64FromAsset(attachedImagePath);
       } catch (err) {
-        logger.error(`Failed to convert image to base64: ${err}`);
+        logger.error(`Failed to convert image to base64: ${getErrorMessage(err)}`);
       }
     }
 
@@ -95,8 +90,8 @@ export function OpenRouterWidget() {
           return {
             role: msg.role,
             content: [
-              { type: 'text', text: msg.content },
-              { type: 'image_url', image_url: { url: msg.image } }
+              { type: 'text' as const, text: msg.content },
+              { type: 'image_url' as const, image_url: { url: msg.image } }
             ]
           };
         }
@@ -132,9 +127,10 @@ export function OpenRouterWidget() {
       };
 
       setMessages(prev => [...prev, assistantMsg]);
-    } catch (err: any) {
-      logger.error(`AI Error: ${err}`);
-      setMessages(prev => [...prev, { role: 'assistant', content: `[ERROR] ${err.message}` }]);
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err);
+      logger.error(`AI Error: ${msg}`);
+      setMessages(prev => [...prev, { role: 'assistant', content: `[ERROR] ${msg}` }]);
     } finally {
       setIsTyping(false);
     }
@@ -196,7 +192,7 @@ export function OpenRouterWidget() {
       <form onSubmit={handleSubmit} className="mt-auto flex flex-col gap-2">
         {attachedImagePath && (
           <div className="flex justify-between items-center bg-accent-amber/10 border border-accent-amber/30 text-accent-amber px-2 py-1 rounded-sm text-xs">
-            <span className="truncate flex-1">Attached: {attachedImagePath.split('/').pop()}</span>
+            <span className="truncate flex-1">Attached: {attachedImagePath.split(/[\\/]/).pop()}</span>
             <button type="button" onClick={() => setAttachedImagePath(null)} className="ml-2 hover:text-white">✕</button>
           </div>
         )}

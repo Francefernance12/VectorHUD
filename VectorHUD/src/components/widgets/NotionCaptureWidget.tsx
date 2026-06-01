@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { logger } from '../../utils/logger';
+import { getErrorMessage } from '../../types';
 
 
 
@@ -24,9 +25,10 @@ export function NotionCaptureWidget() {
       logger.info('Notion sync successful');
       
       setTimeout(() => setStatus(null), 3000);
-    } catch (err: any) {
-      logger.error(`Notion sync failed: ${err}`);
-      setStatus(`Error: ${err.message}`);
+    } catch (err: unknown) {
+      const msg = getErrorMessage(err);
+      logger.error(`Notion sync failed: ${msg}`);
+      setStatus(`Error: ${msg}`);
     } finally {
       setIsSubmitting(false);
     }
