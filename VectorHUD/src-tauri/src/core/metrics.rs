@@ -19,9 +19,10 @@ pub struct HardwareMetrics {
 pub fn spawn_metrics_thread(app: AppHandle, shutdown: Arc<AtomicBool>) {
     std::thread::spawn(move || {
         tracing::info!("Hardware metrics thread started (polling every 1s)");
-        let mut sys = System::new_all();
+        let mut sys = System::new();
         // Initial refresh
-        sys.refresh_all();
+        sys.refresh_cpu_usage();
+        sys.refresh_memory();
 
         loop {
             // Check if the application has requested shutdown

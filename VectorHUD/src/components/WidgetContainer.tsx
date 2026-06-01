@@ -12,11 +12,17 @@ interface WidgetContainerProps {
 
 export function WidgetContainer({ id, children }: WidgetContainerProps) {
   const controls = useDragControls();
-  const { activeWidgets, toggleWidget, bringToFront, updateWidgetBounds, togglePin } = useWidgetStore();
+  
+  // Use granular selectors to prevent re-rendering when OTHER widgets update
+  const instance = useWidgetStore(state => state.activeWidgets[id]);
+  const toggleWidget = useWidgetStore(state => state.toggleWidget);
+  const bringToFront = useWidgetStore(state => state.bringToFront);
+  const updateWidgetBounds = useWidgetStore(state => state.updateWidgetBounds);
+  const togglePin = useWidgetStore(state => state.togglePin);
+
   const isInteractive = useShellStore(state => state.isInteractive);
   
   const widgetDef = WIDGETS.find(w => w.id === id);
-  const instance = activeWidgets[id];
   
   if (!widgetDef || !instance) return null;
 

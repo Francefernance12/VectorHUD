@@ -6,6 +6,7 @@ import { getDb } from "./utils/db";
 import { setSetting, getSetting } from "./utils/store";
 import { useShellStore } from "./store/shellStore";
 import { useWidgetStore } from "./store/widgetStore";
+import { useShallow } from 'zustand/react/shallow';
 import { Dock } from "./components/Dock";
 import { WidgetContainer } from "./components/WidgetContainer";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -21,7 +22,7 @@ function App() {
   const toggleInteractive = useShellStore((state) => state.toggleInteractive);
   const setInteractive = useShellStore((state) => state.setInteractive);
   
-  const activeWidgets = useWidgetStore((state) => state.activeWidgets);
+  const activeWidgetIds = useWidgetStore(useShallow((state) => Object.keys(state.activeWidgets)));
   useEffect(() => {
     logger.info("VectorHUD UI Booted");
 
@@ -106,7 +107,7 @@ function App() {
       {/* Widget Layer (Always rendered above the overlay so widgets stay bright and interactive) */}
       <div className="fixed inset-0 z-50 pointer-events-none overflow-hidden" id="widget-bounds">
         <AnimatePresence>
-          {Object.keys(activeWidgets).map((id) => (
+          {activeWidgetIds.map((id) => (
             <div key={id} className={isInteractive ? 'pointer-events-auto' : 'pointer-events-none'}>
               <WidgetContainer id={id}>
                 <ErrorBoundary>

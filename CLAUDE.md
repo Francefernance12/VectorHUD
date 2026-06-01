@@ -126,7 +126,7 @@ for the Windows compositor to fully remove the window from the screen buffer.
 
 - Branch naming: `Session-{N}{A/B}-{Name}` (e.g., `Session-4B-Capture`)
 - **Always specify the target branch** in implementation plans
-- **Commit and push** when the user says "push the changes into the repo"
+- **Commit and push** ONLY when the user explicitly instructs you to "push the changes" in the current message. Do NOT assume a general instruction from a previous session applies automatically. When in doubt, commit but ask for permission to push.
 - Run `cargo fmt` before every commit
 - Check `context/` files at the start of every session and after every meaningful change
 
