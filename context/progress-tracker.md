@@ -6,7 +6,7 @@ Update this file after every meaningful implementation change.
 - Core Logic & Widget Physics.
 
 ## Current Goal
-- Ready for Session 5A (Integration: API/AI) or final optimizations.
+- Ready for Session 6A (Optimization & Cleanup).
 
 ## Completed
 - Session 1A: Project scaffolding and framework initialization.
