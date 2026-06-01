@@ -30,8 +30,7 @@ Update this file after every meaningful implementation change.
 | 6B | Settings | UI & Auth | Build a settings modal to input API keys and store them securely via Rust. |
 
 ## Open Questions
-- What specific OCR library will we use for the developer quick-capture widget?
-- Do we want to implement custom window shadows, or rely on the OS compositor?
+- What encryption strategy should be used for the Machine ID in Session 6B?
 
 ## Architecture Decisions
 - See [Decisions.md](./Decisions.md) for a comprehensive list of architectural and design decisions.
