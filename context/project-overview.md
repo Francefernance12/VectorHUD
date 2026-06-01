@@ -26,10 +26,10 @@ A lightweight, transparent, globally-summoned desktop overlay built for PC gamer
 - Hardware Metrics (CPU, GPU, RAM polling).
 - Media Capture (Screenshots, rolling 30-second video buffers, Gallery view).
 - Advanced Audio Mixer (Per-application volume, hardware input/output toggles).
-
-### Integration Widgets (Future)
 - OpenRouter AI Vision Chat.
 - Notion Quick-Capture Notes.
+
+### Integration Widgets (Future)
 - CI/CD & Local Server Monitors.
 
 ## Scope

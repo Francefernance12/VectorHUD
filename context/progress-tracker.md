@@ -3,10 +3,10 @@
 Update this file after every meaningful implementation change.
 
 ## Current Phase
-- Core Logic & Widget Physics.
+- Hardening, Security, and Settings (Session 6).
 
 ## Current Goal
-- Ready for Session 6A (Optimization & Cleanup).
+- Ready for Session 6B (Settings Menu & API Configuration UI).
 
 ## Completed
 - Session 1A: Project scaffolding and framework initialization.
@@ -19,6 +19,7 @@ Update this file after every meaningful implementation change.
 - Session 4A: System Metrics (Hardware - Rust background thread for CPU/GPU polling events).
 - Session 4B: Media Capture (Capture - Screenshot logic + Local file storage + Unified Inline Gallery + SQLite capability fixes).
 - Session 5A: Integration (API/AI - OpenRouter connectivity, Notion syncing, credential handling logic).
+- Session 6A: Enhancement (Performance - Zustand `useShallow` re-render fix, `sysinfo` targeted booting, React Error boundaries, Autostart).
 
 ## In Progress
 - N/A
@@ -26,7 +27,7 @@ Update this file after every meaningful implementation change.
 ## Next Up
 | Session | Unit Name | Focus | Goal |
 | :--- | :--- | :--- | :--- |
-| 6A | Optimization | Cleanup | Performance audit, bug squashing, and final build. |
+| 6B | Settings | UI & Auth | Build a settings modal to input API keys and store them securely via Rust. |
 
 ## Open Questions
 - What specific OCR library will we use for the developer quick-capture widget?
