@@ -6,9 +6,11 @@ import { getDb } from "./utils/db";
 import { setSetting, getSetting } from "./utils/store";
 import { useShellStore } from "./store/shellStore";
 import { useWidgetStore } from "./store/widgetStore";
+import { useSettingsStore } from "./store/settingsStore";
 import { useShallow } from 'zustand/react/shallow';
 import { Dock } from "./components/Dock";
 import { WidgetContainer } from "./components/WidgetContainer";
+import { SettingsModal } from "./components/SettingsModal";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { DummyWidget } from "./components/widgets/DummyWidget";
 import { HardwareWidget } from "./components/widgets/HardwareWidget";
@@ -23,6 +25,14 @@ function App() {
   const setInteractive = useShellStore((state) => state.setInteractive);
   
   const activeWidgetIds = useWidgetStore(useShallow((state) => Object.keys(state.activeWidgets)));
+
+  // Force settings to close in state when exiting interactive mode
+  useEffect(() => {
+    if (!isInteractive && useSettingsStore.getState().isSettingsOpen) {
+      useSettingsStore.getState().toggleSettings();
+    }
+  }, [isInteractive]);
+
   useEffect(() => {
     logger.info("VectorHUD UI Booted");
 
@@ -38,6 +48,9 @@ function App() {
         if (Object.keys(savedWidgets).length > 0) {
           useWidgetStore.getState().setInitialState(savedWidgets);
         }
+
+        // Hydrate settings
+        await useSettingsStore.getState().loadPreferences();
       } catch (err) {
         logger.error(`Persistence verification failed: ${err}`);
       }
@@ -123,6 +136,8 @@ function App() {
         </AnimatePresence>
       </div>
 
+
+
       {/* Interactive Overlay UI Backdrop & Dock */}
       <AnimatePresence>
         {isInteractive && (
@@ -139,6 +154,7 @@ function App() {
             }}
           >
             <Dock />
+            <SettingsModal />
           </motion.div>
         )}
       </AnimatePresence>

@@ -1,6 +1,8 @@
 import { Cpu, Camera, Volume2, MessageSquare, Edit3, LucideIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { Settings } from 'lucide-react';
 import { WIDGETS, useWidgetStore } from '../store/widgetStore';
+import { useSettingsStore } from '../store/settingsStore';
 import { DockItem } from './DockItem';
 
 const iconMap: Record<string, LucideIcon> = {
@@ -49,6 +51,16 @@ export function Dock() {
             );
           })}
         </div>
+
+        {/* Settings Button Separator */}
+        <div className="w-[1px] h-8 bg-border-wire/50 mx-2" />
+
+        <button
+          onClick={useSettingsStore.getState().toggleSettings}
+          className="p-3 rounded-xl transition-all duration-300 hover:bg-white/10 hover:shadow-[0_0_15px_rgba(255,255,255,0.2)] text-zinc-400 hover:text-white"
+        >
+          <Settings size={22} strokeWidth={1.5} />
+        </button>
       </div>
     </motion.div>
   );
