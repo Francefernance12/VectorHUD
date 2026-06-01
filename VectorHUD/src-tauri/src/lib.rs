@@ -87,11 +87,73 @@ pub fn run() {
                             if event.state == ShortcutState::Pressed
                                 && shortcut.matches(Modifiers::CONTROL | Modifiers::ALT, Code::KeyO)
                             {
+                                if let Some(window) = app.get_webview_window("main") {
+                                    if let Ok(cursor_pos) = app.cursor_position() {
+                                        if let Ok(monitors) = window.available_monitors() {
+                                            for m in monitors {
+                                                let pos = m.position();
+                                                let size = m.size();
+                                                let scale = m.scale_factor();
+                                                let x = pos.x as f64;
+                                                let y = pos.y as f64;
+                                                let w = size.width as f64;
+                                                let h = size.height as f64;
+
+                                                if cursor_pos.x >= x
+                                                    && cursor_pos.x <= x + w
+                                                    && cursor_pos.y >= y
+                                                    && cursor_pos.y <= y + h
+                                                {
+                                                    let lx = x / scale;
+                                                    let ly = y / scale;
+                                                    let lw = w / scale;
+                                                    let lh = h / scale;
+                                                    let _ = window.set_position(
+                                                        tauri::LogicalPosition::new(lx, ly),
+                                                    );
+                                                    let _ = window
+                                                        .set_size(tauri::LogicalSize::new(lw, lh));
+                                                    let _ = window.set_skip_taskbar(true);
+                                                    let _ = window.set_focus();
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                                 let _ = app.emit("toggle-interactive-mode", ());
                             }
                         })
                         .build(),
                 )?;
+
+                // Size the window to cover the primary monitor on boot
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.set_shadow(false);
+                    if let Ok(Some(monitor)) = window.primary_monitor() {
+                        let scale = monitor.scale_factor();
+                        let size = monitor.size();
+                        let pos = monitor.position();
+                        let _ = window.set_position(tauri::LogicalPosition::new(
+                            pos.x as f64 / scale,
+                            pos.y as f64 / scale,
+                        ));
+                        let _ = window.set_size(tauri::LogicalSize::new(
+                            size.width as f64 / scale,
+                            size.height as f64 / scale,
+                        ));
+                    }
+
+                    // Dismiss overlay when window loses focus (e.g. clicking second monitor)
+                    let app_handle = app.handle().clone();
+                    window.on_window_event(move |event| {
+                        if let tauri::WindowEvent::Focused(focused) = event {
+                            if !*focused {
+                                let _ = app_handle.emit("window-lost-focus", ());
+                            }
+                        }
+                    });
+                }
             }
 
             // Spawn the hardware telemetry thread
@@ -150,7 +212,9 @@ pub fn run() {
             commands::telemetry::frontend_log,
             commands::api::get_api_keys,
             commands::api::sync_to_notion,
-            core::capture::capture_screenshot
+            core::capture::capture_screenshot,
+            core::capture::check_file_exists,
+            core::capture::delete_capture
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

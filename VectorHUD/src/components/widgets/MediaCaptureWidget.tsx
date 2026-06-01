@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
+import { Trash2 } from 'lucide-react';
 import { getDb, executeQuery } from '../../utils/db';
 import { logger } from '../../utils/logger';
 
@@ -21,7 +22,18 @@ export function MediaCaptureWidget() {
     try {
       const db = await getDb();
       const res = await db.select<CaptureHistory[]>('SELECT * FROM capture_history ORDER BY timestamp DESC LIMIT 20');
-      setCaptures(res);
+      
+      const validCaptures: CaptureHistory[] = [];
+      for (const cap of res) {
+        const exists = await invoke<boolean>('check_file_exists', { path: cap.file_path });
+        if (exists) {
+          validCaptures.push(cap);
+        } else {
+          logger.info(`Cleaning up ghost capture record for ${cap.file_path}`);
+          await db.execute('DELETE FROM capture_history WHERE id = ?1', [cap.id]);
+        }
+      }
+      setCaptures(validCaptures);
     } catch (err) {
       logger.error(`Failed to fetch history: ${err}`);
     }
@@ -52,6 +64,19 @@ export function MediaCaptureWidget() {
 
   const openGalleryWindow = (cap: CaptureHistory) => {
     setExpandedImage(convertFileSrc(cap.file_path));
+  };
+
+  const handleDelete = async (cap: CaptureHistory, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await invoke('delete_capture', { path: cap.file_path });
+      const db = await getDb();
+      await db.execute('DELETE FROM capture_history WHERE id = ?1', [cap.id]);
+      setCaptures(prev => prev.filter(c => c.id !== cap.id));
+      logger.info(`Deleted capture ${cap.file_path}`);
+    } catch (err) {
+      logger.error(`Failed to delete capture: ${err}`);
+    }
   };
 
   return (
@@ -95,13 +120,22 @@ export function MediaCaptureWidget() {
               <div 
                 key={cap.id} 
                 onClick={() => openGalleryWindow(cap)}
-                className="flex justify-between items-center p-2 border border-border-wire/50 hover:bg-white/5 cursor-pointer transition-colors"
+                className="flex justify-between items-center p-2 border border-border-wire/50 hover:bg-white/5 cursor-pointer transition-colors group"
               >
                 <div className="truncate flex-1 max-w-[70%]">
                   <span className="opacity-60 mr-2">[{cap.media_type.toUpperCase()}]</span>
                   <span className="truncate" title={cap.file_path}>{cap.file_path.split('/').pop()}</span>
                 </div>
-                <div className="opacity-50 text-xs">{cap.timestamp}</div>
+                <div className="flex items-center gap-3">
+                  <div className="opacity-50 text-xs">{cap.timestamp}</div>
+                  <button 
+                    onClick={(e) => handleDelete(cap, e)}
+                    className="p-1.5 opacity-0 group-hover:opacity-100 hover:bg-red-500/20 text-red-500 rounded transition-all"
+                    title="Delete capture"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             ))
           )}
