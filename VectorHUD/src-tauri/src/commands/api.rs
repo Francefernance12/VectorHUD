@@ -24,3 +24,43 @@ pub fn get_api_keys() -> ApiKeys {
         notion_db_id: env::var("NOTION_DB_ID").ok(),
     }
 }
+
+#[tauri::command]
+pub async fn sync_to_notion(note: String) -> Result<(), String> {
+    let keys = get_api_keys();
+    let token = keys.notion_token.ok_or("Notion token missing")?;
+    let db_id = keys.notion_db_id.ok_or("Notion DB ID missing")?;
+
+    let client = reqwest::Client::new();
+    let body = serde_json::json!({
+        "parent": { "database_id": db_id },
+        "properties": {
+            "title": {
+                "title": [
+                    {
+                        "text": {
+                            "content": note
+                        }
+                    }
+                ]
+            }
+        }
+    });
+
+    let res = client
+        .post("https://api.notion.com/v1/pages")
+        .header("Authorization", format!("Bearer {}", token))
+        .header("Notion-Version", "2022-06-28")
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !res.status().is_success() {
+        let error_text = res.text().await.unwrap_or_default();
+        return Err(format!("Notion API Error: {}", error_text));
+    }
+
+    Ok(())
+}

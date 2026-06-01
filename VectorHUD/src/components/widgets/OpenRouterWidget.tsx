@@ -16,8 +16,9 @@ interface ApiKeys {
 }
 
 const MODELS = [
-  { id: 'google/gemini-flash-1.5-8b', name: 'Gemini Flash 1.5' },
-  { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet' },
+  { id: 'deepseek/deepseek-v4-flash', name: 'DeepSeek V4 Flash' },
+  { id: 'anthropic/claude-sonnet-4.6', name: 'Claude Sonnet Latest' },
+  { id: 'google/gemini-3.5-flash', name: 'Gemini 3.5 Flash' },
   { id: 'openai/gpt-4o', name: 'GPT-4o' },
 ];
 

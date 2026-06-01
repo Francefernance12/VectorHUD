@@ -2,11 +2,7 @@ import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { logger } from '../../utils/logger';
 
-interface ApiKeys {
-  openrouter?: string;
-  notion_token?: string;
-  notion_db_id?: string;
-}
+
 
 export function NotionCaptureWidget() {
   const [note, setNote] = useState('');
@@ -21,39 +17,7 @@ export function NotionCaptureWidget() {
     setStatus('Syncing...');
 
     try {
-      const keys = await invoke<ApiKeys>('get_api_keys');
-      if (!keys.notion_token || !keys.notion_db_id) {
-        throw new Error("Notion API keys missing from .env");
-      }
-
-      const res = await fetch('https://api.notion.com/v1/pages', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${keys.notion_token}`,
-          'Notion-Version': '2022-06-28',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          parent: { database_id: keys.notion_db_id },
-          properties: {
-            "title": { // Assuming default 'Title' or 'Name' column in Notion databases is universally accessible as "title" type
-              title: [
-                {
-                  text: {
-                    content: note
-                  }
-                }
-              ]
-            }
-          }
-        })
-      });
-
-      const data = await res.json();
-      
-      if (!res.ok) {
-        throw new Error(data.message || 'Failed to sync to Notion');
-      }
+      await invoke('sync_to_notion', { note });
 
       setNote('');
       setStatus('Synced successfully!');
