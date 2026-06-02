@@ -7,7 +7,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { executeQuery, getDb } from '../utils/db';
 
 export function SettingsModal() {
-  const { isSettingsOpen, toggleSettings, openRouterModel, setOpenRouterModel, globalFontSize, setGlobalFontSize } = useSettingsStore(
+  const { isSettingsOpen, toggleSettings, openRouterModel, setOpenRouterModel, globalFontSize, setGlobalFontSize, interactablePins, setInteractablePins } = useSettingsStore(
     useShallow((state) => ({
       isSettingsOpen: state.isSettingsOpen,
       toggleSettings: state.toggleSettings,
@@ -15,6 +15,8 @@ export function SettingsModal() {
       setOpenRouterModel: state.setOpenRouterModel,
       globalFontSize: state.globalFontSize,
       setGlobalFontSize: state.setGlobalFontSize,
+      interactablePins: state.interactablePins,
+      setInteractablePins: state.setInteractablePins,
     }))
   );
 
@@ -234,6 +236,22 @@ export function SettingsModal() {
                     onChange={(e) => setGlobalFontSize(parseInt(e.target.value))}
                     className="w-full accent-primary"
                   />
+                </div>
+
+                <div className="flex justify-between items-center bg-black/40 p-3 rounded-lg border border-white/5">
+                  <div>
+                    <label className="text-sm font-semibold text-zinc-200">Interactable Pins</label>
+                    <p className="text-xs text-zinc-500 mt-0.5">Keep pinned widgets interactable when overlay is closed.</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer" 
+                      checked={interactablePins}
+                      onChange={(e) => setInteractablePins(e.target.checked)}
+                    />
+                    <div className="w-11 h-6 bg-zinc-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent-green"></div>
+                  </label>
                 </div>
               </div>
             )}
