@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { AnimatePresence, motion } from "framer-motion";
 import { logger } from "./utils/logger";
@@ -17,6 +17,9 @@ import { HardwareWidget } from "./components/widgets/HardwareWidget";
 import { MediaCaptureWidget } from "./components/widgets/MediaCaptureWidget";
 import { OpenRouterWidget } from "./components/widgets/OpenRouterWidget";
 import { NotionCaptureWidget } from "./components/widgets/NotionCaptureWidget";
+import { RecordingStatusBar } from "./components/RecordingStatusBar";
+import { useRecordingStore } from "./store/recordingStore";
+import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
 function App() {
@@ -25,6 +28,11 @@ function App() {
   const setInteractive = useShellStore((state) => state.setInteractive);
   
   const activeWidgetIds = useWidgetStore(useShallow((state) => Object.keys(state.activeWidgets)));
+  
+  const interactablePins = useSettingsStore((state) => state.interactablePins);
+  const isRecording = useRecordingStore((state) => state.isRecording);
+
+  const [toasts, setToasts] = useState<{ id: number; message: string }[]>([]);
 
   // Force settings to close in state when exiting interactive mode
   useEffect(() => {
@@ -73,13 +81,87 @@ function App() {
 
 
     // Listen for the global shortcut event from Rust
-    const unlistenShortcut = listen("toggle-interactive-mode", () => {
+    const unlistenShortcut = listen("hotkey-overlay", () => {
       toggleInteractive();
+    });
+
+    const showToast = (message: string) => {
+      const id = Date.now();
+      setToasts((prev) => [...prev, { id, message }]);
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+      }, 3000);
+    };
+
+    // Listen for HUD toasts from Rust
+    const unlistenToast = listen<string>("hud-toast", (event) => {
+      showToast(event.payload);
     });
 
     // Dismiss overlay when clicking on another monitor (window loses focus)
     const unlistenFocusLoss = listen("window-lost-focus", () => {
       setInteractive(false);
+    });
+
+    // Global Hotkey Listeners
+    const unlistenScreenshot = listen("hotkey-screenshot", async () => {
+      try {
+        const path = await invoke<string>('capture_screenshot');
+        await getDb().then(db => db.execute('INSERT INTO capture_history (file_path, media_type, game_process) VALUES (?1, ?2, ?3)', [path, 'screenshot', 'Desktop']));
+        window.dispatchEvent(new Event('refresh-capture-history'));
+        showToast("📸 Screenshot Saved");
+      } catch (err) {
+        logger.error(`Screenshot hotkey failed: ${err}`);
+      }
+    });
+
+    const unlistenRecord = listen("hotkey-record", async () => {
+      const isRec = useRecordingStore.getState().isRecording;
+      if (isRec) {
+        try {
+          const path = await invoke<string>('stop_video_recording');
+          await getDb().then(db => db.execute('INSERT INTO capture_history (file_path, media_type, game_process) VALUES (?1, ?2, ?3)', [path, 'video', 'Desktop']));
+          useRecordingStore.getState().setRecording(false);
+          window.dispatchEvent(new Event('refresh-capture-history'));
+          showToast("⏹️ Recording Saved");
+        } catch (err) {
+          logger.error(`Stop recording hotkey failed: ${err}`);
+        }
+      } else {
+        try {
+          const micEnabled = useSettingsStore.getState().recordMicrophone;
+          const audioEnabled = useSettingsStore.getState().recordSystemAudio;
+          await invoke<string>('start_video_recording', { micEnabled, audioEnabled });
+          useRecordingStore.getState().setRecording(true);
+          showToast("🔴 Recording Started");
+        } catch (err) {
+          logger.error(`Start recording hotkey failed: ${err}`);
+        }
+      }
+    });
+
+    const unlistenReplay = listen("hotkey-replay", async () => {
+      const isReplay = useRecordingStore.getState().isReplayActive;
+      if (isReplay) {
+        try {
+          const path = await invoke<string>('save_replay_buffer');
+          await getDb().then(db => db.execute('INSERT INTO capture_history (file_path, media_type, game_process) VALUES (?1, ?2, ?3)', [path, 'video', 'Desktop']));
+          window.dispatchEvent(new Event('refresh-capture-history'));
+          showToast("⚡ Replay Clip Saved");
+        } catch (err) {
+          logger.error(`Save replay hotkey failed: ${err}`);
+        }
+      } else {
+        try {
+          const micEnabled = useSettingsStore.getState().recordMicrophone;
+          const audioEnabled = useSettingsStore.getState().recordSystemAudio;
+          await invoke('start_replay_buffer', { micEnabled, audioEnabled });
+          useRecordingStore.getState().setReplayActive(true);
+          showToast("⏪ Replay Buffer Started");
+        } catch (err) {
+          logger.error(`Start replay hotkey failed: ${err}`);
+        }
+      }
     });
 
     const handleBlur = () => {
@@ -106,6 +188,10 @@ function App() {
 
     return () => {
       unlistenShortcut.then((fn) => fn());
+      unlistenToast.then((fn) => fn());
+      unlistenScreenshot.then((fn) => fn());
+      unlistenRecord.then((fn) => fn());
+      unlistenReplay.then((fn) => fn());
       unlistenFocusLoss.then((fn) => fn());
       window.removeEventListener('blur', handleBlur);
       window.removeEventListener('error', handleGlobalError);
@@ -117,6 +203,30 @@ function App() {
 
   return (
     <>
+      {/* HUD Toasts */}
+      <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[9999] pointer-events-none flex flex-col items-center gap-2">
+        <AnimatePresence>
+          {toasts.map((toast) => (
+            <motion.div
+              key={toast.id}
+              initial={{ opacity: 0, y: 20, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
+              className="bg-black/90 backdrop-blur-md border border-white/20 text-white font-mono text-xs px-4 py-2 rounded-full shadow-[0_0_20px_rgba(255,255,255,0.1)] font-bold tracking-widest"
+            >
+              {toast.message}
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+
+      {/* Floating persistent recording status bar */}
+      {isRecording && (
+        <div className={isInteractive || interactablePins ? 'pointer-events-auto' : 'pointer-events-none'}>
+          <RecordingStatusBar />
+        </div>
+      )}
+
       {/* Widget Layer (Always rendered above the overlay so widgets stay bright and interactive) */}
       <div className="fixed inset-0 z-50 pointer-events-none overflow-hidden" id="widget-bounds">
         <AnimatePresence>

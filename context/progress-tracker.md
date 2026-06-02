@@ -2,10 +2,10 @@
 
 Update this file after every meaningful implementation change.
 
-- Session 7B: Capture+
+- Session 8A: Audio Hub
 
 ## Current Goal
-- Ready for Session 7B (Capture+).
+- Ready for Session 8A (Audio Hub).
 
 ## Completed
 - Session 1A: Project scaffolding and framework initialization.
@@ -21,14 +21,14 @@ Update this file after every meaningful implementation change.
 - Session 6A: Enhancement (Performance - Zustand `useShallow` re-render fix, `sysinfo` targeted booting, React Error boundaries, Autostart).
 - Session 6B: Settings (UI & Auth) - Building a settings modal and secure Rust-based credential storage.
 - Session 7A: UI Polish (Expandable dock, pin toggles (interactable), custom scrollbars).
+- Session 7B: Capture+ (Media - 30s rolling video buffer, standard recording, mic toggling, windows-record forked to fix focus tracking limitations).
 
 ## In Progress
-- Session 7B: Capture+ (Media - 30s rolling video buffer, standard recording, mic toggling).
+- Session 8A: Audio Hub (Mixer - Hook Core Audio API for app-specific volume, mic/output switcher, music player).
 
 ## Next Up
 | Session | Unit Name | Focus | Goal |
 | :--- | :--- | :--- | :--- |
-| 7B | Capture+ | Media | 30s rolling video buffer, standard recording, mic toggling. |
 | 8A | Audio Hub | Mixer | Hook Core Audio API for app-specific volume, mic/output switcher, music player. |
 | 8B | Metrics+ | Hardware | GPU, VRAM, and FPS polling; Timer utility. |
 | 9A | AI+Notion | Integrations | Chat history SQLite DB, Notion floating checklists. |

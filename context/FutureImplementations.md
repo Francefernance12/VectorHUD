@@ -15,3 +15,12 @@ To balance security with UX, we will:
 4. On boot, the Rust backend automatically fetches the Machine ID, decrypts the tokens, and stores them in memory for active sessions.
 
 This ensures that even if the `vectorhud.db` file is stolen or copied to another PC, the API keys remain encrypted and inaccessible, while providing a zero-interaction boot process for the legitimate user.
+
+## Mouse Cursor Capture in Video Recording
+
+Currently, the `windows-record` crate captures the raw DXGI Output, which does not naturally contain the hardware mouse cursor. 
+To implement this in the future:
+1. We must periodically query the cursor position using `GetCursorInfo`.
+2. Extract the cursor icon (often via `GetIconInfo`) and convert it to a texture or draw it directly onto the D3D11 staging texture.
+3. Handle cursor state changes (hidden, custom game cursors, resizing).
+This was delayed to avoid introducing new bugs during the Session 7 backend integration phase.
