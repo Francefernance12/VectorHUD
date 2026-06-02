@@ -11,10 +11,12 @@ use tracing_appender::rolling;
 use tracing_subscriber::EnvFilter;
 
 #[tauri::command]
-fn set_interactive_mode(window: tauri::Window, interactive: bool) {
-    // If interactive is true, we DO NOT ignore cursor events.
-    // If interactive is false (ghost mode), we DO ignore cursor events.
-    let _ = window.set_ignore_cursor_events(!interactive);
+fn set_interactive_mode(window: tauri::Window, interactive: bool, interactable_pins: bool) {
+    if interactive {
+        let _ = window.set_ignore_cursor_events(false);
+    } else {
+        let _ = window.set_ignore_cursor_events(!interactable_pins);
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

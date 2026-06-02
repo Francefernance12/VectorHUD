@@ -34,7 +34,7 @@ export function Dock() {
           </span>
         </div>
         
-        <div className="flex gap-2 pl-2">
+        <div className="flex gap-2 pl-2 overflow-x-auto snap-x custom-scrollbar max-w-[420px]">
           {WIDGETS.map((widget) => {
             const Icon = iconMap[widget.iconName];
             const isActive = !!activeWidgets[widget.id];

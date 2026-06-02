@@ -13,7 +13,7 @@ export function DockItem({ label, Icon, isActive, onClick }: DockItemProps) {
   return (
     <button
       onClick={onClick}
-      className={`group relative flex flex-col items-center justify-center w-20 h-20 rounded-xl transition-all duration-300 border
+      className={`group relative flex flex-col items-center justify-center w-20 h-20 shrink-0 rounded-xl transition-all duration-300 border
         ${isActive 
           ? 'bg-zinc-800/80 border-accent-green/50 shadow-[0_0_15px_rgba(74,246,38,0.15)]' 
           : 'bg-transparent border-transparent hover:bg-zinc-800/50 hover:border-border-wire'

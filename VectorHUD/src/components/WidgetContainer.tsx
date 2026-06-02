@@ -59,11 +59,7 @@ export function WidgetContainer({ id, children }: WidgetContainerProps) {
         x: instance.x,
         y: instance.y,
       }}
-      className={`flex flex-col border rounded-xl overflow-hidden transition-colors ${
-        instance.isPinned && !isInteractive 
-          ? 'bg-black/60 backdrop-blur-md border-transparent shadow-none' // Semi-transparent when pinned in ghost mode
-          : 'bg-surface border-border-wire shadow-2xl'
-      }`}
+      className="flex flex-col border rounded-xl overflow-hidden transition-colors bg-surface border-border-wire shadow-2xl"
     >
       {/* Draggable Header (Only show if interactive) */}
       {isInteractive && (
