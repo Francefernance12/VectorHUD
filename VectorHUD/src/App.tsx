@@ -15,6 +15,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { DummyWidget } from "./components/widgets/DummyWidget";
 import { HardwareWidget } from "./components/widgets/HardwareWidget";
 import { MediaCaptureWidget } from "./components/widgets/MediaCaptureWidget";
+import { AudioHubWidget } from "./components/widgets/AudioHubWidget";
 import { OpenRouterWidget } from "./components/widgets/OpenRouterWidget";
 import { NotionCaptureWidget } from "./components/widgets/NotionCaptureWidget";
 import { RecordingStatusBar } from "./components/RecordingStatusBar";
@@ -236,6 +237,7 @@ function App() {
                 <ErrorBoundary>
                   {id === 'hardware-metrics' ? <HardwareWidget /> : 
                    id === 'media-capture' ? <MediaCaptureWidget /> : 
+                   id === 'audio-mixer' ? <AudioHubWidget /> :
                    id === 'ai-chat' ? <OpenRouterWidget /> :
                    id === 'quick-notes' ? <NotionCaptureWidget /> :
                    <DummyWidget />}

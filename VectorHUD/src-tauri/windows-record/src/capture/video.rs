@@ -298,6 +298,34 @@ unsafe fn process_frame(
             
             // Then copy from pooled to staging texture
             context.CopyResource(staging_texture, &pooled_texture);
+            
+            // Draw Mouse Cursor
+            use windows::Win32::Graphics::Dxgi::IDXGISurface1;
+            use windows::Win32::UI::WindowsAndMessaging::{GetCursorInfo, DrawIconEx, CURSORINFO, CURSOR_SHOWING, DI_NORMAL};
+            
+            if let Ok(surface) = staging_texture.cast::<IDXGISurface1>() {
+                if let Ok(hdc) = surface.GetDC(false) {
+                    let mut cursor_info = CURSORINFO {
+                        cbSize: std::mem::size_of::<CURSORINFO>() as u32,
+                        ..Default::default()
+                    };
+                    if GetCursorInfo(&mut cursor_info).into() && cursor_info.flags.0 == CURSOR_SHOWING.0 {
+                        // DXGI output is for the monitor the window is on. 
+                        // For a single monitor setup, ptScreenPos is correct. For multi-monitor, 
+                        // we'd need to subtract the monitor's top-left offset.
+                        let pos = cursor_info.ptScreenPos;
+                        let _ = DrawIconEx(
+                            hdc,
+                            pos.x,
+                            pos.y,
+                            cursor_info.hCursor,
+                            0, 0, 0, None, DI_NORMAL
+                        );
+                    }
+                    let _ = surface.ReleaseDC(None);
+                }
+            }
+            
         } else {
             // Window not in focus, just use blank screen
             context.CopyResource(staging_texture, blank_texture);

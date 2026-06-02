@@ -309,7 +309,14 @@ pub fn run() {
             core::record::start_replay_buffer,
             core::record::save_replay_buffer,
             core::record::stop_replay_buffer,
-            core::record::get_recording_status
+            core::record::get_recording_status,
+            core::audio_mixer::get_audio_mixer_state,
+            core::audio_mixer::set_app_volume,
+            core::audio_mixer::set_master_volume,
+            core::media_control::get_current_media,
+            core::media_control::media_play_pause,
+            core::media_control::media_next,
+            core::media_control::media_prev
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
