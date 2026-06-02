@@ -11,13 +11,6 @@ interface Message {
   image?: string; // base64 data url
 }
 
-const MODELS = [
-  { id: 'deepseek/deepseek-chat-v3-0324', name: 'DeepSeek V3' },
-  { id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4' },
-  { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
-  { id: 'openai/gpt-4o', name: 'GPT-4o' },
-];
-
 export function OpenRouterWidget() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');

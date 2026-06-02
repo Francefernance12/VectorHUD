@@ -6,18 +6,96 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::tray::TrayIconBuilder;
 use tauri::{Emitter, Manager, RunEvent};
-use tauri_plugin_global_shortcut::{Code, Modifiers, ShortcutState};
 use tracing_appender::rolling;
 use tracing_subscriber::EnvFilter;
 
 #[tauri::command]
-fn set_interactive_mode(window: tauri::Window, interactive: bool, interactable_pins: bool) {
+fn set_interactive_mode(window: tauri::Window, interactive: bool, _interactable_pins: bool) {
     if interactive {
         let _ = window.set_ignore_cursor_events(false);
     } else {
-        let _ = window.set_ignore_cursor_events(!interactable_pins);
+        // Force ignore events when dismissed to not block underlying game interactions
+        let _ = window.set_ignore_cursor_events(true);
     }
 }
+
+#[tauri::command]
+fn update_hotkeys(
+    app: tauri::AppHandle,
+    overlay_hotkey: String,
+    screenshot_hotkey: String,
+    record_hotkey: String,
+    replay_hotkey: String,
+) -> Result<(), String> {
+    use std::str::FromStr;
+    use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
+    
+    let shortcut_manager = app.global_shortcut();
+    let _ = shortcut_manager.unregister_all();
+    
+    let register_hotkey = |hotkey_str: &str, event_name: &str| {
+        if let Ok(shortcut) = Shortcut::from_str(hotkey_str) {
+            if shortcut_manager.is_registered(shortcut) {
+                let _ = shortcut_manager.unregister(shortcut);
+            }
+            let event_name = event_name.to_string();
+            let res = shortcut_manager.on_shortcut(shortcut, move |app, _shortcut, event| {
+                if event.state == ShortcutState::Pressed {
+                    if event_name == "hotkey-overlay" {
+                        use tauri::Manager;
+                        if let Some(window) = app.get_webview_window("main") {
+                            if let Ok(cursor_pos) = app.cursor_position() {
+                                if let Ok(monitors) = window.available_monitors() {
+                                    for m in monitors {
+                                        let pos = m.position();
+                                        let size = m.size();
+                                        let scale = m.scale_factor();
+                                        let x = pos.x as f64;
+                                        let y = pos.y as f64;
+                                        let w = size.width as f64;
+                                        let h = size.height as f64;
+
+                                        if cursor_pos.x >= x
+                                            && cursor_pos.x <= x + w
+                                            && cursor_pos.y >= y
+                                            && cursor_pos.y <= y + h
+                                        {
+                                            let lx = x / scale;
+                                            let ly = y / scale;
+                                            let lw = w / scale;
+                                            let lh = h / scale;
+                                            let _ = window.set_position(
+                                                tauri::LogicalPosition::new(lx, ly),
+                                            );
+                                            let _ = window
+                                                .set_size(tauri::LogicalSize::new(lw, lh));
+                                            let _ = window.set_skip_taskbar(true);
+                                            let _ = window.set_focus();
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    let _ = app.emit(&event_name, ());
+                }
+            });
+            if let Err(e) = res {
+                tracing::error!("Failed to register shortcut: {} - {:?}", hotkey_str, e);
+            }
+        }
+    };
+    
+    register_hotkey(&overlay_hotkey, "hotkey-overlay");
+    register_hotkey(&screenshot_hotkey, "hotkey-screenshot");
+    register_hotkey(&record_hotkey, "hotkey-record");
+    register_hotkey(&replay_hotkey, "hotkey-replay");
+    
+    Ok(())
+}
+
+
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -88,56 +166,16 @@ pub fn run() {
                     Some(vec![]),
                 ))?;
 
+                // Register global shortcut plugin (hotkeys will be bound via frontend update_hotkeys)
                 app.handle().plugin(
-                    tauri_plugin_global_shortcut::Builder::new()
-                        .with_shortcuts(["ctrl+alt+o"])?
-                        .with_handler(|app, shortcut, event| {
-                            if event.state == ShortcutState::Pressed
-                                && shortcut.matches(Modifiers::CONTROL | Modifiers::ALT, Code::KeyO)
-                            {
-                                if let Some(window) = app.get_webview_window("main") {
-                                    if let Ok(cursor_pos) = app.cursor_position() {
-                                        if let Ok(monitors) = window.available_monitors() {
-                                            for m in monitors {
-                                                let pos = m.position();
-                                                let size = m.size();
-                                                let scale = m.scale_factor();
-                                                let x = pos.x as f64;
-                                                let y = pos.y as f64;
-                                                let w = size.width as f64;
-                                                let h = size.height as f64;
-
-                                                if cursor_pos.x >= x
-                                                    && cursor_pos.x <= x + w
-                                                    && cursor_pos.y >= y
-                                                    && cursor_pos.y <= y + h
-                                                {
-                                                    let lx = x / scale;
-                                                    let ly = y / scale;
-                                                    let lw = w / scale;
-                                                    let lh = h / scale;
-                                                    let _ = window.set_position(
-                                                        tauri::LogicalPosition::new(lx, ly),
-                                                    );
-                                                    let _ = window
-                                                        .set_size(tauri::LogicalSize::new(lw, lh));
-                                                    let _ = window.set_skip_taskbar(true);
-                                                    let _ = window.set_focus();
-                                                    break;
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                let _ = app.emit("toggle-interactive-mode", ());
-                            }
-                        })
-                        .build(),
+                    tauri_plugin_global_shortcut::Builder::new().build()
                 )?;
 
                 // Size the window to cover the primary monitor on boot
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.set_shadow(false);
+                    
+                    // Size the window to cover the primary monitor on boot
                     if let Ok(Some(monitor)) = window.primary_monitor() {
                         let scale = monitor.scale_factor();
                         let size = monitor.size();
@@ -150,6 +188,16 @@ pub fn run() {
                             size.width as f64 / scale,
                             size.height as f64 / scale,
                         ));
+                    }
+
+                    // Exclude from capture so it doesn't show up in recordings
+                    if let Ok(hwnd) = window.hwnd() {
+                        unsafe {
+                            let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowDisplayAffinity(
+                                windows::Win32::Foundation::HWND(hwnd.0 as isize),
+                                windows::Win32::UI::WindowsAndMessaging::WDA_EXCLUDEFROMCAPTURE,
+                            );
+                        }
                     }
 
                     // Dismiss overlay when window loses focus (e.g. clicking second monitor)
@@ -166,6 +214,11 @@ pub fn run() {
 
             // Spawn the hardware telemetry thread with shutdown signal
             core::metrics::spawn_metrics_thread(app.handle().clone(), shutdown_flag.clone());
+
+            // Initialize video recorder state
+            app.manage(core::record::RecorderState(std::sync::Mutex::new(
+                core::record::RecorderManager::new(),
+            )));
 
             Ok(())
         })
@@ -224,12 +277,24 @@ pub fn run() {
                         ",
                             kind: tauri_plugin_sql::MigrationKind::Up,
                         },
+                        tauri_plugin_sql::Migration {
+                            version: 4,
+                            description: "create_known_games",
+                            sql: "
+                        CREATE TABLE IF NOT EXISTS known_games (
+                            process_name TEXT PRIMARY KEY,
+                            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                        );
+                        ",
+                            kind: tauri_plugin_sql::MigrationKind::Up,
+                        },
                     ],
                 )
                 .build(),
         )
         .invoke_handler(tauri::generate_handler![
             set_interactive_mode,
+            update_hotkeys,
             commands::telemetry::frontend_log,
             commands::api::sync_to_notion,
             commands::api::save_local_note,
@@ -238,7 +303,13 @@ pub fn run() {
             core::capture::check_file_exists,
             core::capture::delete_capture,
             core::auth::encrypt_data,
-            core::auth::decrypt_data
+            core::auth::decrypt_data,
+            core::record::start_video_recording,
+            core::record::stop_video_recording,
+            core::record::start_replay_buffer,
+            core::record::save_replay_buffer,
+            core::record::stop_replay_buffer,
+            core::record::get_recording_status
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

@@ -7,7 +7,28 @@ import { invoke } from '@tauri-apps/api/core';
 import { executeQuery, getDb } from '../utils/db';
 
 export function SettingsModal() {
-  const { isSettingsOpen, toggleSettings, openRouterModel, setOpenRouterModel, globalFontSize, setGlobalFontSize, interactablePins, setInteractablePins } = useSettingsStore(
+  const { 
+    isSettingsOpen, 
+    toggleSettings, 
+    openRouterModel, 
+    setOpenRouterModel, 
+    globalFontSize, 
+    setGlobalFontSize, 
+    interactablePins, 
+    setInteractablePins,
+    recordMicrophone,
+    setRecordMicrophone,
+    recordSystemAudio,
+    setRecordSystemAudio,
+    overlayHotkey,
+    setOverlayHotkey,
+    screenshotHotkey,
+    setScreenshotHotkey,
+    recordHotkey,
+    setRecordHotkey,
+    replayHotkey,
+    setReplayHotkey
+  } = useSettingsStore(
     useShallow((state) => ({
       isSettingsOpen: state.isSettingsOpen,
       toggleSettings: state.toggleSettings,
@@ -17,10 +38,22 @@ export function SettingsModal() {
       setGlobalFontSize: state.setGlobalFontSize,
       interactablePins: state.interactablePins,
       setInteractablePins: state.setInteractablePins,
+      recordMicrophone: state.recordMicrophone,
+      setRecordMicrophone: state.setRecordMicrophone,
+      recordSystemAudio: state.recordSystemAudio,
+      setRecordSystemAudio: state.setRecordSystemAudio,
+      overlayHotkey: state.overlayHotkey,
+      setOverlayHotkey: state.setOverlayHotkey,
+      screenshotHotkey: state.screenshotHotkey,
+      setScreenshotHotkey: state.setScreenshotHotkey,
+      recordHotkey: state.recordHotkey,
+      setRecordHotkey: state.setRecordHotkey,
+      replayHotkey: state.replayHotkey,
+      setReplayHotkey: state.setReplayHotkey,
     }))
   );
 
-  const [activeTab, setActiveTab] = useState<'integrations' | 'preferences'>('integrations');
+  const [activeTab, setActiveTab] = useState<'integrations' | 'preferences' | 'hotkeys'>('integrations');
   const [openRouterKey, setOpenRouterKey] = useState('');
   const [notionKey, setNotionKey] = useState('');
   const [notionDbId, setNotionDbId] = useState('');
@@ -149,6 +182,14 @@ export function SettingsModal() {
             >
               <Palette size={16} /> Preferences
             </button>
+            <button
+              onClick={() => setActiveTab('hotkeys')}
+              className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                activeTab === 'hotkeys' ? 'bg-primary/20 text-primary' : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
+              }`}
+            >
+              <Zap size={16} /> Hotkeys
+            </button>
           </div>
 
           {/* Content Area */}
@@ -253,6 +294,99 @@ export function SettingsModal() {
                     <div className="w-11 h-6 bg-zinc-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent-green"></div>
                   </label>
                 </div>
+
+                <h3 className="text-md font-semibold text-white flex items-center gap-2 border-b border-white/10 pb-2 mt-6">
+                  <Palette size={16} className="text-purple-400" /> Video & Replay Recording
+                </h3>
+
+                <div className="flex justify-between items-center bg-black/40 p-3 rounded-lg border border-white/5">
+                  <div>
+                    <label className="text-sm font-semibold text-zinc-200">Record System Audio</label>
+                    <p className="text-xs text-zinc-500 mt-0.5">Include game and desktop sound output in recordings.</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer" 
+                      checked={recordSystemAudio}
+                      onChange={(e) => setRecordSystemAudio(e.target.checked)}
+                    />
+                    <div className="w-11 h-6 bg-zinc-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent-green"></div>
+                  </label>
+                </div>
+
+                <div className="flex justify-between items-center bg-black/40 p-3 rounded-lg border border-white/5">
+                  <div>
+                    <label className="text-sm font-semibold text-zinc-200">Record Microphone</label>
+                    <p className="text-xs text-zinc-500 mt-0.5">Include voice input from default microphone.</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer" 
+                      checked={recordMicrophone}
+                      onChange={(e) => setRecordMicrophone(e.target.checked)}
+                    />
+                    <div className="w-11 h-6 bg-zinc-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent-green"></div>
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'hotkeys' && (
+              <div className="space-y-6">
+                <h3 className="text-md font-semibold text-white flex items-center gap-2 border-b border-white/10 pb-2">
+                  <Zap size={16} className="text-amber-400" /> Global Hotkeys
+                </h3>
+                
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Main Overlay Toggle</label>
+                    <input 
+                      type="text"
+                      value={overlayHotkey}
+                      onChange={(e) => setOverlayHotkey(e.target.value)}
+                      placeholder="ctrl+alt+o"
+                      className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-primary transition-colors uppercase"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Capture Screenshot</label>
+                    <input 
+                      type="text"
+                      value={screenshotHotkey}
+                      onChange={(e) => setScreenshotHotkey(e.target.value)}
+                      placeholder="ctrl+alt+s"
+                      className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-primary transition-colors uppercase"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Toggle Recording</label>
+                    <input 
+                      type="text"
+                      value={recordHotkey}
+                      onChange={(e) => setRecordHotkey(e.target.value)}
+                      placeholder="ctrl+alt+r"
+                      className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-primary transition-colors uppercase"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Toggle / Save Replay Buffer</label>
+                    <input 
+                      type="text"
+                      value={replayHotkey}
+                      onChange={(e) => setReplayHotkey(e.target.value)}
+                      placeholder="ctrl+alt+b"
+                      className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-primary transition-colors uppercase"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-zinc-500 italic mt-4">
+                  Note: Updating hotkeys requires an application restart to take effect. Supported modifiers: ctrl, alt, shift, super.
+                </p>
               </div>
             )}
           </div>

@@ -21,7 +21,11 @@ For every task, follow this loop:
 2. **Test:** Write the failing unit tests (Rust `cargo test` or frontend `Vitest`).
 3. **Build:** Write the minimal code required to pass the test and satisfy the spec.
 4. **Log:** Ensure the new feature integrates with the centralized logging system.
-5. **Verify:** Run tests and ensure the build completes successfully. Update `progress-tracker.md`.
+5. **Document:** **CRITICAL:** Update ALL relevant context files dynamically. Do not just rely on `progress-tracker.md`. 
+    - If you made architectural choices or encountered gotchas, update `Decisions.md`.
+    - If you modified the DB schema, update `database-schema.md`.
+    - If you skipped a feature or found a non-critical bug, add it to `FutureImplementations.md`.
+6. **Verify:** Run tests and ensure the build completes successfully. Update `progress-tracker.md`.
 
 ## Scoping Rules
 - Do not combine UI creation with heavy backend Rust logic in a single prompt.
