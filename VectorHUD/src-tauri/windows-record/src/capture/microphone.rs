@@ -213,27 +213,27 @@ pub unsafe fn collect_microphone(
                     }
                     last_packet_time = qpc_position;
 
-                    if (flags & (AUDCLNT_BUFFERFLAGS_SILENT.0 as u32)) == 0 {
-                        let relative_qpc = qpc_position - start_qpc;
-                        let time_hns = (relative_qpc as f64 * ticks_to_hns) as i64;
+                    let is_silent = (flags & (AUDCLNT_BUFFERFLAGS_SILENT.0 as u32)) != 0;
+                    let relative_qpc = qpc_position - start_qpc;
+                    let time_hns = (relative_qpc as f64 * ticks_to_hns) as i64;
 
-                        match create_microphone_sample(
-                            buffer,
-                            num_frames_available,
-                            &wave_format,
-                            time_hns,
-                            packet_duration_hns,
-                        ) {
-                            Ok(sample) => {
-                                if let Err(e) = send.send(SendableSample::new(sample)) {
-                                    info!("Failed to send audio sample, receiver likely dropped: {:?}", e);
-                                    return Err(E_FAIL.into());
-                                }
+                    match create_microphone_sample(
+                        buffer,
+                        num_frames_available,
+                        &wave_format,
+                        time_hns,
+                        packet_duration_hns,
+                        is_silent,
+                    ) {
+                        Ok(sample) => {
+                            if let Err(e) = send.send(SendableSample::new(sample)) {
+                                info!("Failed to send audio sample, receiver likely dropped: {:?}", e);
+                                return Err(E_FAIL.into());
                             }
-                            Err(e) => {
-                                info!("Failed to create audio sample: {:?}", e);
-                                return Err(e);
-                            }
+                        }
+                        Err(e) => {
+                            info!("Failed to create audio sample: {:?}", e);
+                            return Err(e);
                         }
                     }
 
@@ -402,8 +402,9 @@ unsafe fn create_microphone_sample(
     wave_format: &WAVEFORMATEX,
     time_hns: i64,
     packet_duration_hns: i64,
+    is_silent: bool,
 ) -> Result<IMFSample> {
-    if buffer.is_null() {
+    if !is_silent && buffer.is_null() {
         return Err(E_POINTER.into());
     }
 
@@ -425,7 +426,10 @@ unsafe fn create_microphone_sample(
         Some(&mut max_length as *mut u32),
         Some(&mut current_length as *mut u32),
     )?;
-    if wave_format.wBitsPerSample == 32 {
+    if is_silent {
+        // Just zero-fill the output buffer
+        std::ptr::write_bytes(buffer_data, 0, buffer_size);
+    } else if wave_format.wBitsPerSample == 32 {
         let src =
             std::slice::from_raw_parts(buffer as *const f32, num_frames as usize * num_channels);
         let dst = std::slice::from_raw_parts_mut(

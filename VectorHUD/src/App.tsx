@@ -205,7 +205,7 @@ function App() {
   return (
     <>
       {/* HUD Toasts */}
-      <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[9999] pointer-events-none flex flex-col items-center gap-2">
+      <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[9999] pointer-events-none flex flex-col items-center gap-2">
         <AnimatePresence>
           {toasts.map((toast) => (
             <motion.div

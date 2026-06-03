@@ -37,3 +37,8 @@ This document tracks all important decisions made throughout the lifecycle of th
 
 - **Decision:** Pinned widgets will be non-interactable when the main overlay is closed. `set_ignore_cursor_events(true)` must be enforced when the overlay backdrop is hidden to guarantee that underlying games and applications remain clickable.
 - **Reasoning:** A transparent full-screen window intercepts all mouse clicks by default. Custom Windows hit-testing (HTTRANSPARENT) is difficult to implement efficiently per-widget on a unified transparent webview without degrading performance. Therefore, the user accepts that pinned widgets act as passive HUD elements unless the overlay is actively summoned via hotkey.
+
+## Session 7B: Media Capture Engine
+
+- **Decision:** Shift from external ffmpeg binaries to a custom `windows-record` crate that wraps DXGI Desktop Duplication and Media Foundation.
+- **Reasoning:** Allows for in-memory rolling replay buffers without massive disk I/O, integrates seamlessly with Tauri, gives us full control over WASAPI loopback audio capture, and allows us to easily use `SetWindowDisplayAffinity` to exclude the overlay from capture outputs. It also enables setting exact color space matrices (BT.709) for HDR to SDR tone mapping.

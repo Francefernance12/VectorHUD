@@ -15,7 +15,7 @@ use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
 use super::dxgi::{create_blank_dxgi_texture, setup_dxgi_duplication};
 use super::window::{is_window_valid, get_window_title};
 use crate::capture::dxgi::create_staging_texture;
-use crate::types::{SendableSample, TexturePool, SamplePool};
+use crate::types::{PooledTexture, SamplePool, SendableSample, TexturePool};
 
 /// Struct to manage window target state
 struct WindowTracker {
@@ -153,15 +153,12 @@ pub unsafe fn get_frames(
     let mut accumulated_delay = Duration::ZERO;
     let mut num_duped = 0;
 
-    // Create staging texture once and reuse
-    let staging_texture = create_staging_texture(&device, input_width, input_height)?;
     let (blank_texture, _blank_resource) = create_blank_dxgi_texture(&device, input_width, input_height)?;
 
     // Initialize texture pool for reusable textures (for Media Foundation samples)
     use windows::Win32::Graphics::Dxgi::Common::*;
     use windows::Win32::Graphics::Direct3D11::*;
 
-    // Create a pool with capacity of 10 textures - adjust based on expected frame rate and processing time
     let texture_pool = TexturePool::new(
         device.clone(),
         10, // Capacity
@@ -169,9 +166,9 @@ pub unsafe fn get_frames(
         input_height,
         DXGI_FORMAT_B8G8R8A8_UNORM,
         D3D11_USAGE_DEFAULT.0.try_into().unwrap(),
-        D3D11_BIND_SHADER_RESOURCE.0.try_into().unwrap(),
+        (D3D11_BIND_SHADER_RESOURCE.0 | D3D11_BIND_RENDER_TARGET.0).try_into().unwrap(),
         0, // CPU access flags
-        0, // Misc flags
+        D3D11_RESOURCE_MISC_GDI_COMPATIBLE.0.try_into().unwrap(), // Misc flags
     )?;
     let texture_pool = Arc::new(texture_pool);
     
@@ -183,14 +180,14 @@ pub unsafe fn get_frames(
     started.wait();
 
     // Initialize duplication
-    let mut duplication_result = setup_dxgi_duplication(&device);
+    let mut duplication_result = setup_dxgi_duplication(&device).map(|(d, _)| d);
     
     // Main recording loop
     while recording.load(Ordering::Relaxed) {
         if let Err(e) = &duplication_result {
             warn!("DXGI duplication error: {:?}. Retrying...", e);
             spin_sleep::sleep(Duration::from_millis(500));
-            duplication_result = setup_dxgi_duplication(&device);
+            duplication_result = setup_dxgi_duplication(&device).map(|(d, _)| d);
             if duplication_result.is_err() {
                 continue;
             }
@@ -201,7 +198,6 @@ pub unsafe fn get_frames(
         match process_frame(
             duplication,
             &context_mutex,
-            &staging_texture,
             &blank_texture,
             &mut window_tracker,
             fps_num,
@@ -258,7 +254,6 @@ pub unsafe fn get_frames(
 unsafe fn process_frame(
     duplication: &IDXGIOutputDuplication,
     context_mutex: &Arc<Mutex<ID3D11DeviceContext>>,
-    staging_texture: &ID3D11Texture2D,
     blank_texture: &ID3D11Texture2D,
     _window_tracker: &mut WindowTracker,
     _fps_num: u32,
@@ -292,67 +287,95 @@ unsafe fn process_frame(
         // Get the source texture from the resource
         let source_texture: ID3D11Texture2D = resource.cast()?;
         
+        // Wrap the pooled_texture in PooledTexture to track its lifetime
+        let arc_pooled = Arc::new(crate::types::PooledTexture {
+            texture: pooled_texture.clone(),
+            pool: texture_pool.clone(),
+        });
+
         if should_show_content {
             // Copy content from source to pooled texture
             context.CopyResource(&pooled_texture, &source_texture);
             
-            // Then copy from pooled to staging texture
-            context.CopyResource(staging_texture, &pooled_texture);
-            
             // Draw Mouse Cursor
             use windows::Win32::Graphics::Dxgi::IDXGISurface1;
-            use windows::Win32::UI::WindowsAndMessaging::{GetCursorInfo, DrawIconEx, CURSORINFO, CURSOR_SHOWING, DI_NORMAL};
+            use windows::Win32::UI::WindowsAndMessaging::{GetCursorInfo, DrawIconEx, CURSORINFO, CURSOR_SHOWING, DI_NORMAL, GetForegroundWindow};
+            use windows::Win32::Graphics::Gdi::{MonitorFromWindow, GetMonitorInfoW, MONITORINFO, MONITOR_DEFAULTTOPRIMARY};
             
-            if let Ok(surface) = staging_texture.cast::<IDXGISurface1>() {
-                if let Ok(hdc) = surface.GetDC(false) {
-                    let mut cursor_info = CURSORINFO {
-                        cbSize: std::mem::size_of::<CURSORINFO>() as u32,
-                        ..Default::default()
-                    };
-                    if GetCursorInfo(&mut cursor_info).into() && cursor_info.flags.0 == CURSOR_SHOWING.0 {
-                        // DXGI output is for the monitor the window is on. 
-                        // For a single monitor setup, ptScreenPos is correct. For multi-monitor, 
-                        // we'd need to subtract the monitor's top-left offset.
-                        let pos = cursor_info.ptScreenPos;
-                        let _ = DrawIconEx(
-                            hdc,
-                            pos.x,
-                            pos.y,
-                            cursor_info.hCursor,
-                            0, 0, 0, None, DI_NORMAL
-                        );
+            if let Ok(surface) = pooled_texture.cast::<IDXGISurface1>() {
+                match surface.GetDC(false) {
+                    Ok(hdc) => {
+                        let mut cursor_info = CURSORINFO {
+                            cbSize: std::mem::size_of::<CURSORINFO>() as u32,
+                            ..Default::default()
+                        };
+                        
+                        let hwnd = GetForegroundWindow();
+                        let target_hmonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY);
+                        let mut minfo = MONITORINFO {
+                            cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+                            ..Default::default()
+                        };
+                        
+                        let mut offset_x = 0;
+                        let mut offset_y = 0;
+                        if GetMonitorInfoW(target_hmonitor, &mut minfo).into() {
+                            offset_x = minfo.rcMonitor.left;
+                            offset_y = minfo.rcMonitor.top;
+                        }
+
+                        if GetCursorInfo(&mut cursor_info).into() && cursor_info.flags.0 == CURSOR_SHOWING.0 {
+                            let mut pos = cursor_info.ptScreenPos;
+                            // Adjust to local texture coordinates
+                            pos.x -= offset_x;
+                            pos.y -= offset_y;
+                            
+                            let res = DrawIconEx(
+                                hdc,
+                                pos.x,
+                                pos.y,
+                                cursor_info.hCursor,
+                                0, 0, 0, None, DI_NORMAL
+                            );
+                            if res.0 == 0 {
+                                log::warn!("DrawIconEx failed");
+                            }
+                        }
+                        let _ = surface.ReleaseDC(None);
                     }
-                    let _ = surface.ReleaseDC(None);
+                    Err(e) => {
+                        log::warn!("GetDC failed: {:?}", e);
+                    }
                 }
+            } else {
+                log::warn!("Failed to cast pooled_texture to IDXGISurface1");
             }
-            
         } else {
-            // Window not in focus, just use blank screen
-            context.CopyResource(staging_texture, blank_texture);
+            // Fill with black if not focused
+            context.CopyResource(&pooled_texture, blank_texture);
         }
         
         // Release the original texture and frame
         drop(source_texture);
         duplication.ReleaseFrame()?;
         
-        // Return the pooled texture to the pool when done
-        texture_pool.release(pooled_texture);
+        // Handle frame timing and duplication
+        while *accumulated_delay >= frame_duration {
+            debug!("Duping a frame to catch up");
+            send_frame(&pooled_texture, frame_count, send, sample_pool, None)
+                .map_err(|_| FrameError::ChannelClosed)?;
+            *next_frame_time += frame_duration;
+            *accumulated_delay -= frame_duration;
+            *num_duped += 1;
+        }
+        
+        // Send the real frame, passing arc_pooled to be released when the SendableSample drops
+        send_frame(&pooled_texture, frame_count, send, sample_pool, Some(arc_pooled))
+            .map_err(|_| FrameError::ChannelClosed)?;
     }
     
     drop(context);
     
-    // Handle frame timing and duplication
-    while *accumulated_delay >= frame_duration {
-        debug!("Duping a frame to catch up");
-        send_frame(staging_texture, frame_count, send, sample_pool)
-            .map_err(|_| FrameError::ChannelClosed)?;
-        *next_frame_time += frame_duration;
-        *accumulated_delay -= frame_duration;
-        *num_duped += 1;
-    }
-    
-    send_frame(staging_texture, frame_count, send, sample_pool)
-        .map_err(|_| FrameError::ChannelClosed)?;
     *next_frame_time += frame_duration;
     
     let current_time = Instant::now();
@@ -366,6 +389,7 @@ unsafe fn send_frame(
     frame_count: u64,
     send: &Sender<SendableSample>,
     sample_pool: &Arc<SamplePool>,
+    pooled_texture: Option<Arc<PooledTexture>>,
 ) -> Result<()> {
     // Get a sample from the pool instead of creating a new one each time
     let samp = sample_pool.acquire_for_texture(texture)?;
@@ -374,7 +398,7 @@ unsafe fn send_frame(
     sample_pool.set_sample_time(&samp, frame_count)?;
     
     // Create a pooled SendableSample that will return the sample to the pool when dropped
-    let sendable = SendableSample::new_pooled(samp, texture, sample_pool.clone());
+    let sendable = SendableSample::new_pooled(samp, texture, sample_pool.clone(), pooled_texture);
     
     // Send the sample and return to pool if fails
     match send.send(sendable) {

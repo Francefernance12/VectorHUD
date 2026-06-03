@@ -150,6 +150,10 @@ unsafe fn create_video_output_type(
         &MF_MT_YUV_MATRIX,
         MFVideoTransferMatrix_BT709.0.try_into().unwrap(),
     )?;
+    output_type.SetUINT32(
+        &MF_MT_VIDEO_NOMINAL_RANGE,
+        MFNominalRange_0_255.0.try_into().unwrap(),
+    )?;
     // Set the appropriate profile based on the encoder type
     if video_encoder_id == &MFVideoFormat_H264 {
         output_type.SetUINT32(
@@ -188,7 +192,7 @@ unsafe fn create_video_input_type(
     input_type.SetUINT32(&MF_MT_DEFAULT_STRIDE, output_width as u32)?;
     input_type.SetUINT32(
         &MF_MT_TRANSFER_FUNCTION,
-        MFVideoTransFunc_709.0.try_into().unwrap(),
+        MFVideoTransFunc_709.0.try_into().unwrap(), // The sink writer input receives NV12 from our Video Processor
     )?;
     input_type.SetUINT32(
         &MF_MT_VIDEO_PRIMARIES,
@@ -197,6 +201,10 @@ unsafe fn create_video_input_type(
     input_type.SetUINT32(
         &MF_MT_YUV_MATRIX,
         MFVideoTransferMatrix_BT709.0.try_into().unwrap(),
+    )?;
+    input_type.SetUINT32(
+        &MF_MT_VIDEO_NOMINAL_RANGE,
+        MFNominalRange_0_255.0.try_into().unwrap(), // Video Processor outputs full range NV12
     )?;
 
     Ok(input_type)
