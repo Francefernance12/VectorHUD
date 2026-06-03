@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Volume2, VolumeX, Mic, MicOff, Music, Play, Pause, SkipForward, SkipBack } from 'lucide-react';
+import { Volume2, VolumeX, Music, Play, Pause, SkipForward, SkipBack } from 'lucide-react';
 import { logger } from '../../utils/logger';
 
 interface AudioSession {

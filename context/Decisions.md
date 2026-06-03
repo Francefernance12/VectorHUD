@@ -42,3 +42,14 @@ This document tracks all important decisions made throughout the lifecycle of th
 
 - **Decision:** Shift from external ffmpeg binaries to a custom `windows-record` crate that wraps DXGI Desktop Duplication and Media Foundation.
 - **Reasoning:** Allows for in-memory rolling replay buffers without massive disk I/O, integrates seamlessly with Tauri, gives us full control over WASAPI loopback audio capture, and allows us to easily use `SetWindowDisplayAffinity` to exclude the overlay from capture outputs. It also enables setting exact color space matrices (BT.709) for HDR to SDR tone mapping.
+
+## Session 8: Bug Fixes & API Quirks
+
+- **Decision:** When dynamically setting global hotkeys in the backend, we must explicitly call `shortcut_manager.register(shortcut)` *after* binding the handler via `shortcut_manager.on_shortcut(...)`.
+- **Reasoning:** The `tauri-plugin-global-shortcut` v2 API separates the closure handler attachment (`on_shortcut`) from the OS-level hook registration (`register`). Simply calling `on_shortcut` without `register` leads to silent failures where hotkeys are ignored by the OS.
+- **Decision:** Ignore `already registered` errors from `tauri-plugin-global-shortcut` during global hotkey registration.
+- **Reasoning:** React's StrictMode double-renders the application on boot in development. This causes two rapid IPC invocations of `update_hotkeys`. The second invocation attempts to register a hotkey that the first invocation successfully bound to the OS mere milliseconds prior, throwing a harmless "already registered" error.
+- **Decision:** Defer GPU utilization metrics to PDH instead of WMI.
+- **Reasoning:** WMI crate initialization calls `CoInitializeSecurity` globally, which strictly conflicts with Tauri's WebView2 COM requirements. This conflict caused `vectorhud.exe` to instantly print `Failed to unregister class Chrome_WidgetWin_0. Error = 1412` and crash the WebView renderer layer.
+- **Decision:** Use raw DXGI adapters (`QueryVideoMemoryInfo`) to poll VRAM instead of WMI.
+- **Reasoning:** WMI requires global security initialization (see above) and relies on outdated performance counters. DXGI provides low-level, instantaneous access to adapter video memory stats which is far more lightweight and accurate for hardware polling.

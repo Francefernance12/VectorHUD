@@ -12,6 +12,8 @@ interface SettingsState {
   screenshotHotkey: string;
   recordHotkey: string;
   replayHotkey: string;
+  timerHotkey: string;
+  stopwatchHotkey: string;
   
   toggleSettings: () => void;
   setOpenRouterModel: (model: string) => Promise<void>;
@@ -23,6 +25,8 @@ interface SettingsState {
   setScreenshotHotkey: (hotkey: string) => Promise<void>;
   setRecordHotkey: (hotkey: string) => Promise<void>;
   setReplayHotkey: (hotkey: string) => Promise<void>;
+  setTimerHotkey: (hotkey: string) => Promise<void>;
+  setStopwatchHotkey: (hotkey: string) => Promise<void>;
   loadPreferences: () => Promise<void>;
 }
 
@@ -37,6 +41,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   screenshotHotkey: 'ctrl+alt+s',
   recordHotkey: 'ctrl+alt+r',
   replayHotkey: 'ctrl+alt+b',
+  timerHotkey: 'ctrl+alt+t',
+  stopwatchHotkey: 'ctrl+alt+w',
 
   toggleSettings: () => set((state) => ({ isSettingsOpen: !state.isSettingsOpen })),
 
@@ -105,6 +111,20 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     set({ replayHotkey: hotkey });
   },
 
+  setTimerHotkey: async (hotkey) => {
+    const store = await getSettingsStore();
+    await store.set('timerHotkey', hotkey);
+    await store.save();
+    set({ timerHotkey: hotkey });
+  },
+
+  setStopwatchHotkey: async (hotkey) => {
+    const store = await getSettingsStore();
+    await store.set('stopwatchHotkey', hotkey);
+    await store.save();
+    set({ stopwatchHotkey: hotkey });
+  },
+
   loadPreferences: async () => {
     const store = await getSettingsStore();
     const model = await store.get<string>('openRouterModel');
@@ -116,6 +136,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     const sHot = await store.get<string>('screenshotHotkey');
     const rHot = await store.get<string>('recordHotkey');
     const rpHot = await store.get<string>('replayHotkey');
+    const tHot = await store.get<string>('timerHotkey');
+    const swHot = await store.get<string>('stopwatchHotkey');
 
     set({
       openRouterModel: model || 'openai/gpt-4o',
@@ -127,6 +149,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       screenshotHotkey: sHot || 'ctrl+alt+s',
       recordHotkey: rHot || 'ctrl+alt+r',
       replayHotkey: rpHot || 'ctrl+alt+b',
+      timerHotkey: tHot || 'ctrl+alt+t',
+      stopwatchHotkey: swHot || 'ctrl+alt+w',
     });
 
     try {
@@ -135,7 +159,9 @@ export const useSettingsStore = create<SettingsState>((set) => ({
         overlayHotkey: oHot || 'ctrl+alt+o',
         screenshotHotkey: sHot || 'ctrl+alt+s',
         recordHotkey: rHot || 'ctrl+alt+r',
-        replayHotkey: rpHot || 'ctrl+alt+b'
+        replayHotkey: rpHot || 'ctrl+alt+b',
+        timerHotkey: tHot || 'ctrl+alt+t',
+        stopwatchHotkey: swHot || 'ctrl+alt+w'
       });
     } catch (err) {
       console.error("Failed to sync hotkeys to Rust backend:", err);

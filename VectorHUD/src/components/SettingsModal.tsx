@@ -27,7 +27,11 @@ export function SettingsModal() {
     recordHotkey,
     setRecordHotkey,
     replayHotkey,
-    setReplayHotkey
+    setReplayHotkey,
+    timerHotkey,
+    setTimerHotkey,
+    stopwatchHotkey,
+    setStopwatchHotkey
   } = useSettingsStore(
     useShallow((state) => ({
       isSettingsOpen: state.isSettingsOpen,
@@ -50,6 +54,10 @@ export function SettingsModal() {
       setRecordHotkey: state.setRecordHotkey,
       replayHotkey: state.replayHotkey,
       setReplayHotkey: state.setReplayHotkey,
+      timerHotkey: state.timerHotkey,
+      setTimerHotkey: state.setTimerHotkey,
+      stopwatchHotkey: state.stopwatchHotkey,
+      setStopwatchHotkey: state.setStopwatchHotkey,
     }))
   );
 
@@ -373,13 +381,33 @@ export function SettingsModal() {
                     />
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Toggle / Save Replay Buffer</label>
+                  <div>
+                    <label className="block text-xs font-semibold text-zinc-400 mb-2 tracking-wider">Save Replay Buffer</label>
                     <input 
                       type="text"
                       value={replayHotkey}
                       onChange={(e) => setReplayHotkey(e.target.value)}
                       placeholder="ctrl+alt+b"
+                      className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-primary transition-colors uppercase"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-zinc-400 mb-2 tracking-wider">Toggle Timer</label>
+                    <input 
+                      type="text"
+                      value={timerHotkey}
+                      onChange={(e) => setTimerHotkey(e.target.value)}
+                      placeholder="ctrl+alt+t"
+                      className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-primary transition-colors uppercase"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-zinc-400 mb-2 tracking-wider">Toggle Stopwatch</label>
+                    <input 
+                      type="text"
+                      value={stopwatchHotkey}
+                      onChange={(e) => setStopwatchHotkey(e.target.value)}
+                      placeholder="ctrl+alt+w"
                       className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-primary transition-colors uppercase"
                     />
                   </div>
