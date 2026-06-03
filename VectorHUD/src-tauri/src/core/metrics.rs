@@ -18,7 +18,8 @@ pub struct HardwareMetrics {
 #[cfg(windows)]
 fn get_foreground_info() -> (Option<String>, Option<bool>) {
     use windows::Win32::UI::WindowsAndMessaging::{
-        GetForegroundWindow, GetWindowTextW, GetWindowRect, GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN
+        GetForegroundWindow, GetSystemMetrics, GetWindowRect, GetWindowTextW, SM_CXSCREEN,
+        SM_CYSCREEN,
     };
 
     unsafe {
@@ -35,8 +36,12 @@ fn get_foreground_info() -> (Option<String>, Option<bool>) {
             return (None, None);
         };
 
-
-        let mut rect = windows::Win32::Foundation::RECT { left: 0, top: 0, right: 0, bottom: 0 };
+        let mut rect = windows::Win32::Foundation::RECT {
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+        };
         let mut is_fs = false;
         if GetWindowRect(hwnd, &mut rect).as_bool() {
             let width = rect.right - rect.left;
@@ -66,59 +71,59 @@ pub fn spawn_metrics_thread(app: AppHandle, shutdown: Arc<AtomicBool>) {
         sys.refresh_cpu_usage();
         sys.refresh_memory();
 
-            let mut last_valid_app: Option<String> = None;
-            let mut last_valid_fs: Option<bool> = None;
+        let mut last_valid_app: Option<String> = None;
+        let mut last_valid_fs: Option<bool> = None;
 
-            loop {
-                // Check if the application has requested shutdown
-                if shutdown.load(Ordering::Relaxed) {
-                    tracing::info!("Hardware metrics thread received shutdown signal — exiting");
-                    break;
+        loop {
+            // Check if the application has requested shutdown
+            if shutdown.load(Ordering::Relaxed) {
+                tracing::info!("Hardware metrics thread received shutdown signal — exiting");
+                break;
+            }
+
+            // Refresh CPU and memory
+            sys.refresh_cpu_usage();
+            sys.refresh_memory();
+
+            let cpu_usage = sys.global_cpu_usage();
+
+            let total_memory = sys.total_memory(); // bytes
+            let used_memory = sys.used_memory(); // bytes
+
+            let total_gb = total_memory as f32 / 1_073_741_824.0;
+            let used_gb = used_memory as f32 / 1_073_741_824.0;
+
+            let ram_percent = if total_gb > 0.0 {
+                (used_gb / total_gb) * 100.0
+            } else {
+                0.0
+            };
+
+            let (current_app, current_fs) = get_foreground_info();
+
+            // If the active app is our overlay, ignore it and keep the previous app state
+            let (active_app, is_fullscreen) = if let Some(ref app_name) = current_app {
+                if app_name.contains("VectorHUD") || app_name.to_lowercase().contains("vectorhud") {
+                    (last_valid_app.clone(), last_valid_fs)
+                } else {
+                    last_valid_app = current_app.clone();
+                    last_valid_fs = current_fs;
+                    (current_app, current_fs)
                 }
+            } else {
+                last_valid_app = None;
+                last_valid_fs = None;
+                (None, None)
+            };
 
-                // Refresh CPU and memory
-                sys.refresh_cpu_usage();
-                sys.refresh_memory();
-
-                let cpu_usage = sys.global_cpu_usage();
-
-                let total_memory = sys.total_memory(); // bytes
-                let used_memory = sys.used_memory(); // bytes
-
-                let total_gb = total_memory as f32 / 1_073_741_824.0;
-                let used_gb = used_memory as f32 / 1_073_741_824.0;
-
-                let ram_percent = if total_gb > 0.0 {
-                    (used_gb / total_gb) * 100.0
-                } else {
-                    0.0
-                };
-
-                let (current_app, current_fs) = get_foreground_info();
-
-                // If the active app is our overlay, ignore it and keep the previous app state
-                let (active_app, is_fullscreen) = if let Some(ref app_name) = current_app {
-                    if app_name.contains("VectorHUD") || app_name.to_lowercase().contains("vectorhud") {
-                        (last_valid_app.clone(), last_valid_fs)
-                    } else {
-                        last_valid_app = current_app.clone();
-                        last_valid_fs = current_fs;
-                        (current_app, current_fs)
-                    }
-                } else {
-                    last_valid_app = None;
-                    last_valid_fs = None;
-                    (None, None)
-                };
-
-                let metrics = HardwareMetrics {
-                    cpu_usage,
-                    ram_usage_percent: ram_percent,
-                    ram_total_gb: total_gb,
-                    ram_used_gb: used_gb,
-                    active_app,
-                    is_fullscreen,
-                };
+            let metrics = HardwareMetrics {
+                cpu_usage,
+                ram_usage_percent: ram_percent,
+                ram_total_gb: total_gb,
+                ram_used_gb: used_gb,
+                active_app,
+                is_fullscreen,
+            };
 
             // Emit the event to the frontend
             let _ = app.emit("hardware-metrics-update", metrics);

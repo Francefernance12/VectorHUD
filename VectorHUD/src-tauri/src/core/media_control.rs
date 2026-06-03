@@ -1,9 +1,10 @@
+use serde::Serialize;
+use tauri::command;
+use windows::core::Result as WinResult;
 use windows::Media::Control::{
     GlobalSystemMediaTransportControlsSessionManager,
     GlobalSystemMediaTransportControlsSessionPlaybackStatus,
 };
-use windows::core::Result as WinResult;use serde::Serialize;
-use tauri::command;
 
 #[derive(Serialize, Clone)]
 pub struct MediaMetadata {
@@ -56,9 +57,12 @@ pub async fn media_play_pause() -> Result<(), String> {
         .map_err(|e| e.to_string())?
         .await
         .map_err(|e| e.to_string())?;
-    
+
     if let Ok(session) = manager.GetCurrentSession() {
-        let _ = session.TryTogglePlayPauseAsync().map_err(|e| e.to_string())?.await;
+        let _ = session
+            .TryTogglePlayPauseAsync()
+            .map_err(|e| e.to_string())?
+            .await;
     }
     Ok(())
 }
@@ -69,7 +73,7 @@ pub async fn media_next() -> Result<(), String> {
         .map_err(|e| e.to_string())?
         .await
         .map_err(|e| e.to_string())?;
-    
+
     if let Ok(session) = manager.GetCurrentSession() {
         let _ = session.TrySkipNextAsync().map_err(|e| e.to_string())?.await;
     }
@@ -82,9 +86,12 @@ pub async fn media_prev() -> Result<(), String> {
         .map_err(|e| e.to_string())?
         .await
         .map_err(|e| e.to_string())?;
-    
+
     if let Ok(session) = manager.GetCurrentSession() {
-        let _ = session.TrySkipPreviousAsync().map_err(|e| e.to_string())?.await;
+        let _ = session
+            .TrySkipPreviousAsync()
+            .map_err(|e| e.to_string())?
+            .await;
     }
     Ok(())
 }
