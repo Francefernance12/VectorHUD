@@ -102,6 +102,10 @@ function App() {
       setInteractive(false);
     });
 
+    const unlistenForceInteractive = listen("force-interactive", () => {
+      setInteractive(true);
+    });
+
     // Global Hotkey Listeners
     const unlistenScreenshot = listen("hotkey-screenshot", async () => {
       try {
@@ -208,6 +212,7 @@ function App() {
       unlistenRecord.then((fn) => fn());
       unlistenReplay.then((fn) => fn());
       unlistenFocusLoss.then((fn) => fn());
+      unlistenForceInteractive.then((fn) => fn());
       unlistenTimer.then((fn) => fn());
       unlistenStopwatch.then((fn) => fn());
       window.removeEventListener('blur', handleBlur);

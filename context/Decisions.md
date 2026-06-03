@@ -53,3 +53,10 @@ This document tracks all important decisions made throughout the lifecycle of th
 - **Reasoning:** WMI crate initialization calls `CoInitializeSecurity` globally, which strictly conflicts with Tauri's WebView2 COM requirements. This conflict caused `vectorhud.exe` to instantly print `Failed to unregister class Chrome_WidgetWin_0. Error = 1412` and crash the WebView renderer layer.
 - **Decision:** Use raw DXGI adapters (`QueryVideoMemoryInfo`) to poll VRAM instead of WMI.
 - **Reasoning:** WMI requires global security initialization (see above) and relies on outdated performance counters. DXGI provides low-level, instantaneous access to adapter video memory stats which is far more lightweight and accurate for hardware polling.
+
+## Session 9/10: Integrations & Interactivity
+
+- **Decision:** Utilize block-level endpoints (`/v1/blocks/{block_id}/children`) for parsing and managing interactive Notion tasks rather than the page properties endpoint.
+- **Reasoning:** Notion page properties only map to top-level database columns. Rich content like paragraph notes and interactive checkboxes reside inside the internal page body block tree, necessitating block-level recursive queries and patches to support real-time to-do list manipulation within the overlay.
+- **Decision:** Adopt Zustand's `persist` middleware with `localStorage` for all draft forms (Notion sync drafts, AI chat inputs, and Vision buffer thumbnails).
+- **Reasoning:** The HUD overlay constantly toggles visibility (`window.hide()`), and the React environment frequently unmounts nodes when switching into "Ghost Mode" (non-interactive state) to free up memory. Utilizing `persist` guarantees that inputs effortlessly survive these aggressive unmount cycles and full Tauri developer reloads.
