@@ -22,9 +22,10 @@ Update this file after every meaningful implementation change.
 - Session 6B: Settings (UI & Auth) - Building a settings modal and secure Rust-based credential storage.
 - Session 7A: UI Polish (Expandable dock, pin toggles (interactable), custom scrollbars).
 - Session 7B: Capture+ (Media - 30s rolling video buffer, standard recording, mic toggling, windows-record forked to fix focus tracking limitations, fixed HDR washout and sound mixing deadlocks).
+- Session 8A: Audio Hub (Mixer - Hook Core Audio API for app-specific volume, mic/output switcher, music player).
 
 ## In Progress
-- Session 8A: Audio Hub (Mixer - Hook Core Audio API for app-specific volume, mic/output switcher, music player).
+- Session 8B: Metrics+ (Hardware - GPU, VRAM, and FPS polling; Timer utility).
 
 ## Next Up
 | Session | Unit Name | Focus | Goal |
