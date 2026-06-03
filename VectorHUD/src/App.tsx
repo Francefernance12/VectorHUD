@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { AnimatePresence, motion } from "framer-motion";
 import { logger } from "./utils/logger";
@@ -7,6 +7,8 @@ import { setSetting, getSetting } from "./utils/store";
 import { useShellStore } from "./store/shellStore";
 import { useWidgetStore } from "./store/widgetStore";
 import { useSettingsStore } from "./store/settingsStore";
+import { useToastStore } from "./store/toastStore";
+import { useTimerStore } from "./store/timerStore";
 import { useShallow } from 'zustand/react/shallow';
 import { Dock } from "./components/Dock";
 import { WidgetContainer } from "./components/WidgetContainer";
@@ -18,7 +20,9 @@ import { MediaCaptureWidget } from "./components/widgets/MediaCaptureWidget";
 import { AudioHubWidget } from "./components/widgets/AudioHubWidget";
 import { OpenRouterWidget } from "./components/widgets/OpenRouterWidget";
 import { NotionCaptureWidget } from "./components/widgets/NotionCaptureWidget";
+import { TimerWidget } from "./components/widgets/TimerWidget";
 import { RecordingStatusBar } from "./components/RecordingStatusBar";
+import { TimerStatusBar } from "./components/TimerStatusBar";
 import { useRecordingStore } from "./store/recordingStore";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
@@ -33,7 +37,9 @@ function App() {
   const interactablePins = useSettingsStore((state) => state.interactablePins);
   const isRecording = useRecordingStore((state) => state.isRecording);
 
-  const [toasts, setToasts] = useState<{ id: number; message: string }[]>([]);
+  // Global Toast Store
+  const toasts = useToastStore((state) => state.toasts);
+  const showToast = useToastStore((state) => state.showToast);
 
   // Force settings to close in state when exiting interactive mode
   useEffect(() => {
@@ -85,14 +91,6 @@ function App() {
     const unlistenShortcut = listen("hotkey-overlay", () => {
       toggleInteractive();
     });
-
-    const showToast = (message: string) => {
-      const id = Date.now();
-      setToasts((prev) => [...prev, { id, message }]);
-      setTimeout(() => {
-        setToasts((prev) => prev.filter((t) => t.id !== id));
-      }, 3000);
-    };
 
     // Listen for HUD toasts from Rust
     const unlistenToast = listen<string>("hud-toast", (event) => {
@@ -164,6 +162,22 @@ function App() {
         }
       }
     });
+    const unlistenTimer = listen("hotkey-timer", () => {
+      const { cdIsRunning, cdFinished, cdTime, cdInput, pauseCd, startCd, resetCd } = useTimerStore.getState();
+      if (cdIsRunning) {
+        pauseCd();
+      } else {
+        if (cdFinished) resetCd();
+        if (cdTime === 0) useTimerStore.getState().setCdInput(cdInput);
+        startCd();
+      }
+    });
+
+    const unlistenStopwatch = listen("hotkey-stopwatch", () => {
+      const { swIsRunning, pauseSw, startSw } = useTimerStore.getState();
+      if (swIsRunning) pauseSw();
+      else startSw();
+    });
 
     const handleBlur = () => {
       if (useShellStore.getState().isInteractive) {
@@ -194,18 +208,20 @@ function App() {
       unlistenRecord.then((fn) => fn());
       unlistenReplay.then((fn) => fn());
       unlistenFocusLoss.then((fn) => fn());
+      unlistenTimer.then((fn) => fn());
+      unlistenStopwatch.then((fn) => fn());
       window.removeEventListener('blur', handleBlur);
       window.removeEventListener('error', handleGlobalError);
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
       unsubscribeStore();
       clearTimeout(saveTimeout);
     };
-  }, [setInteractive, toggleInteractive]);
+  }, [setInteractive, toggleInteractive, showToast]);
 
   return (
     <>
       {/* HUD Toasts */}
-      <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[9999] pointer-events-none flex flex-col items-center gap-2">
+      <div className="fixed top-16 left-1/2 -translate-x-1/2 z-[9999] pointer-events-none flex flex-col items-center gap-2">
         <AnimatePresence>
           {toasts.map((toast) => (
             <motion.div
@@ -228,6 +244,9 @@ function App() {
         </div>
       )}
 
+      {/* Floating persistent timer status bar */}
+      <TimerStatusBar />
+
       {/* Widget Layer (Always rendered above the overlay so widgets stay bright and interactive) */}
       <div className="fixed inset-0 z-50 pointer-events-none overflow-hidden" id="widget-bounds">
         <AnimatePresence>
@@ -240,6 +259,7 @@ function App() {
                    id === 'audio-mixer' ? <AudioHubWidget /> :
                    id === 'ai-chat' ? <OpenRouterWidget /> :
                    id === 'quick-notes' ? <NotionCaptureWidget /> :
+                   id === 'game-timer' ? <TimerWidget /> :
                    <DummyWidget />}
                 </ErrorBoundary>
               </WidgetContainer>

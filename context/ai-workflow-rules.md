@@ -37,3 +37,4 @@ For every task, follow this loop:
 - **Log Verification:** Make it a habit to check the backend (`vectorhud.log`) and frontend console logs when an error is reported. Rely on concrete error output rather than assumptions.
 - **Document Fixes:** When making security or database permission changes, always document the required whitelist/capability additions.
 - **Terminal Execution:** The user's system runs PowerShell. Do NOT use `&&` to chain terminal commands, as this will fail. Use `;` instead, or run commands sequentially in separate calls.
+- **Library Documentation (Context7):** Always use the Context7 MCP to fetch current documentation whenever the user asks about a library, framework, SDK, API, CLI tool, or cloud service. This includes API syntax, configuration, version migration, and library-specific debugging. Never rely solely on training data for third-party tools (e.g., Tauri v2 plugins).

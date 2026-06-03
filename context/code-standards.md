@@ -4,6 +4,7 @@
 - Build the "Dumb Container" pattern. Widgets only receive props; they do not handle their own drag/resize logic.
 - Follow Test-Driven Development (TDD) where applicable. Write the test, watch it fail, implement the fix.
 - Log explicitly. Every backend command must log its invocation and result.
+- **Context Updating Principle (CRITICAL):** At the end of every development session, before moving to the next session, you MUST update all relevant context files (`progress-tracker.md`, `Decisions.md`, `database-schema.md`). This ensures the AI's internal model of the architecture never drifts from reality.
 
 ## TypeScript & React
 - Strict mode is required.

@@ -10,7 +10,8 @@ use tracing_appender::rolling;
 use tracing_subscriber::EnvFilter;
 
 #[tauri::command]
-fn set_interactive_mode(window: tauri::Window, interactive: bool, _interactable_pins: bool) {
+#[allow(unused_variables)]
+fn set_interactive_mode(window: tauri::Window, interactive: bool, interactable_pins: bool) {
     if interactive {
         let _ = window.set_ignore_cursor_events(false);
     } else {
@@ -26,6 +27,8 @@ fn update_hotkeys(
     screenshot_hotkey: String,
     record_hotkey: String,
     replay_hotkey: String,
+    timer_hotkey: String,
+    stopwatch_hotkey: String,
 ) -> Result<(), String> {
     use std::str::FromStr;
     use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
@@ -81,7 +84,13 @@ fn update_hotkeys(
                 }
             });
             if let Err(e) = res {
-                tracing::error!("Failed to register shortcut: {} - {:?}", hotkey_str, e);
+                tracing::error!("Failed to set shortcut handler: {} - {:?}", hotkey_str, e);
+            }
+            if let Err(e) = shortcut_manager.register(shortcut) {
+                let err_str = format!("{:?}", e);
+                if !err_str.contains("already registered") {
+                    tracing::error!("Failed to register shortcut: {} - {:?}", hotkey_str, e);
+                }
             }
         }
     };
@@ -90,6 +99,8 @@ fn update_hotkeys(
     register_hotkey(&screenshot_hotkey, "hotkey-screenshot");
     register_hotkey(&record_hotkey, "hotkey-record");
     register_hotkey(&replay_hotkey, "hotkey-replay");
+    register_hotkey(&timer_hotkey, "hotkey-timer");
+    register_hotkey(&stopwatch_hotkey, "hotkey-stopwatch");
 
     Ok(())
 }

@@ -6,6 +6,10 @@ interface HardwareMetrics {
   ram_usage_percent: number;
   ram_total_gb: number;
   ram_used_gb: number;
+  gpu_usage: number;
+  vram_usage_percent: number;
+  vram_used_gb: number;
+  fps: number;
 }
 
 export function HardwareWidget() {
@@ -13,6 +17,10 @@ export function HardwareWidget() {
   const [ramUsage, setRamUsage] = useState(0);
   const [ramTotal, setRamTotal] = useState(32); // GB
   const [ramUsed, setRamUsed] = useState(0);
+  const [gpuUsage, setGpuUsage] = useState(0);
+  const [vramUsage, setVramUsage] = useState(0);
+  const [vramUsed, setVramUsed] = useState(0);
+  const [fps, setFps] = useState(0);
 
   useEffect(() => {
     let unlisten: UnlistenFn | undefined;
@@ -24,6 +32,10 @@ export function HardwareWidget() {
         setRamUsage(Math.round(payload.ram_usage_percent));
         setRamTotal(parseFloat(payload.ram_total_gb.toFixed(1)));
         setRamUsed(parseFloat(payload.ram_used_gb.toFixed(1)));
+        setGpuUsage(Math.round(payload.gpu_usage));
+        setVramUsage(Math.round(payload.vram_usage_percent));
+        setVramUsed(parseFloat(payload.vram_used_gb.toFixed(1)));
+        setFps(payload.fps);
       });
     };
 
@@ -37,15 +49,15 @@ export function HardwareWidget() {
   }, []);
 
   return (
-    <div className="flex flex-col h-full text-text-primary font-mono text-sm p-4 space-y-6">
+    <div className="flex flex-col h-full text-text-primary font-mono text-sm p-4 space-y-4">
       
       {/* CPU Section */}
-      <div className="flex flex-col space-y-2">
-        <div className="flex justify-between items-center">
+      <div className="flex flex-col space-y-1">
+        <div className="flex justify-between items-center text-xs">
           <span className="font-bold text-accent-green tracking-widest">CPU</span>
           <span className="text-accent-green font-bold">{cpuUsage}%</span>
         </div>
-        <div className="w-full h-3 bg-black border border-border-wire rounded-sm overflow-hidden relative">
+        <div className="w-full h-2 bg-black border border-border-wire rounded-sm overflow-hidden relative">
           <div 
             className="h-full bg-accent-green transition-all duration-500 ease-in-out"
             style={{ width: `${cpuUsage}%` }}
@@ -53,13 +65,27 @@ export function HardwareWidget() {
         </div>
       </div>
 
+      {/* GPU Section */}
+      <div className="flex flex-col space-y-1">
+        <div className="flex justify-between items-center text-xs">
+          <span className="font-bold text-accent-cyan tracking-widest">GPU</span>
+          <span className="text-accent-cyan font-bold">{gpuUsage}%</span>
+        </div>
+        <div className="w-full h-2 bg-black border border-border-wire rounded-sm overflow-hidden relative">
+          <div 
+            className="h-full bg-accent-cyan transition-all duration-500 ease-in-out"
+            style={{ width: `${gpuUsage}%` }}
+          />
+        </div>
+      </div>
+
       {/* RAM Section */}
-      <div className="flex flex-col space-y-2">
-        <div className="flex justify-between items-center">
+      <div className="flex flex-col space-y-1">
+        <div className="flex justify-between items-center text-xs">
           <span className="font-bold text-accent-amber tracking-widest">RAM</span>
           <span className="text-accent-amber font-bold">{ramUsed} / {ramTotal} GB</span>
         </div>
-        <div className="w-full h-3 bg-black border border-border-wire rounded-sm overflow-hidden relative">
+        <div className="w-full h-2 bg-black border border-border-wire rounded-sm overflow-hidden relative">
           <div 
             className="h-full bg-accent-amber transition-all duration-500 ease-in-out"
             style={{ width: `${ramUsage}%` }}
@@ -67,12 +93,25 @@ export function HardwareWidget() {
         </div>
       </div>
 
-      {/* Status Footer */}
-      <div className="mt-auto pt-4 border-t border-border-wire text-xs opacity-60 flex justify-between">
-        <span>SYS: ONLINE</span>
-        <span className="animate-pulse">● REC</span>
+      {/* VRAM Section */}
+      <div className="flex flex-col space-y-1">
+        <div className="flex justify-between items-center text-xs">
+          <span className="font-bold text-accent-rose tracking-widest">VRAM</span>
+          <span className="text-accent-rose font-bold">{vramUsed} GB</span>
+        </div>
+        <div className="w-full h-2 bg-black border border-border-wire rounded-sm overflow-hidden relative">
+          <div 
+            className="h-full bg-accent-rose transition-all duration-500 ease-in-out"
+            style={{ width: `${vramUsage}%` }}
+          />
+        </div>
       </div>
 
+      {/* Status Footer */}
+      <div className="mt-auto pt-2 border-t border-border-wire text-xs opacity-60 flex justify-between items-center">
+        <span>FPS: {fps > 0 ? fps : '--'}</span>
+        <span className="animate-pulse">● REC</span>
+      </div>
     </div>
   );
 }

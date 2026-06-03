@@ -14,6 +14,7 @@ export const WIDGETS: WidgetDefinition[] = [
   { id: 'audio-mixer', label: 'Audio', iconName: 'Volume2', defaultWidth: 350, defaultHeight: 500 },
   { id: 'ai-chat', label: 'AI Vision', iconName: 'MessageSquare', defaultWidth: 450, defaultHeight: 550 },
   { id: 'quick-notes', label: 'Notion', iconName: 'Edit3', defaultWidth: 350, defaultHeight: 400 },
+  { id: 'game-timer', label: 'Timer', iconName: 'Clock', defaultWidth: 300, defaultHeight: 350 },
 ];
 
 export interface WidgetInstance {

@@ -5,7 +5,7 @@ Update this file after every meaningful implementation change.
 - Session 8A: Audio Hub
 
 ## Current Goal
-- Develop Session 8A (Audio Hub).
+- Develop Session 9A (AI+Notion).
 
 ## Completed
 - Session 1A: Project scaffolding and framework initialization.
@@ -23,17 +23,17 @@ Update this file after every meaningful implementation change.
 - Session 7A: UI Polish (Expandable dock, pin toggles (interactable), custom scrollbars).
 - Session 7B: Capture+ (Media - 30s rolling video buffer, standard recording, mic toggling, windows-record forked to fix focus tracking limitations, fixed HDR washout and sound mixing deadlocks).
 - Session 8A: Audio Hub (Mixer - Hook Core Audio API for app-specific volume, mic/output switcher, music player).
+- Session 8B: Metrics+ (Hardware - GPU, VRAM, and FPS polling; Timer utility).
 
 ## In Progress
-- Session 8B: Metrics+ (Hardware - GPU, VRAM, and FPS polling; Timer utility).
+- Session 9A: AI+Notion (Integrations).
 
 ## Next Up
 | Session | Unit Name | Focus | Goal |
 | :--- | :--- | :--- | :--- |
-| 8A | Audio Hub | Mixer | Hook Core Audio API for app-specific volume, mic/output switcher, music player. |
-| 8B | Metrics+ | Hardware | GPU, VRAM, and FPS polling; Timer utility. |
 | 9A | AI+Notion | Integrations | Chat history SQLite DB, Notion floating checklists. |
 | 10A | Scaling | Architecture | Developer plugin architecture abstraction and theming system. |
+| 10B | Optimization | Performance & UI/UX | Backend memory profiling, UI/UX polish, React rendering optimization, WMI polling efficiency. |
 
 ## Architecture Decisions
 - See [Decisions.md](./Decisions.md) for a comprehensive list of architectural and design decisions.
