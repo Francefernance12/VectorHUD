@@ -40,3 +40,14 @@ Tracks applications that the user has explicitly flagged as games for auto-recor
 | :--- | :--- | :--- |
 | `process_name` | TEXT PRIMARY KEY | The name of the game executable or window |
 | `timestamp` | DATETIME DEFAULT CURRENT_TIMESTAMP | When the game was flagged |
+
+## Table: `ai_chat_history`
+Stores messages from the OpenRouter widget so chats persist between sessions.
+
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `id` | INTEGER PRIMARY KEY AUTOINCREMENT | Unique record ID |
+| `role` | TEXT NOT NULL | 'user' or 'assistant' |
+| `content` | TEXT NOT NULL | The text content of the message |
+| `image_path` | TEXT | Optional: Base64 or file path to an attached image |
+| `timestamp` | DATETIME DEFAULT CURRENT_TIMESTAMP | When the message was sent |

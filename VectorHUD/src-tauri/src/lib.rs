@@ -296,6 +296,28 @@ pub fn run() {
                         ",
                             kind: tauri_plugin_sql::MigrationKind::Up,
                         },
+                        tauri_plugin_sql::Migration {
+                            version: 5,
+                            description: "create_ai_chat_history",
+                            sql: "
+                        CREATE TABLE IF NOT EXISTS ai_chat_history (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            role TEXT NOT NULL,
+                            content TEXT NOT NULL,
+                            image_path TEXT,
+                            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                        );
+                        ",
+                            kind: tauri_plugin_sql::MigrationKind::Up,
+                        },
+                        tauri_plugin_sql::Migration {
+                            version: 6,
+                            description: "add_session_id_to_chat",
+                            sql: "
+                        ALTER TABLE ai_chat_history ADD COLUMN session_id TEXT;
+                        ",
+                            kind: tauri_plugin_sql::MigrationKind::Up,
+                        },
                     ],
                 )
                 .build(),
@@ -307,7 +329,14 @@ pub fn run() {
             commands::api::sync_to_notion,
             commands::api::save_local_note,
             commands::api::open_notes_folder,
+            commands::api::ensure_notion_schema,
+            commands::api::fetch_notion_notes,
+            commands::api::delete_notion_note,
+            commands::api::update_notion_status,
+            commands::api::fetch_notion_blocks,
+            commands::api::toggle_notion_task,
             core::capture::capture_screenshot,
+            core::capture::capture_screen_base64,
             core::capture::check_file_exists,
             core::capture::delete_capture,
             core::auth::encrypt_data,
