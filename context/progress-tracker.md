@@ -2,12 +2,8 @@
 
 Update this file after every meaningful implementation change.
 
-- Session 9A: AI+Notion
-- Session 9B: Advanced AI context integration (Hardware stats ingestion), Voice-to-Text command parser.
-- Session 10A: Architecture scaling and performance optimization.
-
 ## Current Goal
-- Develop Session 10B: Performance & UI/UX optimization.
+- Develop Session 10B: Optimization (Performance & UI/UX)
 
 ## Completed
 - Session 1A: Project scaffolding and framework initialization.
@@ -26,15 +22,15 @@ Update this file after every meaningful implementation change.
 - Session 7B: Capture+ (Media - 30s rolling video buffer, standard recording, mic toggling, windows-record forked to fix focus tracking limitations, fixed HDR washout and sound mixing deadlocks).
 - Session 8A: Audio Hub (Mixer - Hook Core Audio API for app-specific volume, mic/output switcher, music player).
 - Session 8B: Metrics+ (Hardware - GPU, VRAM, and FPS polling; Timer utility).
+- Session 9A: Integrations (AI+Notion - Vision buffer parsing, Notion block-level parsing for floating checklists).
+- Session 10A: Architecture & Scaling (Notion interactive status patches, AI context drafts via Zustand persist layer).
 
 ## In Progress
-- Session 9A: AI+Notion (Integrations).
+- Session 10B: Optimization (Performance & UI/UX)
 
 ## Next Up
 | Session | Unit Name | Focus | Goal |
 | :--- | :--- | :--- | :--- |
-| 9A | AI+Notion | Integrations | Chat history SQLite DB, Notion floating checklists. |
-| 10A | Scaling | Architecture | Developer plugin architecture abstraction and theming system. |
 | 10B | Optimization | Performance & UI/UX | Backend memory profiling, UI/UX polish, React rendering optimization, WMI polling efficiency. |
 
 ## Architecture Decisions
