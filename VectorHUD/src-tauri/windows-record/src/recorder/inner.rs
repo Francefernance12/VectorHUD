@@ -147,7 +147,9 @@ impl RecorderInner {
             // Get the REAL physical monitor dimensions from DXGI
             // Windows display scaling causes user32/xcap to report logical resolution.
             // DXGI ALWAYS captures at physical resolution. We MUST match it or D3D11 crashes.
-            if let Ok(duplication) = crate::capture::dxgi::setup_dxgi_duplication(&device) {
+            let mut is_hdr = false;
+            if let Ok((duplication, detected_hdr)) = crate::capture::dxgi::setup_dxgi_duplication(&device) {
+                is_hdr = detected_hdr;
                 let mut desc = windows::Win32::Graphics::Dxgi::DXGI_OUTDUPL_DESC::default();
                 unsafe { duplication.GetDesc(&mut desc) };
                 
@@ -214,6 +216,7 @@ impl RecorderInner {
             // Start processing thread
             let rec_clone = recording.clone();
             let buffer_clone = replay_buffer.clone();
+            // is_hdr is already in scope
             process_handle = Some(std::thread::spawn(move || {
                 process_samples(
                     sendable_sink,
@@ -231,6 +234,7 @@ impl RecorderInner {
                     system_volume,
                     microphone_volume,
                     buffer_clone,
+                    is_hdr,
                 )
             }));
         }

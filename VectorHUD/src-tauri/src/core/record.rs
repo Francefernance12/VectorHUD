@@ -78,13 +78,21 @@ pub async fn start_video_recording(
     let mut width = 1920;
     let mut height = 1080;
 
-    // Get the primary monitor resolution to prevent DXGI/D3D11 crash 
+    // Get the primary monitor resolution to prevent DXGI/D3D11 crash
     // when copying the desktop duplication texture to the texture pool
     if let Ok(monitors) = xcap::Monitor::all() {
-        if let Some(monitor) = monitors.into_iter().find(|m| m.is_primary().unwrap_or(false)).or_else(|| xcap::Monitor::all().unwrap_or_default().into_iter().next()) {
+        if let Some(monitor) = monitors
+            .into_iter()
+            .find(|m| m.is_primary().unwrap_or(false))
+            .or_else(|| xcap::Monitor::all().unwrap_or_default().into_iter().next())
+        {
             width = monitor.width().unwrap_or(1920);
             height = monitor.height().unwrap_or(1080);
-            tracing::info!("Using primary monitor resolution for recording: {}x{}", width, height);
+            tracing::info!(
+                "Using primary monitor resolution for recording: {}x{}",
+                width,
+                height
+            );
         }
     }
 
@@ -174,10 +182,18 @@ pub async fn start_replay_buffer(
     let mut height = 1080;
 
     if let Ok(monitors) = xcap::Monitor::all() {
-        if let Some(monitor) = monitors.into_iter().find(|m| m.is_primary().unwrap_or(false)).or_else(|| xcap::Monitor::all().unwrap_or_default().into_iter().next()) {
+        if let Some(monitor) = monitors
+            .into_iter()
+            .find(|m| m.is_primary().unwrap_or(false))
+            .or_else(|| xcap::Monitor::all().unwrap_or_default().into_iter().next())
+        {
             width = monitor.width().unwrap_or(1920);
             height = monitor.height().unwrap_or(1080);
-            tracing::info!("Using primary monitor resolution for replay buffer: {}x{}", width, height);
+            tracing::info!(
+                "Using primary monitor resolution for replay buffer: {}x{}",
+                width,
+                height
+            );
         }
     }
 

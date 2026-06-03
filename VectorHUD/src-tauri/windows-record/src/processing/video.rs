@@ -12,6 +12,7 @@ pub unsafe fn setup_video_converter(
     input_height: u32,
     output_width: u32,
     output_height: u32,
+    is_hdr: bool,
 ) -> Result<IMFTransform> {
     // Create converter
     let converter: IMFTransform =
@@ -32,16 +33,8 @@ pub unsafe fn setup_video_converter(
             )?;
             media_type.SetUINT64(&MF_MT_PIXEL_ASPECT_RATIO, (1 << 32) | 1)?;
             media_type.SetUINT32(
-                &MF_MT_TRANSFER_FUNCTION,
-                MFVideoTransFunc_709.0.try_into().unwrap(),
-            )?;
-            media_type.SetUINT32(
                 &MF_MT_VIDEO_PRIMARIES,
                 MFVideoPrimaries_BT709.0.try_into().unwrap(),
-            )?;
-            media_type.SetUINT32(
-                &MF_MT_YUV_MATRIX,
-                MFVideoTransferMatrix_BT709.0.try_into().unwrap(),
             )?;
         }
         Ok(())
@@ -52,6 +45,11 @@ pub unsafe fn setup_video_converter(
     output_type.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video)?;
     output_type.SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_NV12)?;
     set_common_attributes(&output_type, true)?;
+    unsafe {
+        output_type.SetUINT32(&MF_MT_TRANSFER_FUNCTION, MFVideoTransFunc_709.0.try_into().unwrap())?;
+        output_type.SetUINT32(&MF_MT_YUV_MATRIX, MFVideoTransferMatrix_BT709.0.try_into().unwrap())?;
+        output_type.SetUINT32(&MF_MT_VIDEO_NOMINAL_RANGE, MFNominalRange_0_255.0.try_into().unwrap())?;
+    }
     output_type.SetUINT64(&MF_MT_FRAME_SIZE, ((output_width as u64) << 32) | (output_height as u64))?;
     output_type.SetUINT32(&MF_MT_DEFAULT_STRIDE, output_width as u32)?;
     converter.SetOutputType(0, &output_type, 0)?;
@@ -61,6 +59,20 @@ pub unsafe fn setup_video_converter(
     input_type.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video)?;
     input_type.SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_ARGB32)?;
     set_common_attributes(&input_type, true)?;
+    unsafe {
+        // Desktop Duplication typically produces sRGB for SDR.
+        // For HDR monitors, Windows tone mapping to 8-bit SDR often yields a washed-out image
+        // because it compresses the range. A common cause of "washed out" captures is 
+        // a mismatch in the nominal range (studio swing vs full swing).
+        let nominal_range = if is_hdr {
+            MFNominalRange_16_235 // Tell MFT the input is studio range so it expands it to 0-255
+        } else {
+            MFNominalRange_0_255
+        };
+        
+        input_type.SetUINT32(&MF_MT_TRANSFER_FUNCTION, MFVideoTransFunc_sRGB.0.try_into().unwrap())?;
+        input_type.SetUINT32(&MF_MT_VIDEO_NOMINAL_RANGE, nominal_range.0.try_into().unwrap())?;
+    }
     input_type.SetUINT64(&MF_MT_FRAME_SIZE, ((input_width as u64) << 32) | (input_height as u64))?;
     input_type.SetUINT32(&MF_MT_DEFAULT_STRIDE, (input_width * 4) as u32)?;
     converter.SetInputType(0, &input_type, 0)?;

@@ -3,7 +3,7 @@ use windows::Win32::Graphics::Direct3D11::{ID3D11Device, ID3D11Texture2D};
 use windows::Win32::Graphics::Dxgi::Common::*;
 use windows::Win32::Graphics::Dxgi::*;
 
-pub unsafe fn setup_dxgi_duplication(device: &ID3D11Device) -> Result<IDXGIOutputDuplication> {
+pub unsafe fn setup_dxgi_duplication(device: &ID3D11Device) -> Result<(IDXGIOutputDuplication, bool)> {
     use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
     use windows::Win32::Graphics::Gdi::{MonitorFromWindow, MONITOR_DEFAULTTOPRIMARY};
     
@@ -33,12 +33,25 @@ pub unsafe fn setup_dxgi_duplication(device: &ID3D11Device) -> Result<IDXGIOutpu
     // Fallback to primary monitor (index 0) if not found
     let output = selected_output.unwrap_or_else(|| dxgi_adapter.EnumOutputs(0).unwrap());
     
+    let mut is_hdr = false;
+    if let Ok(output6) = output.cast::<IDXGIOutput6>() {
+        let mut desc1 = std::mem::zeroed();
+        if output6.GetDesc1(&mut desc1).is_ok() {
+            // DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 is 12
+            // DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709 is 1 (linear scRGB)
+            if desc1.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 || 
+               desc1.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709 {
+                is_hdr = true;
+            }
+        }
+    }
+
     let output1: IDXGIOutput1 = output.cast()?;
 
     // Create duplication
     let duplication = output1.DuplicateOutput(device)?;
 
-    Ok(duplication)
+    Ok((duplication, is_hdr))
 }
 
 pub unsafe fn create_blank_dxgi_texture(
@@ -92,9 +105,9 @@ pub unsafe fn create_staging_texture(
             Quality: 0,
         },
         Usage: D3D11_USAGE_DEFAULT,
-        BindFlags: D3D11_BIND_SHADER_RESOURCE,
+        BindFlags: D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET,
         CPUAccessFlags: D3D11_CPU_ACCESS_FLAG(0),
-        MiscFlags: D3D11_RESOURCE_MISC_FLAG(0),
+        MiscFlags: D3D11_RESOURCE_MISC_GDI_COMPATIBLE,
     };
 
     let mut staging_texture = None;

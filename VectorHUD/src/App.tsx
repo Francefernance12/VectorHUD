@@ -15,6 +15,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { DummyWidget } from "./components/widgets/DummyWidget";
 import { HardwareWidget } from "./components/widgets/HardwareWidget";
 import { MediaCaptureWidget } from "./components/widgets/MediaCaptureWidget";
+import { AudioHubWidget } from "./components/widgets/AudioHubWidget";
 import { OpenRouterWidget } from "./components/widgets/OpenRouterWidget";
 import { NotionCaptureWidget } from "./components/widgets/NotionCaptureWidget";
 import { RecordingStatusBar } from "./components/RecordingStatusBar";
@@ -204,7 +205,7 @@ function App() {
   return (
     <>
       {/* HUD Toasts */}
-      <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[9999] pointer-events-none flex flex-col items-center gap-2">
+      <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[9999] pointer-events-none flex flex-col items-center gap-2">
         <AnimatePresence>
           {toasts.map((toast) => (
             <motion.div
@@ -236,6 +237,7 @@ function App() {
                 <ErrorBoundary>
                   {id === 'hardware-metrics' ? <HardwareWidget /> : 
                    id === 'media-capture' ? <MediaCaptureWidget /> : 
+                   id === 'audio-mixer' ? <AudioHubWidget /> :
                    id === 'ai-chat' ? <OpenRouterWidget /> :
                    id === 'quick-notes' ? <NotionCaptureWidget /> :
                    <DummyWidget />}

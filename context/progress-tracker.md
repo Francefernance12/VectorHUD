@@ -5,7 +5,7 @@ Update this file after every meaningful implementation change.
 - Session 8A: Audio Hub
 
 ## Current Goal
-- Ready for Session 8A (Audio Hub).
+- Develop Session 8A (Audio Hub).
 
 ## Completed
 - Session 1A: Project scaffolding and framework initialization.
@@ -21,7 +21,7 @@ Update this file after every meaningful implementation change.
 - Session 6A: Enhancement (Performance - Zustand `useShallow` re-render fix, `sysinfo` targeted booting, React Error boundaries, Autostart).
 - Session 6B: Settings (UI & Auth) - Building a settings modal and secure Rust-based credential storage.
 - Session 7A: UI Polish (Expandable dock, pin toggles (interactable), custom scrollbars).
-- Session 7B: Capture+ (Media - 30s rolling video buffer, standard recording, mic toggling, windows-record forked to fix focus tracking limitations).
+- Session 7B: Capture+ (Media - 30s rolling video buffer, standard recording, mic toggling, windows-record forked to fix focus tracking limitations, fixed HDR washout and sound mixing deadlocks).
 
 ## In Progress
 - Session 8A: Audio Hub (Mixer - Hook Core Audio API for app-specific volume, mic/output switcher, music player).

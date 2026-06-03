@@ -15,6 +15,19 @@ pub struct SendableSample {
     pub sample: Arc<IMFSample>,
     texture_ptr: Option<usize>,
     pool: Option<Arc<SamplePool>>,
+    pooled_texture: Option<Arc<PooledTexture>>,
+}
+
+/// A wrapper that returns the texture to the TexturePool when dropped
+pub struct PooledTexture {
+    pub texture: ID3D11Texture2D,
+    pub pool: Arc<TexturePool>,
+}
+
+impl Drop for PooledTexture {
+    fn drop(&mut self) {
+        self.pool.release(self.texture.clone());
+    }
 }
 
 impl SendableSample {
@@ -24,11 +37,17 @@ impl SendableSample {
             sample: Arc::new(sample),
             texture_ptr: None,
             pool: None,
+            pooled_texture: None,
         }
     }
     
     /// Create a new SendableSample with pool tracking for auto-return
-    pub fn new_pooled(sample: IMFSample, texture: &ID3D11Texture2D, pool: Arc<SamplePool>) -> Self {
+    pub fn new_pooled(
+        sample: IMFSample, 
+        texture: &ID3D11Texture2D, 
+        pool: Arc<SamplePool>, 
+        pooled_texture: Option<Arc<PooledTexture>>
+    ) -> Self {
         let texture_ptr = texture as *const _ as usize;
         
         #[cfg(debug_assertions)]
@@ -38,6 +57,7 @@ impl SendableSample {
             sample: Arc::new(sample),
             texture_ptr: Some(texture_ptr),
             pool: Some(pool),
+            pooled_texture,
         }
     }
 }

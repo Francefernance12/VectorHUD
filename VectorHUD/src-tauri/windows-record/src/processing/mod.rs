@@ -28,6 +28,7 @@ pub fn process_samples(
     system_volume: Option<f32>,
     microphone_volume: Option<f32>,
     replay_buffer: Option<Arc<ReplayBuffer>>,
+    is_hdr: bool,
 ) -> Result<()> {
     info!("Starting sample processing");
 
@@ -80,7 +81,8 @@ pub fn process_samples(
             input_width, 
             input_height, 
             output_width, 
-            output_height
+            output_height,
+            is_hdr
         )
     }?;
     info!("Video processor transform created and configured");

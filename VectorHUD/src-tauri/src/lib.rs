@@ -29,10 +29,10 @@ fn update_hotkeys(
 ) -> Result<(), String> {
     use std::str::FromStr;
     use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
-    
+
     let shortcut_manager = app.global_shortcut();
     let _ = shortcut_manager.unregister_all();
-    
+
     let register_hotkey = |hotkey_str: &str, event_name: &str| {
         if let Ok(shortcut) = Shortcut::from_str(hotkey_str) {
             if shortcut_manager.is_registered(shortcut) {
@@ -64,11 +64,10 @@ fn update_hotkeys(
                                             let ly = y / scale;
                                             let lw = w / scale;
                                             let lh = h / scale;
-                                            let _ = window.set_position(
-                                                tauri::LogicalPosition::new(lx, ly),
-                                            );
                                             let _ = window
-                                                .set_size(tauri::LogicalSize::new(lw, lh));
+                                                .set_position(tauri::LogicalPosition::new(lx, ly));
+                                            let _ =
+                                                window.set_size(tauri::LogicalSize::new(lw, lh));
                                             let _ = window.set_skip_taskbar(true);
                                             let _ = window.set_focus();
                                             break;
@@ -86,16 +85,14 @@ fn update_hotkeys(
             }
         }
     };
-    
+
     register_hotkey(&overlay_hotkey, "hotkey-overlay");
     register_hotkey(&screenshot_hotkey, "hotkey-screenshot");
     register_hotkey(&record_hotkey, "hotkey-record");
     register_hotkey(&replay_hotkey, "hotkey-replay");
-    
+
     Ok(())
 }
-
-
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -167,14 +164,13 @@ pub fn run() {
                 ))?;
 
                 // Register global shortcut plugin (hotkeys will be bound via frontend update_hotkeys)
-                app.handle().plugin(
-                    tauri_plugin_global_shortcut::Builder::new().build()
-                )?;
+                app.handle()
+                    .plugin(tauri_plugin_global_shortcut::Builder::new().build())?;
 
                 // Size the window to cover the primary monitor on boot
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.set_shadow(false);
-                    
+
                     // Size the window to cover the primary monitor on boot
                     if let Ok(Some(monitor)) = window.primary_monitor() {
                         let scale = monitor.scale_factor();
@@ -193,10 +189,11 @@ pub fn run() {
                     // Exclude from capture so it doesn't show up in recordings
                     if let Ok(hwnd) = window.hwnd() {
                         unsafe {
-                            let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowDisplayAffinity(
-                                windows::Win32::Foundation::HWND(hwnd.0 as isize),
-                                windows::Win32::UI::WindowsAndMessaging::WDA_EXCLUDEFROMCAPTURE,
-                            );
+                            let _ =
+                                windows::Win32::UI::WindowsAndMessaging::SetWindowDisplayAffinity(
+                                    windows::Win32::Foundation::HWND(hwnd.0 as isize),
+                                    windows::Win32::UI::WindowsAndMessaging::WDA_EXCLUDEFROMCAPTURE,
+                                );
                         }
                     }
 
@@ -309,7 +306,14 @@ pub fn run() {
             core::record::start_replay_buffer,
             core::record::save_replay_buffer,
             core::record::stop_replay_buffer,
-            core::record::get_recording_status
+            core::record::get_recording_status,
+            core::audio_mixer::get_audio_mixer_state,
+            core::audio_mixer::set_app_volume,
+            core::audio_mixer::set_master_volume,
+            core::media_control::get_current_media,
+            core::media_control::media_play_pause,
+            core::media_control::media_next,
+            core::media_control::media_prev
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
