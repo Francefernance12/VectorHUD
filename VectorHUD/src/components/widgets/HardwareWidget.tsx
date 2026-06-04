@@ -10,6 +10,8 @@ interface HardwareMetrics {
   vram_usage_percent: number;
   vram_used_gb: number;
   fps: number;
+  hud_cpu_usage: number;
+  hud_ram_usage_mb: number;
 }
 
 export function HardwareWidget() {
@@ -21,6 +23,8 @@ export function HardwareWidget() {
   const [vramUsage, setVramUsage] = useState(0);
   const [vramUsed, setVramUsed] = useState(0);
   const [fps, setFps] = useState(0);
+  const [hudCpuUsage, setHudCpuUsage] = useState(0);
+  const [hudRamUsageMb, setHudRamUsageMb] = useState(0);
 
   useEffect(() => {
     let unlisten: UnlistenFn | undefined;
@@ -36,6 +40,8 @@ export function HardwareWidget() {
         setVramUsage(Math.round(payload.vram_usage_percent));
         setVramUsed(parseFloat(payload.vram_used_gb.toFixed(1)));
         setFps(payload.fps);
+        setHudCpuUsage(payload.hud_cpu_usage || 0);
+        setHudRamUsageMb(payload.hud_ram_usage_mb || 0);
       });
     };
 
@@ -111,6 +117,12 @@ export function HardwareWidget() {
       <div className="mt-auto pt-2 border-t border-border-wire text-xs opacity-60 flex justify-between items-center">
         <span>FPS: {fps > 0 ? fps : '--'}</span>
         <span className="animate-pulse">● REC</span>
+      </div>
+
+      {/* Overlay Perf Section */}
+      <div className="pt-2 border-t border-border-wire text-[10px] opacity-70 flex justify-between items-center bg-black/30 px-2 py-1 rounded">
+        <span>HUD CPU: {hudCpuUsage.toFixed(1)}%</span>
+        <span>HUD RAM: {hudRamUsageMb.toFixed(0)} MB</span>
       </div>
     </div>
   );

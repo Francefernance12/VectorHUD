@@ -13,7 +13,7 @@ use windows::Win32::System::Threading::*;
 use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
 
 use super::dxgi::{create_blank_dxgi_texture, setup_dxgi_duplication};
-use super::window::{is_window_valid, get_window_title};
+use super::window::{get_window_title, is_window_valid};
 use crate::capture::dxgi::create_staging_texture;
 use crate::types::{PooledTexture, SamplePool, SendableSample, TexturePool};
 
@@ -38,7 +38,7 @@ impl WindowTracker {
     fn new(hwnd: HWND, process_name: &str) -> Self {
         Self::new_with_exact_match(hwnd, process_name, false)
     }
-    
+
     /// Create a new window tracker with option for exact matching
     fn new_with_exact_match(hwnd: HWND, process_name: &str, use_exact_match: bool) -> Self {
         Self {
@@ -50,57 +50,61 @@ impl WindowTracker {
             use_exact_match,
         }
     }
-    
+
     /// Check if the window is currently in focus
     fn is_focused(&mut self) -> bool {
         let foreground_window = unsafe { GetForegroundWindow() };
         let is_target_window = foreground_window == self.hwnd;
-        
+
         if is_target_window {
             // If window is now in focus, remember this
             self.ever_focused = true;
         }
-        
+
         is_target_window
     }
-    
+
     /// Ensure the window handle is still valid, and try to find it again if needed
     fn ensure_valid_window(&mut self) -> bool {
         let now = Instant::now();
-        
+
         // Don't check too frequently
         if now.duration_since(self.last_check) < self.check_interval {
             return true;
         }
-        
+
         self.last_check = now;
-        
+
         // If the window is still valid, we're good
         if is_window_valid(self.hwnd) {
             return true;
         }
-        
+
         // If not, try to find the window again
         if self.use_exact_match {
-            debug!("Window handle no longer valid, attempting to find '{}' again with exact match", 
-                self.process_name);
-            
+            debug!(
+                "Window handle no longer valid, attempting to find '{}' again with exact match",
+                self.process_name
+            );
+
             if let Some(new_hwnd) = super::window::get_window_by_exact_string(&self.process_name) {
                 debug!("Found window again with new handle: {:?}", new_hwnd);
                 self.hwnd = new_hwnd;
                 return true;
             }
         } else {
-            debug!("Window handle no longer valid, attempting to find '{}' again with substring match", 
-                self.process_name);
-            
+            debug!(
+                "Window handle no longer valid, attempting to find '{}' again with substring match",
+                self.process_name
+            );
+
             if let Some(new_hwnd) = super::window::get_window_by_string(&self.process_name) {
                 debug!("Found window again with new handle: {:?}", new_hwnd);
                 self.hwnd = new_hwnd;
                 return true;
             }
         }
-        
+
         debug!("Failed to find window '{}'", self.process_name);
         false
     }
@@ -141,11 +145,15 @@ pub unsafe fn get_frames(
     context_mutex: Arc<Mutex<ID3D11DeviceContext>>,
     use_exact_match: bool,
 ) -> Result<()> {
-    info!("Starting frame collection for window: '{}'", get_window_title(hwnd));
+    info!(
+        "Starting frame collection for window: '{}'",
+        get_window_title(hwnd)
+    );
     SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
 
     // Create window tracker to handle focus and window validity
-    let mut window_tracker = WindowTracker::new_with_exact_match(hwnd, process_name, use_exact_match);
+    let mut window_tracker =
+        WindowTracker::new_with_exact_match(hwnd, process_name, use_exact_match);
 
     let frame_duration = Duration::from_nanos(1_000_000_000 * fps_den as u64 / fps_num as u64);
     let mut next_frame_time = Instant::now();
@@ -153,11 +161,12 @@ pub unsafe fn get_frames(
     let mut accumulated_delay = Duration::ZERO;
     let mut num_duped = 0;
 
-    let (blank_texture, _blank_resource) = create_blank_dxgi_texture(&device, input_width, input_height)?;
+    let (blank_texture, _blank_resource) =
+        create_blank_dxgi_texture(&device, input_width, input_height)?;
 
     // Initialize texture pool for reusable textures (for Media Foundation samples)
-    use windows::Win32::Graphics::Dxgi::Common::*;
     use windows::Win32::Graphics::Direct3D11::*;
+    use windows::Win32::Graphics::Dxgi::Common::*;
 
     let texture_pool = TexturePool::new(
         device.clone(),
@@ -166,12 +175,14 @@ pub unsafe fn get_frames(
         input_height,
         DXGI_FORMAT_B8G8R8A8_UNORM,
         D3D11_USAGE_DEFAULT.0.try_into().unwrap(),
-        (D3D11_BIND_SHADER_RESOURCE.0 | D3D11_BIND_RENDER_TARGET.0).try_into().unwrap(),
-        0, // CPU access flags
+        (D3D11_BIND_SHADER_RESOURCE.0 | D3D11_BIND_RENDER_TARGET.0)
+            .try_into()
+            .unwrap(),
+        0,                                                        // CPU access flags
         D3D11_RESOURCE_MISC_GDI_COMPATIBLE.0.try_into().unwrap(), // Misc flags
     )?;
     let texture_pool = Arc::new(texture_pool);
-    
+
     // Create a pool for IMFSample objects that are bound to the textures
     let sample_pool = SamplePool::new(fps_num, 10);
     let sample_pool = Arc::new(sample_pool);
@@ -181,7 +192,7 @@ pub unsafe fn get_frames(
 
     // Initialize duplication
     let mut duplication_result = setup_dxgi_duplication(&device).map(|(d, _)| d);
-    
+
     // Main recording loop
     while recording.load(Ordering::Relaxed) {
         if let Err(e) = &duplication_result {
@@ -192,9 +203,9 @@ pub unsafe fn get_frames(
                 continue;
             }
         }
-        
+
         let duplication = duplication_result.as_ref().unwrap();
-        
+
         match process_frame(
             duplication,
             &context_mutex,
@@ -223,7 +234,7 @@ pub unsafe fn get_frames(
                     if e.code() == windows::Win32::Graphics::Dxgi::DXGI_ERROR_WAIT_TIMEOUT {
                         continue;
                     }
-                    
+
                     // Handle "keyed mutex abandoned" and access lost errors
                     if e.code() == windows::Win32::Graphics::Dxgi::DXGI_ERROR_ACCESS_LOST {
                         warn!("DXGI access lost (possibly keyed mutex abandoned), recreating duplication interface");
@@ -231,7 +242,7 @@ pub unsafe fn get_frames(
                         duplication_result = Err(e);
                         continue;
                     }
-                    
+
                     // For other errors, return as before
                     return Err(e);
                 }
@@ -268,14 +279,14 @@ unsafe fn process_frame(
 ) -> std::result::Result<(), FrameError> {
     let mut resource: Option<IDXGIResource> = None;
     let mut info = windows::Win32::Graphics::Dxgi::DXGI_OUTDUPL_FRAME_INFO::default();
-    
+
     // Always show content regardless of focus
     let should_show_content = true;
-    
+
     duplication.AcquireNextFrame(16, &mut info, &mut resource)?;
-    
+
     let context = context_mutex.lock().unwrap();
-    
+
     if let Some(resource) = resource {
         // Acquire a texture from the pool rather than creating a new one every time
         let pooled_texture = texture_pool.acquire().map_err(|e| {
@@ -283,10 +294,10 @@ unsafe fn process_frame(
             // Convert to WindowsError first if needed, or just use TexturePoolError variant
             FrameError::TexturePoolError
         })?;
-        
+
         // Get the source texture from the resource
         let source_texture: ID3D11Texture2D = resource.cast()?;
-        
+
         // Wrap the pooled_texture in PooledTexture to track its lifetime
         let arc_pooled = Arc::new(crate::types::PooledTexture {
             texture: pooled_texture.clone(),
@@ -296,12 +307,17 @@ unsafe fn process_frame(
         if should_show_content {
             // Copy content from source to pooled texture
             context.CopyResource(&pooled_texture, &source_texture);
-            
+
             // Draw Mouse Cursor
             use windows::Win32::Graphics::Dxgi::IDXGISurface1;
-            use windows::Win32::UI::WindowsAndMessaging::{GetCursorInfo, DrawIconEx, CURSORINFO, CURSOR_SHOWING, DI_NORMAL, GetForegroundWindow};
-            use windows::Win32::Graphics::Gdi::{MonitorFromWindow, GetMonitorInfoW, MONITORINFO, MONITOR_DEFAULTTOPRIMARY};
-            
+            use windows::Win32::Graphics::Gdi::{
+                GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTOPRIMARY,
+            };
+            use windows::Win32::UI::WindowsAndMessaging::{
+                DrawIconEx, GetCursorInfo, GetForegroundWindow, CURSORINFO, CURSOR_SHOWING,
+                DI_NORMAL,
+            };
+
             if let Ok(surface) = pooled_texture.cast::<IDXGISurface1>() {
                 match surface.GetDC(false) {
                     Ok(hdc) => {
@@ -309,14 +325,14 @@ unsafe fn process_frame(
                             cbSize: std::mem::size_of::<CURSORINFO>() as u32,
                             ..Default::default()
                         };
-                        
+
                         let hwnd = GetForegroundWindow();
                         let target_hmonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY);
                         let mut minfo = MONITORINFO {
                             cbSize: std::mem::size_of::<MONITORINFO>() as u32,
                             ..Default::default()
                         };
-                        
+
                         let mut offset_x = 0;
                         let mut offset_y = 0;
                         if GetMonitorInfoW(target_hmonitor, &mut minfo).into() {
@@ -324,18 +340,24 @@ unsafe fn process_frame(
                             offset_y = minfo.rcMonitor.top;
                         }
 
-                        if GetCursorInfo(&mut cursor_info).into() && cursor_info.flags.0 == CURSOR_SHOWING.0 {
+                        if GetCursorInfo(&mut cursor_info).into()
+                            && cursor_info.flags.0 == CURSOR_SHOWING.0
+                        {
                             let mut pos = cursor_info.ptScreenPos;
                             // Adjust to local texture coordinates
                             pos.x -= offset_x;
                             pos.y -= offset_y;
-                            
+
                             let res = DrawIconEx(
                                 hdc,
                                 pos.x,
                                 pos.y,
                                 cursor_info.hCursor,
-                                0, 0, 0, None, DI_NORMAL
+                                0,
+                                0,
+                                0,
+                                None,
+                                DI_NORMAL,
                             );
                             if res.0 == 0 {
                                 log::warn!("DrawIconEx failed");
@@ -354,11 +376,11 @@ unsafe fn process_frame(
             // Fill with black if not focused
             context.CopyResource(&pooled_texture, blank_texture);
         }
-        
+
         // Release the original texture and frame
         drop(source_texture);
         duplication.ReleaseFrame()?;
-        
+
         // Handle frame timing and duplication
         while *accumulated_delay >= frame_duration {
             debug!("Duping a frame to catch up");
@@ -368,19 +390,25 @@ unsafe fn process_frame(
             *accumulated_delay -= frame_duration;
             *num_duped += 1;
         }
-        
+
         // Send the real frame, passing arc_pooled to be released when the SendableSample drops
-        send_frame(&pooled_texture, frame_count, send, sample_pool, Some(arc_pooled))
-            .map_err(|_| FrameError::ChannelClosed)?;
+        send_frame(
+            &pooled_texture,
+            frame_count,
+            send,
+            sample_pool,
+            Some(arc_pooled),
+        )
+        .map_err(|_| FrameError::ChannelClosed)?;
     }
-    
+
     drop(context);
-    
+
     *next_frame_time += frame_duration;
-    
+
     let current_time = Instant::now();
     handle_frame_timing(current_time, *next_frame_time, accumulated_delay);
-    
+
     Ok(())
 }
 
@@ -393,13 +421,13 @@ unsafe fn send_frame(
 ) -> Result<()> {
     // Get a sample from the pool instead of creating a new one each time
     let samp = sample_pool.acquire_for_texture(texture)?;
-    
+
     // Set the sample time based on frame count
     sample_pool.set_sample_time(&samp, frame_count)?;
-    
+
     // Create a pooled SendableSample that will return the sample to the pool when dropped
     let sendable = SendableSample::new_pooled(samp, texture, sample_pool.clone(), pooled_texture);
-    
+
     // Send the sample and return to pool if fails
     match send.send(sendable) {
         Ok(_) => Ok(()),

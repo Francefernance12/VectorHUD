@@ -1,5 +1,5 @@
-use std::mem::ManuallyDrop;
 use log::{info, warn};
+use std::mem::ManuallyDrop;
 use windows::core::{ComInterface, Result};
 use windows::Win32::Foundation::FALSE;
 use windows::Win32::Graphics::Direct3D11::{ID3D11Device, ID3D11Texture2D};
@@ -26,11 +26,8 @@ pub unsafe fn setup_video_converter(
             } else {
                 MFVideoInterlace_MixedInterlaceOrProgressive.0
             };
-            
-            media_type.SetUINT32(
-                &MF_MT_INTERLACE_MODE,
-                interlace_mode.try_into().unwrap(),
-            )?;
+
+            media_type.SetUINT32(&MF_MT_INTERLACE_MODE, interlace_mode.try_into().unwrap())?;
             media_type.SetUINT64(&MF_MT_PIXEL_ASPECT_RATIO, (1 << 32) | 1)?;
             media_type.SetUINT32(
                 &MF_MT_VIDEO_PRIMARIES,
@@ -46,40 +43,63 @@ pub unsafe fn setup_video_converter(
     output_type.SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_NV12)?;
     set_common_attributes(&output_type, true)?;
     unsafe {
-        output_type.SetUINT32(&MF_MT_TRANSFER_FUNCTION, MFVideoTransFunc_709.0.try_into().unwrap())?;
-        output_type.SetUINT32(&MF_MT_YUV_MATRIX, MFVideoTransferMatrix_BT709.0.try_into().unwrap())?;
-        output_type.SetUINT32(&MF_MT_VIDEO_NOMINAL_RANGE, MFNominalRange_0_255.0.try_into().unwrap())?;
+        output_type.SetUINT32(
+            &MF_MT_TRANSFER_FUNCTION,
+            MFVideoTransFunc_709.0.try_into().unwrap(),
+        )?;
+        output_type.SetUINT32(
+            &MF_MT_YUV_MATRIX,
+            MFVideoTransferMatrix_BT709.0.try_into().unwrap(),
+        )?;
+        output_type.SetUINT32(
+            &MF_MT_VIDEO_NOMINAL_RANGE,
+            MFNominalRange_16_235.0.try_into().unwrap(),
+        )?;
     }
-    output_type.SetUINT64(&MF_MT_FRAME_SIZE, ((output_width as u64) << 32) | (output_height as u64))?;
+    output_type.SetUINT64(
+        &MF_MT_FRAME_SIZE,
+        ((output_width as u64) << 32) | (output_height as u64),
+    )?;
     output_type.SetUINT32(&MF_MT_DEFAULT_STRIDE, output_width as u32)?;
     converter.SetOutputType(0, &output_type, 0)?;
-    
+
     // Set input media type (BGRA)
     let input_type: IMFMediaType = MFCreateMediaType()?;
     input_type.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video)?;
     input_type.SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_ARGB32)?;
     set_common_attributes(&input_type, true)?;
-    unsafe {
-        // Desktop Duplication typically produces sRGB for SDR.
-        // For HDR monitors, Windows tone mapping to 8-bit SDR often yields a washed-out image
-        // because it compresses the range. A common cause of "washed out" captures is 
-        // a mismatch in the nominal range (studio swing vs full swing).
-        let nominal_range = if is_hdr {
-            MFNominalRange_16_235 // Tell MFT the input is studio range so it expands it to 0-255
-        } else {
-            MFNominalRange_0_255
-        };
-        
-        input_type.SetUINT32(&MF_MT_TRANSFER_FUNCTION, MFVideoTransFunc_sRGB.0.try_into().unwrap())?;
-        input_type.SetUINT32(&MF_MT_VIDEO_NOMINAL_RANGE, nominal_range.0.try_into().unwrap())?;
-    }
-    input_type.SetUINT64(&MF_MT_FRAME_SIZE, ((input_width as u64) << 32) | (input_height as u64))?;
+
+    // Desktop Duplication typically produces sRGB for SDR.
+    // For HDR monitors, DWM tone-maps the HDR desktop into an SDR image, but it uses
+    // the 'SDR content brightness' setting which typically results in an overly bright/washed out image.
+    // Telling the MFT that the input has a BT.709 transfer curve instead of sRGB naturally
+    // produces a slightly darker, more contrasty image which beautifully counteracts the DWM washout!
+    let nominal_range = MFNominalRange_0_255;
+    let transfer_func = if is_hdr {
+        windows::Win32::Media::MediaFoundation::MFVideoTransFunc_709
+    } else {
+        windows::Win32::Media::MediaFoundation::MFVideoTransFunc_sRGB
+    };
+
+    input_type.SetUINT32(
+        &MF_MT_TRANSFER_FUNCTION,
+        transfer_func.0.try_into().unwrap(),
+    )?;
+    input_type.SetUINT32(
+        &MF_MT_VIDEO_NOMINAL_RANGE,
+        nominal_range.0.try_into().unwrap(),
+    )?;
+
+    input_type.SetUINT64(
+        &MF_MT_FRAME_SIZE,
+        ((input_width as u64) << 32) | (input_height as u64),
+    )?;
     input_type.SetUINT32(&MF_MT_DEFAULT_STRIDE, (input_width * 4) as u32)?;
     converter.SetInputType(0, &input_type, 0)?;
 
     // Initialize the converter - only flush once at the beginning instead of each frame
     converter.ProcessMessage(MFT_MESSAGE_COMMAND_FLUSH, 0)?;
-    
+
     // Try enabling async mode
     match converter.GetAttributes() {
         Ok(attrs) => {
@@ -90,7 +110,7 @@ pub unsafe fn setup_video_converter(
             } else {
                 info!("Transform doesn't support async processing");
             }
-        },
+        }
         Err(_) => {
             // This transform doesn't support the attributes interface
             warn!("Transform doesn't support attributes interface");
@@ -127,12 +147,11 @@ pub unsafe fn convert_bgra_to_nv12(
     let mut status: u32 = 0;
 
     let result = converter.ProcessOutput(0, output_slice, &mut status);
-    
+
     // Extract the sample before any error handling to ensure proper resource cleanup
     let final_sample = if result.is_ok() {
         ManuallyDrop::drop(&mut output_slice[0].pEvents);
-        ManuallyDrop::take(&mut output_slice[0].pSample)
-            .ok_or(windows::core::Error::from_win32())?
+        ManuallyDrop::take(&mut output_slice[0].pSample).ok_or(windows::core::Error::from_win32())?
     } else {
         // Clean up resources
         if let Some(sample) = ManuallyDrop::take(&mut output_slice[0].pSample) {
@@ -140,16 +159,16 @@ pub unsafe fn convert_bgra_to_nv12(
         }
         ManuallyDrop::drop(&mut output_slice[0].pEvents);
         drop(nv12_texture);
-        
+
         // Check for device removal
         device.GetDeviceRemovedReason()?;
         return Err(result.unwrap_err());
     };
-    
+
     // Make sure to copy the timestamp and duration from the input sample to the output sample
     final_sample.SetSampleTime(time)?;
     final_sample.SetSampleDuration(duration)?;
-    
+
     // Release the texture as it's no longer needed
     drop(nv12_texture);
 
@@ -193,13 +212,13 @@ unsafe fn create_nv12_output(
 
     // Cast to IDXGISurface instead of ID3D11Resource
     let nv12_surface: IDXGISurface = nv12_texture.cast()?;
-    
+
     // Create a DXGI buffer from the surface
     let output_buffer = MFCreateDXGISurfaceBuffer(&ID3D11Texture2D::IID, &nv12_surface, 0, FALSE)?;
 
     // Add the buffer to the sample
     output_sample.AddBuffer(&output_buffer)?;
-    
+
     // Explicitly release the surface reference after adding the buffer
     drop(nv12_surface);
     drop(output_buffer);

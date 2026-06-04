@@ -3,10 +3,12 @@ use windows::Win32::Graphics::Direct3D11::{ID3D11Device, ID3D11Texture2D};
 use windows::Win32::Graphics::Dxgi::Common::*;
 use windows::Win32::Graphics::Dxgi::*;
 
-pub unsafe fn setup_dxgi_duplication(device: &ID3D11Device) -> Result<(IDXGIOutputDuplication, bool)> {
-    use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+pub unsafe fn setup_dxgi_duplication(
+    device: &ID3D11Device,
+) -> Result<(IDXGIOutputDuplication, bool)> {
     use windows::Win32::Graphics::Gdi::{MonitorFromWindow, MONITOR_DEFAULTTOPRIMARY};
-    
+    use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+
     // Get DXGI device
     let dxgi_device: IDXGIDevice = device.cast()?;
 
@@ -32,15 +34,16 @@ pub unsafe fn setup_dxgi_duplication(device: &ID3D11Device) -> Result<(IDXGIOutp
 
     // Fallback to primary monitor (index 0) if not found
     let output = selected_output.unwrap_or_else(|| dxgi_adapter.EnumOutputs(0).unwrap());
-    
+
     let mut is_hdr = false;
     if let Ok(output6) = output.cast::<IDXGIOutput6>() {
         let mut desc1 = std::mem::zeroed();
         if output6.GetDesc1(&mut desc1).is_ok() {
             // DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 is 12
             // DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709 is 1 (linear scRGB)
-            if desc1.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 || 
-               desc1.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709 {
+            if desc1.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020
+                || desc1.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709
+            {
                 is_hdr = true;
             }
         }

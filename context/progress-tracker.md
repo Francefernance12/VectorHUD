@@ -3,9 +3,11 @@
 Update this file after every meaningful implementation change.
 
 ## Current Goal
-- Develop Session 10B: Optimization (Performance & UI/UX)
+
+- Develop Session 11: Polish (Stability & Final UI Polish)
 
 ## Completed
+
 - Session 1A: Project scaffolding and framework initialization.
 - Session 1B: Telemetry, Logging.
 - Session 1C: Persistence, Data.
@@ -24,18 +26,21 @@ Update this file after every meaningful implementation change.
 - Session 8B: Metrics+ (Hardware - GPU, VRAM, and FPS polling; Timer utility).
 - Session 9A: Integrations (AI+Notion - Vision buffer parsing, Notion block-level parsing for floating checklists).
 - Session 10A: Architecture & Scaling (Notion interactive status patches, AI context drafts via Zustand persist layer).
-- Session 10B: Optimization (Performance & UI/UX, Native GPU PDH, PresentMon FPS, Taskbar z-index fixes).
+- Session 10B: Optimization (Performance & UI/UX, Native GPU PDH, PresentMon FPS, Taskbar z-index fixes, HDR capture tone-mapping tweaks).
 
 ## In Progress
-- Session 11: Polish & Bug Fixes (TBD)
+
+- Session 11: Polish (Clean up edge cases, optimize startup sequence, final UI polish).
 
 ## Next Up
-| Session | Unit Name | Focus | Goal |
-| :--- | :--- | :--- | :--- |
-| 11 | Polish | Stability | Clean up edge cases, optimize startup sequence, final UI polish. |
+
+| Session | Unit Name | Focus     | Goal                                                             |
+| :------ | :-------- | :-------- | :--------------------------------------------------------------- |
 
 ## Architecture Decisions
+
 - See [Decisions.md](./Decisions.md) for a comprehensive list of architectural and design decisions.
 
 ## Session Notes
+
 - Use the Gemini Antigravity in standard mode for execution, and its planning mode (if available) before starting a new Git branch.

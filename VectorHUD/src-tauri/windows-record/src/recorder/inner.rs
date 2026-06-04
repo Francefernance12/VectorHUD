@@ -1,5 +1,4 @@
 use log::{error, info};
-use windows::Win32::System::Performance::QueryPerformanceCounter;
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
@@ -9,13 +8,14 @@ use std::thread::JoinHandle;
 use windows::core::{ComInterface, Result};
 use windows::Win32::Graphics::Direct3D::*;
 use windows::Win32::Graphics::Direct3D11::*;
+use windows::Win32::System::Performance::QueryPerformanceCounter;
 
 use super::config::RecorderConfig;
-use crate::capture::{collect_audio, get_frames, collect_microphone};
+use crate::capture::{collect_audio, collect_microphone, get_frames};
 use crate::device::{get_audio_input_device_by_name, get_video_encoder_by_type};
 use crate::error::RecorderError;
 use crate::processing::{media, process_samples};
-use crate::types::{SendableSample, SendableWriter, ReplayBuffer};
+use crate::types::{ReplayBuffer, SendableSample, SendableWriter};
 
 pub struct RecorderInner {
     recording: Arc<AtomicBool>,
@@ -32,10 +32,16 @@ impl RecorderInner {
         // By default, use substring matching
         Self::init_with_exact_match(config, process_name, false)
     }
-    
-    pub fn init_with_exact_match(config: &RecorderConfig, process_name: &str, use_exact_match: bool) -> Result<Self> {
-        info!("Initializing recorder for process: {} with exact match: {}", 
-              process_name, use_exact_match);
+
+    pub fn init_with_exact_match(
+        config: &RecorderConfig,
+        process_name: &str,
+        use_exact_match: bool,
+    ) -> Result<Self> {
+        info!(
+            "Initializing recorder for process: {} with exact match: {}",
+            process_name, use_exact_match
+        );
 
         // Clone the necessary values from config at the start
         let fps_num = config.fps_num();
@@ -54,9 +60,12 @@ impl RecorderInner {
                 Ok(device_id) => {
                     info!("Found device ID for '{}': {}", device_name, device_id);
                     Some(device_id)
-                },
+                }
                 Err(e) => {
-                    info!("Could not get device ID for '{}', using default: {:?}", device_name, e);
+                    info!(
+                        "Could not get device ID for '{}', using default: {:?}",
+                        device_name, e
+                    );
                     None
                 }
             }
@@ -64,12 +73,12 @@ impl RecorderInner {
             None
         };
 
-        
         // Create replay buffer if enabled
         let replay_buffer = if config.enable_replay_buffer() {
-            let buffer_duration = std::time::Duration::from_secs(config.replay_buffer_seconds() as u64);
+            let buffer_duration =
+                std::time::Duration::from_secs(config.replay_buffer_seconds() as u64);
             let fps = fps_num as f64 / fps_den as f64;
-            
+
             // Estimate the number of frames and audio samples in the buffer
             let video_frames = (fps * buffer_duration.as_secs_f64()) as usize;
             let audio_samples = if capture_audio || capture_microphone {
@@ -78,17 +87,26 @@ impl RecorderInner {
             } else {
                 0
             };
-            
-            info!("Creating replay buffer for {} seconds ({} video frames, {} audio samples)",
-                 config.replay_buffer_seconds(), video_frames, audio_samples);
-            
-            Some(Arc::new(ReplayBuffer::new(buffer_duration, video_frames, audio_samples)))
+
+            info!(
+                "Creating replay buffer for {} seconds ({} video frames, {} audio samples)",
+                config.replay_buffer_seconds(),
+                video_frames,
+                audio_samples
+            );
+
+            Some(Arc::new(ReplayBuffer::new(
+                buffer_duration,
+                video_frames,
+                audio_samples,
+            )))
         } else {
             None
         };
 
         // Parse out path string from PathBuf
-        let output_path = config.output_path()
+        let output_path = config
+            .output_path()
             .to_str()
             .ok_or_else(|| RecorderError::FailedToStart("Invalid path string".to_string()))?;
 
@@ -104,7 +122,7 @@ impl RecorderInner {
 
             // Get the video encoder
             let video_encoder = get_video_encoder_by_type(config.video_encoder())?;
-            
+
             // Create and configure media sink
             let media_sink = media::create_sink_writer(
                 output_path,
@@ -148,16 +166,21 @@ impl RecorderInner {
             // Windows display scaling causes user32/xcap to report logical resolution.
             // DXGI ALWAYS captures at physical resolution. We MUST match it or D3D11 crashes.
             let mut is_hdr = false;
-            if let Ok((duplication, detected_hdr)) = crate::capture::dxgi::setup_dxgi_duplication(&device) {
+            if let Ok((duplication, detected_hdr)) =
+                crate::capture::dxgi::setup_dxgi_duplication(&device)
+            {
                 is_hdr = detected_hdr;
                 let mut desc = windows::Win32::Graphics::Dxgi::DXGI_OUTDUPL_DESC::default();
                 unsafe { duplication.GetDesc(&mut desc) };
-                
+
                 input_width = desc.ModeDesc.Width;
                 input_height = desc.ModeDesc.Height;
                 output_width = desc.ModeDesc.Width;
                 output_height = desc.ModeDesc.Height;
-                info!("DXGI returned ACTUAL physical monitor resolution: {}x{}", input_width, input_height);
+                info!(
+                    "DXGI returned ACTUAL physical monitor resolution: {}x{}",
+                    input_width, input_height
+                );
             } else {
                 info!("Failed to get DXGI monitor resolution early, falling back to logical resolution");
             }
@@ -199,7 +222,14 @@ impl RecorderInner {
                 let barrier_clone = barrier.clone();
                 let audio_source_clone = config.audio_source().clone();
                 collect_audio_handle = Some(std::thread::spawn(move || {
-                    collect_audio(sender_audio, rec_clone, process_id, barrier_clone, Some(shared_start_qpc), &audio_source_clone)
+                    collect_audio(
+                        sender_audio,
+                        rec_clone,
+                        process_id,
+                        barrier_clone,
+                        Some(shared_start_qpc),
+                        &audio_source_clone,
+                    )
                 }));
             }
 
@@ -209,7 +239,13 @@ impl RecorderInner {
                 let barrier_clone = barrier.clone();
                 let device_clone = microphone_device.clone();
                 collect_microphone_handle = Some(std::thread::spawn(move || {
-                    collect_microphone(sender_microphone, rec_clone, barrier_clone, Some(shared_start_qpc), device_clone.as_deref())
+                    collect_microphone(
+                        sender_microphone,
+                        rec_clone,
+                        barrier_clone,
+                        Some(shared_start_qpc),
+                        device_clone.as_deref(),
+                    )
                 }));
             }
 
@@ -224,10 +260,10 @@ impl RecorderInner {
                     receiver_audio,
                     receiver_microphone,
                     rec_clone,
-                    input_width,     // Capture dimensions
-                    input_height,    // Capture dimensions
-                    output_width,    // Target dimensions
-                    output_height,   // Target dimensions
+                    input_width,   // Capture dimensions
+                    input_height,  // Capture dimensions
+                    output_width,  // Target dimensions
+                    output_height, // Target dimensions
                     device,
                     capture_audio,
                     capture_microphone,
@@ -283,41 +319,50 @@ impl RecorderInner {
 
         Ok(())
     }
-    
+
     /// Save the content of the replay buffer to a file
     pub fn save_replay(&self, output_path: &str) -> std::result::Result<(), RecorderError> {
         info!("Saving replay buffer to {}", output_path);
-        
+
         let replay_buffer = self.replay_buffer.borrow();
-        let buffer = replay_buffer.as_ref().ok_or_else(|| {
-            RecorderError::Generic("Replay buffer is not enabled".to_string())
-        })?;
-        
+        let buffer = replay_buffer
+            .as_ref()
+            .ok_or_else(|| RecorderError::Generic("Replay buffer is not enabled".to_string()))?;
+
         // Get the current time range from the buffer
         let duration = buffer.current_duration();
         if duration.as_secs() == 0 {
             return Err(RecorderError::Generic("Replay buffer is empty".to_string()));
         }
-        
-        info!("Replay buffer contains {} seconds of data", duration.as_secs_f64());
-        
+
+        info!(
+            "Replay buffer contains {} seconds of data",
+            duration.as_secs_f64()
+        );
+
         unsafe {
             // Get the oldest timestamp in the buffer
             let oldest_timestamp = *buffer.oldest_timestamp.lock().unwrap();
-            
+
             // Get all video and audio samples from the buffer (within the time range)
             let now = std::time::Instant::now();
             let video_samples = buffer.get_video_samples(oldest_timestamp, i64::MAX);
             let audio_samples = buffer.get_audio_samples(oldest_timestamp, i64::MAX);
-            info!("Retrieved {} video frames and {} audio samples in {:?}",
-                video_samples.len(), audio_samples.len(), now.elapsed());
-            
+            info!(
+                "Retrieved {} video frames and {} audio samples in {:?}",
+                video_samples.len(),
+                audio_samples.len(),
+                now.elapsed()
+            );
+
             if video_samples.is_empty() {
-                return Err(RecorderError::Generic("No video frames in replay buffer".to_string()));
+                return Err(RecorderError::Generic(
+                    "No video frames in replay buffer".to_string(),
+                ));
             }
-    
+
             let video_encoder = get_video_encoder_by_type(self.config.video_encoder())?;
-                
+
             let media_sink = media::create_sink_writer(
                 output_path,
                 self.config.fps_num(),
@@ -330,15 +375,15 @@ impl RecorderInner {
                 &video_encoder.id,
             )?;
             info!("Created sink writer");
-            
+
             // Begin writing
             media_sink.BeginWriting()?;
             info!("Began writing");
-            
+
             // Define stream indices
             let video_stream_index = 0;
             let audio_stream_index = if !audio_samples.is_empty() { 1 } else { 0 };
-            
+
             // Find the earliest timestamp to use as a reference for normalization
             let earliest_timestamp = if !video_samples.is_empty() {
                 video_samples[0].1
@@ -347,42 +392,52 @@ impl RecorderInner {
             } else {
                 oldest_timestamp
             };
-            
+
             info!("Normalizing timestamps, earliest: {}", earliest_timestamp);
-            
+
             // Write video samples with normalized timestamps
-            info!("Writing {} video frames to replay file", video_samples.len());
+            info!(
+                "Writing {} video frames to replay file",
+                video_samples.len()
+            );
             for (sample, timestamp) in video_samples {
                 // Calculate normalized timestamp (relative to the earliest timestamp)
                 let normalized_timestamp = timestamp - earliest_timestamp;
-                
+
                 // Set the normalized timestamp directly on the sample
                 sample.SetSampleTime(normalized_timestamp)?;
-                
+
                 // Write the sample with the normalized timestamp
                 media_sink.WriteSample(video_stream_index, &**sample)?;
             }
-            
+
             // Write audio samples with normalized timestamps
             if !audio_samples.is_empty() {
-                info!("Writing {} audio samples to replay file", audio_samples.len());
+                info!(
+                    "Writing {} audio samples to replay file",
+                    audio_samples.len()
+                );
                 for (sample, timestamp) in audio_samples {
                     // Calculate normalized timestamp (relative to the earliest timestamp)
                     let normalized_timestamp = timestamp - earliest_timestamp;
-                    
+
                     // Set the normalized timestamp directly on the sample
                     sample.SetSampleTime(normalized_timestamp)?;
-                    
+
                     // Write the sample with the normalized timestamp
                     media_sink.WriteSample(audio_stream_index, &**sample)?;
                 }
             }
-            
+
             // Finalize the media sink
             media_sink.Finalize()?;
-            info!("Replay buffer saved to {} in {:?}", output_path, now.elapsed());
+            info!(
+                "Replay buffer saved to {} in {:?}",
+                output_path,
+                now.elapsed()
+            );
         }
-        
+
         Ok(())
     }
 }
@@ -392,19 +447,20 @@ impl Drop for RecorderInner {
         unsafe {
             #[cfg(debug_assertions)]
             log::info!("RecorderInner is being dropped, cleaning up resources");
-            
+
             // Ensure recording flag is set to false to terminate threads
             if self.recording.load(std::sync::atomic::Ordering::Relaxed) {
                 #[cfg(debug_assertions)]
                 log::warn!("Recording flag was still true during drop; setting to false");
-                self.recording.store(false, std::sync::atomic::Ordering::Relaxed);
+                self.recording
+                    .store(false, std::sync::atomic::Ordering::Relaxed);
             }
-            
+
             #[cfg(debug_assertions)]
             log::info!("Shutting down Media Foundation");
-            
+
             let _ = media::shutdown_media_foundation();
-            
+
             #[cfg(debug_assertions)]
             log::info!("RecorderInner cleanup complete");
         }
@@ -424,10 +480,10 @@ unsafe fn create_d3d11_device() -> Result<(ID3D11Device, ID3D11DeviceContext)> {
 
     let mut device = None;
     let mut context = None;
-    
+
     // Base flags always include BGRA support
     let mut flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
-    
+
     // In debug builds, try to use debug layer
     #[cfg(debug_assertions)]
     {
@@ -481,12 +537,14 @@ unsafe fn create_d3d11_device() -> Result<(ID3D11Device, ID3D11DeviceContext)> {
         // Try to enable resource tracking via debug interface
         if let Ok(_debug) = device.cast::<ID3D11Debug>() {
             info!("D3D11 Debug interface available - resource tracking enabled");
-            
-            // We do NOT set BreakOnSeverity here, because it triggers an instant DebugBreak() 
+
+            // We do NOT set BreakOnSeverity here, because it triggers an instant DebugBreak()
             // (exit code 2170/0x87A or 0xC0000409) if ANY minor format or dimension mismatch
             // occurs during CopyResource, instantly killing the application without a trace.
             if let Ok(_info_queue) = device.cast::<ID3D11InfoQueue>() {
-                info!("D3D11 Info Queue available (BreakOnSeverity disabled to prevent hard crashes)");
+                info!(
+                    "D3D11 Info Queue available (BreakOnSeverity disabled to prevent hard crashes)"
+                );
             }
         } else {
             info!("D3D11 Debug interface not available");

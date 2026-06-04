@@ -11,7 +11,7 @@ fn main() -> Result<()> {
     // Create recorder
     let config = Recorder::builder()
         .fps(30, 1)
-        .input_dimensions(1920, 1080)  
+        .input_dimensions(1920, 1080)
         .output_dimensions(1920, 1080)
         .capture_audio(true)
         .capture_microphone(true)
@@ -23,8 +23,7 @@ fn main() -> Result<()> {
         .build();
 
     // Create the recorder with your target window name
-    let recorder = Recorder::new(config)?
-        .with_process_name("Chrome");
+    let recorder = Recorder::new(config)?.with_process_name("Chrome");
 
     // Short delay before starting recording
     std::thread::sleep(Duration::from_secs(1));
@@ -42,11 +41,11 @@ fn main() -> Result<()> {
     // Record for 10 seconds
     info!("Recording for 10 seconds...");
     std::thread::sleep(Duration::from_secs(10));
-    
+
     // Stop recording
     info!("Stopping recording");
     recorder.stop_recording()?;
-    
+
     info!("Application finished - all resources properly cleaned up");
     Ok(())
 }

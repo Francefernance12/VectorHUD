@@ -27,9 +27,7 @@ impl Default for VideoEncoderType {
 
 /// Returns a list of available video encoders
 pub fn enumerate_video_encoders() -> Result<Vec<VideoEncoder>> {
-    use windows::Win32::Media::MediaFoundation::{
-        MFVideoFormat_H264, MFVideoFormat_HEVC,
-    };
+    use windows::Win32::Media::MediaFoundation::{MFVideoFormat_H264, MFVideoFormat_HEVC};
 
     // Currently supported video encoders
     let encoders = vec![
@@ -56,9 +54,7 @@ pub fn get_video_encoder_by_name(name: &str) -> Option<VideoEncoder> {
 
 /// Gets a video encoder by its type
 pub fn get_video_encoder_by_type(encoder_type: &VideoEncoderType) -> Result<VideoEncoder> {
-    use windows::Win32::Media::MediaFoundation::{
-        MFVideoFormat_H264, MFVideoFormat_HEVC,
-    };
+    use windows::Win32::Media::MediaFoundation::{MFVideoFormat_H264, MFVideoFormat_HEVC};
 
     let encoder = match encoder_type {
         VideoEncoderType::H264 => VideoEncoder {

@@ -8,6 +8,7 @@ import { useSettingsStore } from '../../store/settingsStore';
 import { useToastStore } from '../../store/toastStore';
 import { useOpenRouterStore } from '../../store/openRouterStore';
 import { Plus, MessageSquare, Trash2, Camera, Edit3 } from 'lucide-react';
+import { API_ENDPOINTS, UI_CONSTANTS } from '../../config/constants';
 
 interface Message {
   id?: number;
@@ -240,12 +241,12 @@ export function OpenRouterWidget() {
       const apiPayload = [
         {
           role: 'system',
-          content: `You are VectorHUD, a helpful overlay assistant for a gamer. Be extremely concise, formatted, and tactical in your answers.`
+          content: UI_CONSTANTS.CHAT_SYSTEM_PROMPT
         },
         ...apiMessages
       ];
 
-      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      const response = await fetch(API_ENDPOINTS.OPEN_ROUTER_CHAT, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${openRouterKey}`,

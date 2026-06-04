@@ -28,7 +28,15 @@ pub unsafe fn create_sink_writer(
     let mut current_stream_index = 0;
 
     // Configure video stream (always stream index 0)
-    configure_video_stream(&sink_writer, fps_num, fps_den, output_width, output_height, video_bitrate, video_encoder_id)?;
+    configure_video_stream(
+        &sink_writer,
+        fps_num,
+        fps_den,
+        output_width,
+        output_height,
+        video_bitrate,
+        video_encoder_id,
+    )?;
     current_stream_index += 1;
 
     // Configure a single audio stream if either audio source is enabled
@@ -45,7 +53,7 @@ unsafe fn configure_mixed_audio_stream(
     sink_writer: &IMFSinkWriter,
     stream_index: u32,
 ) -> Result<()> {
-    // Create output type 
+    // Create output type
     let audio_output_type = create_audio_output_type()?;
 
     // Create input type suitable for mixed audio (stereo, 16-bit, 44100Hz)
@@ -103,7 +111,13 @@ unsafe fn configure_video_stream(
     video_encoder_id: &GUID,
 ) -> Result<()> {
     // Create output media type
-    let video_output_type = create_video_output_type(fps_num, fps_den, output_width, output_height, video_encoder_id)?;
+    let video_output_type = create_video_output_type(
+        fps_num,
+        fps_den,
+        output_width,
+        output_height,
+        video_encoder_id,
+    )?;
 
     // Create input media type
     let video_input_type = create_video_input_type(fps_num, fps_den, output_width, output_height)?;
@@ -132,7 +146,10 @@ unsafe fn create_video_output_type(
         &MF_MT_FRAME_RATE,
         ((fps_num as u64) << 32) | (fps_den as u64),
     )?;
-    output_type.SetUINT64(&MF_MT_FRAME_SIZE, ((output_width as u64) << 32) | (output_height as u64))?;
+    output_type.SetUINT64(
+        &MF_MT_FRAME_SIZE,
+        ((output_width as u64) << 32) | (output_height as u64),
+    )?;
     output_type.SetUINT64(&MF_MT_PIXEL_ASPECT_RATIO, (1 << 32) | 1u64)?;
     output_type.SetUINT32(
         &MF_MT_INTERLACE_MODE,
@@ -152,7 +169,7 @@ unsafe fn create_video_output_type(
     )?;
     output_type.SetUINT32(
         &MF_MT_VIDEO_NOMINAL_RANGE,
-        MFNominalRange_0_255.0.try_into().unwrap(),
+        MFNominalRange_16_235.0.try_into().unwrap(),
     )?;
     // Set the appropriate profile based on the encoder type
     if video_encoder_id == &MFVideoFormat_H264 {
@@ -185,7 +202,10 @@ unsafe fn create_video_input_type(
         &MF_MT_FRAME_RATE,
         ((fps_num as u64) << 32) | (fps_den as u64),
     )?;
-    input_type.SetUINT64(&MF_MT_FRAME_SIZE, ((output_width as u64) << 32) | (output_height as u64))?;
+    input_type.SetUINT64(
+        &MF_MT_FRAME_SIZE,
+        ((output_width as u64) << 32) | (output_height as u64),
+    )?;
     input_type.SetUINT32(&MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive.0 as u32)?;
     input_type.SetUINT32(&MF_MT_ALL_SAMPLES_INDEPENDENT, 1)?;
     input_type.SetUINT64(&MF_MT_PIXEL_ASPECT_RATIO, (1u64 << 32) | 1u64)?;
@@ -204,7 +224,7 @@ unsafe fn create_video_input_type(
     )?;
     input_type.SetUINT32(
         &MF_MT_VIDEO_NOMINAL_RANGE,
-        MFNominalRange_0_255.0.try_into().unwrap(), // Video Processor outputs full range NV12
+        MFNominalRange_16_235.0.try_into().unwrap(), // Video Processor outputs limited range NV12 now
     )?;
 
     Ok(input_type)

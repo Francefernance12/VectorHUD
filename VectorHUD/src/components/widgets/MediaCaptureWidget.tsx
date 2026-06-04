@@ -6,6 +6,8 @@ import { Trash2, Camera, Zap, Gamepad2, Monitor, FolderOpen } from 'lucide-react
 import { getDb, executeQuery } from '../../utils/db';
 import { logger } from '../../utils/logger';
 import { CaptureHistory } from '../../types';
+import { useTimerStore } from '../../store/timerStore';
+import { useToastStore } from '../../store/toastStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useRecordingStore } from '../../store/recordingStore';
 
@@ -194,6 +196,7 @@ export function MediaCaptureWidget() {
   };
 
   const handleSaveReplayClip = async () => {
+    useToastStore.getState().showToast("⏳ Processing 30s Clip...");
     try {
       const path = await invoke<string>('save_replay_buffer');
       logger.info(`Replay clip saved: ${path}`);
@@ -204,8 +207,10 @@ export function MediaCaptureWidget() {
       );
 
       await fetchHistory();
+      useToastStore.getState().showToast("⚡ Replay Clip Saved");
     } catch (err) {
       logger.error(`Save replay failed: ${err}`);
+      useToastStore.getState().showToast("❌ Failed to save replay");
     }
   };
 

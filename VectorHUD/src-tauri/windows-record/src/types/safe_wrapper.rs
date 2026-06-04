@@ -14,11 +14,7 @@ impl D3D11DeviceContext {
         }
     }
 
-    pub unsafe fn copy_resource(
-        &self,
-        dst: &ID3D11Texture2D,
-        src: &ID3D11Texture2D
-    ) {
+    pub unsafe fn copy_resource(&self, dst: &ID3D11Texture2D, src: &ID3D11Texture2D) {
         self.inner.CopyResource(dst, src);
     }
 }
@@ -29,9 +25,7 @@ pub struct DxgiOutputDuplication {
 
 impl DxgiOutputDuplication {
     pub fn new(duplication: IDXGIOutputDuplication) -> Self {
-        Self {
-            inner: duplication,
-        }
+        Self { inner: duplication }
     }
 
     pub unsafe fn acquire_next_frame(
@@ -40,7 +34,8 @@ impl DxgiOutputDuplication {
         frame_info: &mut DXGI_OUTDUPL_FRAME_INFO,
         resource: &mut Option<IDXGIResource>,
     ) -> Result<()> {
-        self.inner.AcquireNextFrame(timeout_ms, frame_info, resource)
+        self.inner
+            .AcquireNextFrame(timeout_ms, frame_info, resource)
     }
 
     pub unsafe fn release_frame(&self) -> Result<()> {
