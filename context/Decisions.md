@@ -60,3 +60,14 @@ This document tracks all important decisions made throughout the lifecycle of th
 - **Reasoning:** Notion page properties only map to top-level database columns. Rich content like paragraph notes and interactive checkboxes reside inside the internal page body block tree, necessitating block-level recursive queries and patches to support real-time to-do list manipulation within the overlay.
 - **Decision:** Adopt Zustand's `persist` middleware with `localStorage` for all draft forms (Notion sync drafts, AI chat inputs, and Vision buffer thumbnails).
 - **Reasoning:** The HUD overlay constantly toggles visibility (`window.hide()`), and the React environment frequently unmounts nodes when switching into "Ghost Mode" (non-interactive state) to free up memory. Utilizing `persist` guarantees that inputs effortlessly survive these aggressive unmount cycles and full Tauri developer reloads.
+
+## Session 10B: Performance & UI/UX Polish
+
+- **Decision:** Use native Windows Performance Data Helper (PDH) C++ bindings to poll `\GPU Engine(*)\Utilization Percentage` instead of `sysinfo` or WMI.
+- **Reasoning:** WMI inherently requires `CoInitializeSecurity` globally, which strictly breaks Tauri WebView2's COM threading model and crashes the app. Sysinfo lacks GPU telemetry entirely. PDH allows us to query the `engtype_3D` utilization directly from the kernel reliably and safely without breaking COM apartments.
+- **Decision:** Spawn Intel's `PresentMon64.exe` as a headless background child process and parse its CSV stdout for game FPS rather than hooking ETW natively in Rust.
+- **Reasoning:** Hooking Event Tracing for Windows (ETW) manually in Rust requires heavy, complex event loop subscriptions and manifest parsing. PresentMon already does this flawlessly. Piping its stdout is cheap and bypasses the need for DLL injection which triggers Anti-Cheat software.
+- **Decision:** Replace Tauri's native `window.set_fullscreen(true)` API with explicit bounds calculation (`window.set_size` and `window.set_position`) using the primary monitor's geometry.
+- **Reasoning:** Setting `fullscreen` on Windows 11 often causes DWM to draw the standard white titlebar overlapping the overlay, or causes the taskbar to occasionally sit on top of the overlay z-index. Explicitly sizing a borderless window (`decorations: false`) to the exact screen coordinates perfectly forces true borderless windowed mode without the DWM bugs.
+- **Decision:** Shift generic hardware colors to Tailwind's global dynamic CSS variable system (`bg-accent-green`) instead of hardcoded strings like `cyan` or `rose`.
+- **Reasoning:** Hardcoded string concatenation for colors in React components breaks Tailwind's JIT purging. Dynamic theme colors guarantee that hardware widget bars accurately reflect the user's selected global overlay color theme.
