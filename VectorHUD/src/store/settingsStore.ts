@@ -32,6 +32,7 @@ interface SettingsState {
   setStopwatchHotkey: (hotkey: string) => Promise<void>;
   setTimerResetHotkey: (hotkey: string) => Promise<void>;
   loadPreferences: () => Promise<void>;
+  syncHotkeys: () => Promise<void>;
 }
 
 const applyThemeColors = (theme: string, customColor: string) => {
@@ -67,9 +68,9 @@ const applyThemeColors = (theme: string, customColor: string) => {
   }
 };
 
-export const useSettingsStore = create<SettingsState>((set) => ({
+export const useSettingsStore = create<SettingsState>((set, get) => ({
   isSettingsOpen: false,
-  openRouterModel: 'openai/gpt-4o', // Default model
+  openRouterModel: 'openai/gpt-5.5', // Default model
   globalFontSize: 14,
   theme: 'default',
   customColor: '#FF0000',
@@ -200,7 +201,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     const finalColor = customColor || '#FF0000';
 
     set({
-      openRouterModel: model || 'openai/gpt-4o',
+      openRouterModel: model || 'openai/gpt-5.5',
       globalFontSize: fontSize || 14,
       theme: finalTheme,
       customColor: finalColor,
@@ -218,16 +219,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     applyThemeColors(finalTheme, finalColor);
 
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('update_hotkeys', {
-        overlayHotkey: oHot || 'ctrl+alt+o',
-        screenshotHotkey: sHot || 'ctrl+alt+s',
-        recordHotkey: rHot || 'ctrl+alt+r',
-        replayHotkey: rpHot || 'ctrl+alt+b',
-        timerHotkey: tHot || 'ctrl+alt+t',
-        stopwatchHotkey: swHot || 'ctrl+alt+w',
-        timerResetHotkey: trHot || 'ctrl+alt+y'
-      });
+      await get().syncHotkeys();
     } catch (err) {
       console.error("Failed to sync hotkeys to Rust backend:", err);
     }
@@ -235,5 +227,19 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     if (fontSize) {
       document.documentElement.style.setProperty('--base-font-size', `${fontSize}px`);
     }
+  },
+
+  syncHotkeys: async () => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const state = get();
+    await invoke('update_hotkeys', {
+      overlayHotkey: state.overlayHotkey,
+      screenshotHotkey: state.screenshotHotkey,
+      recordHotkey: state.recordHotkey,
+      replayHotkey: state.replayHotkey,
+      timerHotkey: state.timerHotkey,
+      stopwatchHotkey: state.stopwatchHotkey,
+      timerResetHotkey: state.timerResetHotkey
+    });
   }
 }));

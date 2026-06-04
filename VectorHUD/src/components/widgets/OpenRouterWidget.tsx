@@ -7,7 +7,7 @@ import { getErrorMessage } from '../../types';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useToastStore } from '../../store/toastStore';
 import { useOpenRouterStore } from '../../store/openRouterStore';
-import { Plus, MessageSquare, Trash2, Camera, Edit3 } from 'lucide-react';
+import { Plus, MessageSquare, Trash2, Camera, Edit3, Copy, Check } from 'lucide-react';
 import { API_ENDPOINTS, UI_CONSTANTS } from '../../config/constants';
 
 interface Message {
@@ -49,6 +49,14 @@ export function OpenRouterWidget() {
   const openRouterModel = useSettingsStore(state => state.openRouterModel);
   const showToast = useToastStore(state => state.showToast);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  
+  const [copiedId, setCopiedId] = useState<number | string | null>(null);
+
+  const handleCopy = (text: string, id: number | string | undefined) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id || text.substring(0, 10));
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   useEffect(() => {
     loadSessions();
@@ -238,14 +246,6 @@ export function OpenRouterWidget() {
         };
       });
 
-      const apiPayload = [
-        {
-          role: 'system',
-          content: UI_CONSTANTS.CHAT_SYSTEM_PROMPT
-        },
-        ...apiMessages
-      ];
-
       const response = await fetch(API_ENDPOINTS.OPEN_ROUTER_CHAT, {
         method: "POST",
         headers: {
@@ -256,7 +256,8 @@ export function OpenRouterWidget() {
         },
         body: JSON.stringify({
           model: openRouterModel,
-          messages: apiPayload
+          system: UI_CONSTANTS.CHAT_SYSTEM_PROMPT,
+          messages: apiMessages
         })
       });
 
@@ -386,8 +387,17 @@ export function OpenRouterWidget() {
                   </div>
                 )}
                 {msg.role === 'assistant' ? (
-                  <div className="prose prose-invert prose-sm max-w-none prose-p:leading-relaxed prose-pre:bg-black/50 prose-pre:border prose-pre:border-white/10">
-                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  <div className="group/msg relative">
+                    <div className="prose prose-invert prose-sm max-w-none prose-p:leading-relaxed prose-pre:bg-black/50 prose-pre:border prose-pre:border-white/10">
+                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                    </div>
+                    <button
+                      onClick={() => handleCopy(msg.content, idx)}
+                      className="absolute top-0 right-0 opacity-0 group-hover/msg:opacity-100 p-1.5 bg-zinc-800 rounded text-zinc-400 hover:text-white hover:bg-zinc-700 transition-all border border-white/10 shadow-sm"
+                      title="Copy message"
+                    >
+                      {copiedId === idx ? <Check size={14} className="text-accent-green" /> : <Copy size={14} />}
+                    </button>
                   </div>
                 ) : (
                   <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>

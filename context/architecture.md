@@ -6,10 +6,10 @@
 | Framework | Tauri 2.0 | Application container and OS bridge. |
 | UI | React + TypeScript + Tailwind | Rendering the Tactical/HUD widgets. |
 | Backend | Rust | System APIs, logging, and heavy lifting. |
-| Database | SQLite (`tauri-plugin-sql`) | Analytics, persistent structured data. |
-| Telemetry | PresentMon64 (Sidecar) | Headless background process for game FPS tracing via ETW. |
-| Key-Value | `tauri-plugin-store` | Fast UI settings and widget coordinates. |
-| Logging | `tracing` (Rust) | Centralized, rolling file logs. |
+| Database | SQLite (`tauri-plugin-sql`) | Analytics, session history, encrypted credential storage. |
+| Telemetry | PresentMon64 (Sidecar) & PDH/DXGI | Headless background processes and kernel bindings for accurate FPS/GPU hardware metrics without COM conflicts. |
+| Key-Value | `tauri-plugin-store` | Fast UI settings, keybinds, and widget coordinates. |
+| Logging | `tracing` (Rust) | Centralized, rolling file logs mapping both backend and frontend telemetry. |
 
 ## System Boundaries
 - `src-tauri/src/commands/` — Rust functions exposed to the React frontend.

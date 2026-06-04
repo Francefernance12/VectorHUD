@@ -73,12 +73,28 @@ function App() {
 
     // Subscribe to state changes and save to disk (debounced)
     let saveTimeout: ReturnType<typeof setTimeout>;
+    let pendingSave = false;
+
+    const flushSave = () => {
+      if (pendingSave) {
+        clearTimeout(saveTimeout);
+        setSetting("activeWidgets", useWidgetStore.getState().activeWidgets).catch(err => {
+          logger.error(`Failed to flush widget layout: ${err}`).catch(console.error);
+        });
+        pendingSave = false;
+      }
+    };
+
+    window.addEventListener('beforeunload', flushSave);
+
     const unsubscribeStore = useWidgetStore.subscribe((state) => {
+      pendingSave = true;
       clearTimeout(saveTimeout);
       saveTimeout = setTimeout(() => {
         setSetting("activeWidgets", state.activeWidgets).catch(err => {
-          logger.error(`Failed to save widget layout: ${err}`);
+          logger.error(`Failed to save widget layout: ${err}`).catch(console.error);
         });
+        pendingSave = false;
       }, 500); // 500ms debounce
     });
 
@@ -86,107 +102,142 @@ function App() {
     setInteractive(false);
 
 
-    // Listen for the global shortcut event from Rust
-    const unlistenShortcut = listen("hotkey-overlay", () => {
-      toggleInteractive();
-    });
+    let isMounted = true;
+    const unlistenListeners: Array<() => void> = [];
 
-    // Listen for HUD toasts from Rust
-    const unlistenToast = listen<string>("hud-toast", (event) => {
-      showToast(event.payload);
-    });
+    const safePush = (unlisten: () => void) => {
+      if (!isMounted) {
+        unlisten();
+      } else {
+        unlistenListeners.push(unlisten);
+      }
+    };
 
-    // Dismiss overlay when clicking on another monitor (window loses focus)
-    const unlistenFocusLoss = listen("window-lost-focus", () => {
-      setInteractive(false);
-    });
-
-    const unlistenForceInteractive = listen("force-interactive", () => {
-      setInteractive(true);
-    });
-
-    // Global Hotkey Listeners
-    const unlistenScreenshot = listen("hotkey-screenshot", async () => {
+    const initListeners = async () => {
       try {
-        const path = await invoke<string>('capture_screenshot');
-        await getDb().then(db => db.execute('INSERT INTO capture_history (file_path, media_type, game_process) VALUES (?1, ?2, ?3)', [path, 'screenshot', 'Desktop']));
-        window.dispatchEvent(new Event('refresh-capture-history'));
-        showToast("📸 Screenshot Saved");
+        if (!isMounted) return;
+        const unlistenShortcut = await listen("hotkey-overlay", () => {
+          toggleInteractive();
+        });
+        safePush(unlistenShortcut);
+
+        if (!isMounted) return;
+        const unlistenToast = await listen<string>("hud-toast", (event) => {
+          showToast(event.payload);
+        });
+        safePush(unlistenToast);
+
+        if (!isMounted) return;
+        const unlistenFocusLoss = await listen("window-lost-focus", () => {
+          setInteractive(false);
+        });
+        safePush(unlistenFocusLoss);
+
+        if (!isMounted) return;
+        const unlistenForceInteractive = await listen("force-interactive", () => {
+          setInteractive(true);
+        });
+        safePush(unlistenForceInteractive);
+
+        if (!isMounted) return;
+        const unlistenScreenshot = await listen("hotkey-screenshot", async () => {
+          try {
+            const path = await invoke<string>('capture_screenshot');
+            await getDb().then(db => db.execute('INSERT INTO capture_history (file_path, media_type, game_process) VALUES (?1, ?2, ?3)', [path, 'screenshot', 'Desktop']));
+            window.dispatchEvent(new Event('refresh-capture-history'));
+            showToast("📸 Screenshot Saved");
+          } catch (err) {
+            logger.error(`Screenshot hotkey failed: ${err}`).catch(console.error);
+          }
+        });
+        safePush(unlistenScreenshot);
+
+        if (!isMounted) return;
+        const unlistenRecord = await listen("hotkey-record", async () => {
+          const isRec = useRecordingStore.getState().isRecording;
+          if (isRec) {
+            try {
+              const path = await invoke<string>('stop_video_recording');
+              await getDb().then(db => db.execute('INSERT INTO capture_history (file_path, media_type, game_process) VALUES (?1, ?2, ?3)', [path, 'video', 'Desktop']));
+              useRecordingStore.getState().setRecording(false);
+              window.dispatchEvent(new Event('refresh-capture-history'));
+              showToast("⏹️ Recording Saved");
+            } catch (err) {
+              logger.error(`Stop recording hotkey failed: ${err}`).catch(console.error);
+            }
+          } else {
+            try {
+              const micEnabled = useSettingsStore.getState().recordMicrophone;
+              const audioEnabled = useSettingsStore.getState().recordSystemAudio;
+              await invoke<string>('start_video_recording', { micEnabled, audioEnabled });
+              useRecordingStore.getState().setRecording(true);
+              showToast("🔴 Recording Started");
+            } catch (err) {
+              logger.error(`Start recording hotkey failed: ${err}`).catch(console.error);
+            }
+          }
+        });
+        safePush(unlistenRecord);
+
+        if (!isMounted) return;
+        const unlistenReplay = await listen("hotkey-replay", async () => {
+          const isReplay = useRecordingStore.getState().isReplayActive;
+          if (isReplay) {
+            showToast("⏳ Processing 30s Clip...");
+            try {
+              const path = await invoke<string>('save_replay_buffer');
+              await getDb().then(db => db.execute('INSERT INTO capture_history (file_path, media_type, game_process) VALUES (?1, ?2, ?3)', [path, 'video', 'Desktop']));
+              window.dispatchEvent(new Event('refresh-capture-history'));
+              showToast("⚡ Replay Clip Saved");
+            } catch (err) {
+              logger.error(`Save replay hotkey failed: ${err}`).catch(console.error);
+            }
+          } else {
+            try {
+              const micEnabled = useSettingsStore.getState().recordMicrophone;
+              const audioEnabled = useSettingsStore.getState().recordSystemAudio;
+              await invoke('start_replay_buffer', { micEnabled, audioEnabled });
+              useRecordingStore.getState().setReplayActive(true);
+              showToast("⏪ Replay Buffer Started");
+            } catch (err) {
+              logger.error(`Start replay hotkey failed: ${err}`).catch(console.error);
+            }
+          }
+        });
+        safePush(unlistenReplay);
+
+        if (!isMounted) return;
+        const unlistenTimer = await listen("hotkey-timer", () => {
+          const { cdIsRunning, cdFinished, cdTime, cdInput, pauseCd, startCd, resetCd } = useTimerStore.getState();
+          if (cdIsRunning) {
+            pauseCd();
+          } else {
+            if (cdFinished) resetCd();
+            if (cdTime === 0) useTimerStore.getState().setCdInput(cdInput);
+            startCd();
+          }
+        });
+        safePush(unlistenTimer);
+
+        if (!isMounted) return;
+        const unlistenStopwatch = await listen("hotkey-stopwatch", () => {
+          const { swIsRunning, pauseSw, startSw } = useTimerStore.getState();
+          if (swIsRunning) pauseSw();
+          else startSw();
+        });
+        safePush(unlistenStopwatch);
+
+        if (!isMounted) return;
+        const unlistenTimerReset = await listen("hotkey-timer-reset", () => {
+          useTimerStore.getState().resetCd();
+          useTimerStore.getState().resetSw();
+        });
+        safePush(unlistenTimerReset);
       } catch (err) {
-        logger.error(`Screenshot hotkey failed: ${err}`);
+        logger.error(`Failed to initialize listeners: ${err}`).catch(console.error);
       }
-    });
-
-    const unlistenRecord = listen("hotkey-record", async () => {
-      const isRec = useRecordingStore.getState().isRecording;
-      if (isRec) {
-        try {
-          const path = await invoke<string>('stop_video_recording');
-          await getDb().then(db => db.execute('INSERT INTO capture_history (file_path, media_type, game_process) VALUES (?1, ?2, ?3)', [path, 'video', 'Desktop']));
-          useRecordingStore.getState().setRecording(false);
-          window.dispatchEvent(new Event('refresh-capture-history'));
-          showToast("⏹️ Recording Saved");
-        } catch (err) {
-          logger.error(`Stop recording hotkey failed: ${err}`);
-        }
-      } else {
-        try {
-          const micEnabled = useSettingsStore.getState().recordMicrophone;
-          const audioEnabled = useSettingsStore.getState().recordSystemAudio;
-          await invoke<string>('start_video_recording', { micEnabled, audioEnabled });
-          useRecordingStore.getState().setRecording(true);
-          showToast("🔴 Recording Started");
-        } catch (err) {
-          logger.error(`Start recording hotkey failed: ${err}`);
-        }
-      }
-    });
-
-    const unlistenReplay = listen("hotkey-replay", async () => {
-      const isReplay = useRecordingStore.getState().isReplayActive;
-      if (isReplay) {
-        showToast("⏳ Processing 30s Clip...");
-        try {
-          const path = await invoke<string>('save_replay_buffer');
-          await getDb().then(db => db.execute('INSERT INTO capture_history (file_path, media_type, game_process) VALUES (?1, ?2, ?3)', [path, 'video', 'Desktop']));
-          window.dispatchEvent(new Event('refresh-capture-history'));
-          showToast("⚡ Replay Clip Saved");
-        } catch (err) {
-          logger.error(`Save replay hotkey failed: ${err}`);
-        }
-      } else {
-        try {
-          const micEnabled = useSettingsStore.getState().recordMicrophone;
-          const audioEnabled = useSettingsStore.getState().recordSystemAudio;
-          await invoke('start_replay_buffer', { micEnabled, audioEnabled });
-          useRecordingStore.getState().setReplayActive(true);
-          showToast("⏪ Replay Buffer Started");
-        } catch (err) {
-          logger.error(`Start replay hotkey failed: ${err}`);
-        }
-      }
-    });
-    const unlistenTimer = listen("hotkey-timer", () => {
-      const { cdIsRunning, cdFinished, cdTime, cdInput, pauseCd, startCd, resetCd } = useTimerStore.getState();
-      if (cdIsRunning) {
-        pauseCd();
-      } else {
-        if (cdFinished) resetCd();
-        if (cdTime === 0) useTimerStore.getState().setCdInput(cdInput);
-        startCd();
-      }
-    });
-
-    const unlistenStopwatch = listen("hotkey-stopwatch", () => {
-      const { swIsRunning, pauseSw, startSw } = useTimerStore.getState();
-      if (swIsRunning) pauseSw();
-      else startSw();
-    });
-
-    const unlistenTimerReset = listen("hotkey-timer-reset", () => {
-      useTimerStore.getState().resetCd();
-      useTimerStore.getState().resetSw();
-    });
+    };
+    initListeners();
 
     const handleBlur = () => {
       if (useShellStore.getState().isInteractive) {
@@ -195,33 +246,25 @@ function App() {
     };
     window.addEventListener('blur', handleBlur);
 
-    // Global error handlers for crash reporting — forward uncaught JS errors to Rust logger
     const handleGlobalError = (event: ErrorEvent) => {
       logger.error(
         `[UNCAUGHT] ${event.message} at ${event.filename}:${event.lineno}:${event.colno}`
-      );
+      ).catch(console.error);
     };
 
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
       const reason = event.reason instanceof Error ? event.reason.message : String(event.reason);
-      logger.error(`[UNHANDLED_REJECTION] ${reason}`);
+      logger.error(`[UNHANDLED_REJECTION] ${reason}`).catch(console.error);
     };
 
     window.addEventListener('error', handleGlobalError);
     window.addEventListener('unhandledrejection', handleUnhandledRejection);
 
     return () => {
-      unlistenShortcut.then((fn) => fn());
-      unlistenToast.then((fn) => fn());
-      unlistenScreenshot.then((fn) => fn());
-      unlistenRecord.then((fn) => fn());
-      unlistenReplay.then((fn) => fn());
-      unlistenFocusLoss.then((fn) => fn());
-      unlistenForceInteractive.then((fn) => fn());
-      unlistenTimer.then((fn) => fn());
-      unlistenStopwatch.then((fn) => fn());
-      unlistenTimerReset.then((fn) => fn());
+      isMounted = false;
+      unlistenListeners.forEach(fn => fn());
       window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('beforeunload', flushSave);
       window.removeEventListener('error', handleGlobalError);
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
       unsubscribeStore();

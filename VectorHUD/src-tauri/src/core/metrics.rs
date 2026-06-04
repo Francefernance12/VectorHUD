@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use sysinfo::System;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 #[derive(Clone, Serialize)]
 pub struct HardwareMetrics {
@@ -207,7 +207,7 @@ struct FpsMonitor {
 
 #[cfg(windows)]
 impl FpsMonitor {
-    fn new(shutdown: Arc<AtomicBool>) -> Self {
+    fn new(app: tauri::AppHandle, shutdown: Arc<AtomicBool>) -> Self {
         let current_fps = Arc::new(AtomicU32::new(0));
         let fps_clone = current_fps.clone();
 
@@ -219,7 +219,11 @@ impl FpsMonitor {
             // Wait a moment for app to start
             std::thread::sleep(std::time::Duration::from_secs(2));
 
-            let mut present_mon_path = std::path::PathBuf::from("PresentMon64.exe");
+            let mut present_mon_path = app
+                .path()
+                .resolve("PresentMon64.exe", tauri::path::BaseDirectory::Resource)
+                .unwrap_or_else(|_| std::path::PathBuf::from("PresentMon64.exe"));
+
             if !present_mon_path.exists() {
                 let exe_path = std::env::current_exe().unwrap_or_default();
                 present_mon_path = exe_path
@@ -230,7 +234,7 @@ impl FpsMonitor {
             }
 
             // Launch PresentMon hidden
-            let mut child = match Command::new(present_mon_path)
+            let mut child = match Command::new(&present_mon_path)
                 .args([
                     "--output_stdout",
                     "--stop_existing_session",
@@ -244,7 +248,13 @@ impl FpsMonitor {
             {
                 Ok(c) => c,
                 Err(e) => {
-                    tracing::error!("Failed to start PresentMon64.exe: {}", e);
+                    tracing::error!(
+                        "Failed to start PresentMon64.exe: {} at {:?}",
+                        e,
+                        present_mon_path
+                    );
+                    use tauri::Emitter;
+                    let _ = app.emit("hud-toast", "⚠️ GPU Monitor failed to initialize");
                     return;
                 }
             };
@@ -357,7 +367,7 @@ pub fn spawn_metrics_thread(app: AppHandle, shutdown: Arc<AtomicBool>) {
         sys.refresh_memory();
 
         let gpu_monitor = GpuMonitor::new();
-        let fps_monitor = FpsMonitor::new(shutdown.clone());
+        let fps_monitor = FpsMonitor::new(app.clone(), shutdown.clone());
 
         let mut last_valid_app: Option<String> = None;
         let mut last_valid_fs: Option<bool> = None;
