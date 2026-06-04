@@ -35,7 +35,8 @@ export function SettingsModal() {
     stopwatchHotkey,
     setStopwatchHotkey,
     timerResetHotkey,
-    setTimerResetHotkey
+    setTimerResetHotkey,
+    syncHotkeys
   } = useSettingsStore(
     useShallow((state) => ({
       isSettingsOpen: state.isSettingsOpen,
@@ -66,6 +67,7 @@ export function SettingsModal() {
       setStopwatchHotkey: state.setStopwatchHotkey,
       timerResetHotkey: state.timerResetHotkey,
       setTimerResetHotkey: state.setTimerResetHotkey,
+      syncHotkeys: state.syncHotkeys,
     }))
   );
 
@@ -75,6 +77,7 @@ export function SettingsModal() {
   const [notionDbId, setNotionDbId] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
+  const [hotkeyError, setHotkeyError] = useState('');
 
   // Load credentials on mount
   useEffect(() => {
@@ -148,8 +151,19 @@ export function SettingsModal() {
         );
       }
 
-      setSaveMessage('Saved successfully!');
-      setTimeout(() => setSaveMessage(''), 2000);
+      // Sync Hotkeys
+      try {
+        await syncHotkeys();
+        setSaveMessage('Saved successfully!');
+        setHotkeyError('');
+        setTimeout(() => setSaveMessage(''), 2000);
+      } catch (hotkeyErr) {
+        console.error("Hotkey sync failed:", hotkeyErr);
+        setSaveMessage('Partial save.');
+        setHotkeyError(String(hotkeyErr));
+        setTimeout(() => setSaveMessage(''), 5000);
+      }
+
     } catch (e) {
       console.error("Failed to save credentials:", e);
       setSaveMessage('Failed to save.');
@@ -245,10 +259,10 @@ export function SettingsModal() {
                       onChange={(e) => setOpenRouterModel(e.target.value)}
                       className="w-full bg-zinc-800 border border-zinc-600 rounded-lg px-4 py-2 text-sm text-zinc-100 focus:outline-none focus:border-primary transition-colors appearance-none"
                     >
-                      <option value="openai/gpt-4o">GPT-4o [Vision] (Recommended)</option>
-                      <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet [Vision]</option>
+                      <option value="openai/gpt-5.5">GPT-5.5 [Vision] (Recommended)</option>
+                      <option value="anthropic/claude-sonnet-4.6">Claude 4.6 Sonnet [Vision]</option>
+                      <option value="google/gemini-2.5-pro">Gemini 2.5 Pro [Vision]</option>
                       <option value="google/gemini-2.5-flash">Gemini 2.5 Flash [Vision] (Free)</option>
-                      <option value="google/gemini-2.0-flash-lite-preview-02-05:free">Gemini 2.0 Flash Lite [Vision] (Free)</option>
                       <option value="deepseek/deepseek-chat">DeepSeek V3 (Text Only)</option>
                     </select>
                   </div>
@@ -488,11 +502,19 @@ export function SettingsModal() {
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-border-wire/50 bg-black/20 flex justify-between items-center">
-          <span className="text-xs font-mono text-emerald-400">
-            {saveMessage}
-          </span>
-          <button 
+        <div className="p-4 border-t border-border-wire/50 bg-black/20 flex flex-col gap-2">
+          {hotkeyError && (
+            <div className="bg-red-900/30 border border-red-500/50 rounded-md p-3 mb-2">
+              <span className="text-xs font-mono text-red-400 whitespace-pre-wrap">
+                {hotkeyError}
+              </span>
+            </div>
+          )}
+          <div className="flex justify-between items-center">
+            <span className="text-xs font-mono text-emerald-400">
+              {saveMessage}
+            </span>
+            <button 
             onClick={handleSave}
             disabled={isSaving}
             className="flex items-center gap-2 bg-primary hover:bg-primary/80 text-black font-bold px-6 py-2 rounded-lg transition-colors disabled:opacity-50"
@@ -502,7 +524,8 @@ export function SettingsModal() {
                 <Save size={16} /> Apply Settings
               </>
             )}
-          </button>
+            </button>
+          </div>
         </div>
         </div>
       </motion.div>

@@ -27,15 +27,19 @@ Update this file after every meaningful implementation change.
 - Session 9A: Integrations (AI+Notion - Vision buffer parsing, Notion block-level parsing for floating checklists).
 - Session 10A: Architecture & Scaling (Notion interactive status patches, AI context drafts via Zustand persist layer).
 - Session 10B: Optimization (Performance & UI/UX, Native GPU PDH, PresentMon FPS, Taskbar z-index fixes, HDR capture tone-mapping tweaks).
+- Session 11: Deployment (Tauri build prep, settings endpoints updates).
+- Session 12 & 13: Hardening (Code Review Sweeps: Memory leaks, hotkey handling, DB validation, race conditions).
+- Session 14: Documentation Pass (Journey Retrospective, Codebase Guide).
 
 ## In Progress
 
-- Session 11: Polish (Clean up edge cases, optimize startup sequence, final UI polish).
+- Session 15: Deployment & Installer Creation (WiX / NSIS).
 
 ## Next Up
 
 | Session | Unit Name | Focus     | Goal                                                             |
 | :------ | :-------- | :-------- | :--------------------------------------------------------------- |
+| 15 | Deployment | Setup | Finalize Tauri `.msi` and `.exe` build flags and create installer. |
 
 ## Architecture Decisions
 

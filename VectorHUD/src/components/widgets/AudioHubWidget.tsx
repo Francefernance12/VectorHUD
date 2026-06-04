@@ -48,15 +48,33 @@ export function AudioHubWidget() {
   };
 
   useEffect(() => {
-    fetchAudioState();
-    fetchMediaState();
+    let isActive = true;
+    let pollInterval = 1000;
+    let timeoutId: ReturnType<typeof setTimeout>;
 
-    const interval = setInterval(() => {
-      fetchAudioState();
-      fetchMediaState();
-    }, 1000);
+    const poll = async () => {
+      if (!isActive) return;
+      
+      await fetchAudioState();
+      await fetchMediaState();
+      
+      // If media is playing, poll faster, otherwise back off
+      pollInterval = Math.min(5000, pollInterval + 500); // Backoff to 5s
+      
+      timeoutId = setTimeout(poll, pollInterval);
+    };
 
-    return () => clearInterval(interval);
+    poll();
+
+    // Reset polling speed when user interacts
+    const resetPoll = () => { pollInterval = 1000; };
+    window.addEventListener('mousemove', resetPoll);
+
+    return () => {
+      isActive = false;
+      clearTimeout(timeoutId);
+      window.removeEventListener('mousemove', resetPoll);
+    };
   }, []);
 
   const handleAppVolumeChange = async (pid: number, volume: number) => {

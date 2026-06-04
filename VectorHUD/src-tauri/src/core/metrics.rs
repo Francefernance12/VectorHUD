@@ -234,7 +234,7 @@ impl FpsMonitor {
             }
 
             // Launch PresentMon hidden
-            let mut child = match Command::new(present_mon_path)
+            let mut child = match Command::new(&present_mon_path)
                 .args([
                     "--output_stdout",
                     "--stop_existing_session",
@@ -248,7 +248,13 @@ impl FpsMonitor {
             {
                 Ok(c) => c,
                 Err(e) => {
-                    tracing::error!("Failed to start PresentMon64.exe: {}", e);
+                    tracing::error!(
+                        "Failed to start PresentMon64.exe: {} at {:?}",
+                        e,
+                        present_mon_path
+                    );
+                    use tauri::Emitter;
+                    let _ = app.emit("hud-toast", "⚠️ GPU Monitor failed to initialize");
                     return;
                 }
             };

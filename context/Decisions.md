@@ -77,3 +77,14 @@ This document tracks all important decisions made throughout the lifecycle of th
 - **Reasoning:** DWM automatically tone-maps HDR desktops into SDR signals via Windows' `SDR content brightness` slider, which naturally produces overly bright and washed out frames. Telling the Video Processor MFT that the image uses a steep BT.709 curve instead of sRGB forces the encoder to pull down the shadows and midtones, safely counteracting DWM's bright SDR washout. *Note: The video may still appear slightly bright and stubborn depending on HDR peaks, and will need more advanced raw `DXGI_FORMAT_R16G16B16A16_FLOAT` pass-throughs in future implementations.*
 - **Decision:** Use `sysinfo::get_current_pid()` instead of general system scans to poll VectorHUD's own hardware footprint.
 - **Reasoning:** Tracking `vectorhud.exe` specifically ensures we can stream accurate `hud_cpu_usage` and `hud_ram_usage` to the frontend without polling overhead, aiding in performance debugging.
+
+## Session 12/13: Hardening & Bug Fixes
+
+- **Decision:** Wrap `shortcut_manager.unregister_all()` and hotkey registration inside a Rust `std::sync::Mutex`.
+- **Reasoning:** React StrictMode triggers double mounting in development, sending two rapid IPC calls to update hotkeys. The `unregister_all()` call from Thread B was executing exactly as Thread A asked Windows to bind the hotkeys, randomly deleting hooks. The mutex serializes hotkey changes, preventing this race condition.
+- **Decision:** Remove `shortcut_manager.register()` calls that follow `shortcut_manager.on_shortcut()`.
+- **Reasoning:** In `tauri-plugin-global-shortcut` v2, calling `on_shortcut` automatically registers the hook with the OS and attaches the closure. Calling `register()` immediately after overwrites the OS hook *without* the closure, causing hotkeys to fire but do nothing in our application.
+- **Decision:** Strictly guard every async Tauri `listen()` call in React `useEffect` loops with a synchronous `if (!isMounted) return;` check.
+- **Reasoning:** Async listener IPC calls resolve independently of React's lifecycle. If the component unmounts before the IPC resolves, a "zombie" listener is bound to the DOM with stale closure scope.
+- **Decision:** Hard-fail the application boot sequence if the SQLite database is missing its core initialized schema tables (e.g., `widget_analytics`).
+- **Reasoning:** We encountered an issue where a hallucinated table name in the validation query caused silent boot failure, preventing the hydration sequence and hotkey registration. Hard-failing and enforcing an exact table count ensures the DB is healthy before React begins its lifecycle.

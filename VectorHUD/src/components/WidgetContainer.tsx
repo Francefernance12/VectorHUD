@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { X, GripHorizontal, Pin, PinOff } from 'lucide-react';
 import { useWidgetStore, WIDGETS } from '../store/widgetStore';
@@ -21,12 +21,27 @@ export function WidgetContainer({ id, children }: WidgetContainerProps) {
 
   const isInteractive = useShellStore(state => state.isInteractive);
   
+  const [winBounds, setWinBounds] = useState({ 
+    w: typeof window !== 'undefined' ? window.innerWidth : 1920, 
+    h: typeof window !== 'undefined' ? window.innerHeight : 1080 
+  });
+
+  useEffect(() => {
+    const handleResize = () => setWinBounds({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const widgetDef = WIDGETS.find(w => w.id === id);
   
   if (!widgetDef || !instance) return null;
 
   // Fix: Unpinned widgets do not persist when overlay is dismissed.
   if (!isInteractive && !instance.isPinned) return null;
+
+  // Clamp coordinates to prevent widgets getting lost off-screen on smaller monitors
+  const safeX = Math.max(0, Math.min(instance.x, Math.max(0, winBounds.w - instance.width)));
+  const safeY = Math.max(0, Math.min(instance.y, Math.max(0, winBounds.h - instance.height)));
 
   return (
     <motion.div
@@ -39,8 +54,8 @@ export function WidgetContainer({ id, children }: WidgetContainerProps) {
         zIndex: instance.zIndex,
         width: instance.width,
         height: instance.height,
-        left: Math.round(instance.x),
-        top: Math.round(instance.y),
+        left: Math.round(safeX),
+        top: Math.round(safeY),
       }}
       className="flex flex-col border rounded-xl overflow-hidden transition-colors bg-surface border-border-wire shadow-2xl"
     >
@@ -56,8 +71,10 @@ export function WidgetContainer({ id, children }: WidgetContainerProps) {
             const initialWidgetY = instance.y;
             
             const onPointerMove = (moveEvent: PointerEvent) => {
-              const maxW = typeof window !== 'undefined' ? window.innerWidth - instance.width : 2000;
-              const maxH = typeof window !== 'undefined' ? window.innerHeight - instance.height : 1000;
+              const winW = typeof window !== 'undefined' ? window.innerWidth : 1920;
+              const winH = typeof window !== 'undefined' ? window.innerHeight : 1080;
+              const maxW = Math.max(0, winW - instance.width);
+              const maxH = Math.max(0, winH - instance.height);
               updateWidgetBounds(id, {
                 x: Math.round(Math.max(0, Math.min(initialWidgetX + (moveEvent.clientX - startX), maxW))),
                 y: Math.round(Math.max(0, Math.min(initialWidgetY + (moveEvent.clientY - startY), maxH)))
@@ -128,8 +145,10 @@ export function WidgetContainer({ id, children }: WidgetContainerProps) {
             const startH = instance.height;
             
             const onPointerMove = (moveEvent: PointerEvent) => {
-              const maxW = typeof window !== 'undefined' ? window.innerWidth - instance.x : 2000;
-              const maxH = typeof window !== 'undefined' ? window.innerHeight - instance.y : 1000;
+              const winW = typeof window !== 'undefined' ? window.innerWidth : 1920;
+              const winH = typeof window !== 'undefined' ? window.innerHeight : 1080;
+              const maxW = Math.max(200, winW - instance.x);
+              const maxH = Math.max(150, winH - instance.y);
               updateWidgetBounds(id, {
                 width: Math.round(Math.max(200, Math.min(startW + (moveEvent.clientX - startX), maxW))),
                 height: Math.round(Math.max(150, Math.min(startH + (moveEvent.clientY - startY), maxH)))

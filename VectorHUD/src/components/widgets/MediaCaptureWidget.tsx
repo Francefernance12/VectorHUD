@@ -6,7 +6,6 @@ import { Trash2, Camera, Zap, Gamepad2, Monitor, FolderOpen } from 'lucide-react
 import { getDb, executeQuery } from '../../utils/db';
 import { logger } from '../../utils/logger';
 import { CaptureHistory } from '../../types';
-import { useTimerStore } from '../../store/timerStore';
 import { useToastStore } from '../../store/toastStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useRecordingStore } from '../../store/recordingStore';

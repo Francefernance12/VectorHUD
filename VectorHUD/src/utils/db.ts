@@ -11,11 +11,25 @@ export async function getDb(): Promise<Database> {
   if (dbInstance) return dbInstance;
   try {
     dbInstance = await Database.load("sqlite:vectorhud.db");
-    logger.info("SQLite database loaded successfully");
+    
+    // Validate DB is truly responsive
+    await dbInstance.execute("SELECT 1");
+
+    // Validate that schema migrations executed successfully
+    const tables = await dbInstance.select<{name: string}[]>(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('capture_history', 'user_credentials', 'widget_analytics')"
+    );
+
+    if (tables.length !== 3) {
+      throw new Error(`Schema validation failed. Expected 3 core tables, found ${tables.length}. The database migrations may not have run.`);
+    }
+    
+    logger.info("SQLite database loaded and schema verified").catch(console.error);
     return dbInstance;
   } catch (error) {
-    logger.error(`Failed to load SQLite database: ${error}`);
-    throw error;
+    console.error("FATAL: Database initialization failed", error);
+    logger.error(`Failed to load SQLite database: ${error}`).catch(console.error);
+    throw new Error("VectorHUD cannot initialize the database. " + (error instanceof Error ? error.message : "Please check your file permissions."));
   }
 }
 

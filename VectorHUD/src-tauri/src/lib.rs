@@ -20,6 +20,8 @@ fn set_interactive_mode(window: tauri::Window, interactive: bool, interactable_p
     }
 }
 
+static HOTKEY_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 fn update_hotkeys(
@@ -32,21 +34,32 @@ fn update_hotkeys(
     stopwatch_hotkey: String,
     timer_reset_hotkey: String,
 ) -> Result<(), String> {
+    let _lock = HOTKEY_MUTEX.lock().unwrap();
     use std::str::FromStr;
     use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
     let shortcut_manager = app.global_shortcut();
     let _ = shortcut_manager.unregister_all();
 
-    let register_hotkey = |hotkey_str: &str, event_name: &str| {
+    let mut errors = Vec::new();
+
+    let mut register_hotkey = |hotkey_str: &str, event_name: &str| {
+        if hotkey_str.is_empty() {
+            return;
+        } // Skip empty hotkeys
         if let Ok(shortcut) = Shortcut::from_str(hotkey_str) {
             if shortcut_manager.is_registered(shortcut) {
                 let _ = shortcut_manager.unregister(shortcut);
             }
-            let event_name = event_name.to_string();
+            let event_name_clone = event_name.to_string();
             let res = shortcut_manager.on_shortcut(shortcut, move |app, _shortcut, event| {
+                tracing::info!(
+                    "Shortcut triggered: {} with state {:?}",
+                    event_name_clone,
+                    event.state
+                );
                 if event.state == ShortcutState::Pressed {
-                    if event_name == "hotkey-overlay" {
+                    if event_name_clone == "hotkey-overlay" {
                         use tauri::Manager;
                         if let Some(window) = app.get_webview_window("main") {
                             if let Ok(cursor_pos) = app.cursor_position() {
@@ -84,18 +97,19 @@ fn update_hotkeys(
                             }
                         }
                     }
-                    let _ = app.emit(&event_name, ());
+                    let _ = app.emit(&event_name_clone, ());
                 }
             });
             if let Err(e) = res {
                 tracing::error!("Failed to set shortcut handler: {} - {:?}", hotkey_str, e);
+                errors.push(format!(
+                    "Internal handler error for {}: {:?}",
+                    hotkey_str, e
+                ));
             }
-            if let Err(e) = shortcut_manager.register(shortcut) {
-                let err_str = format!("{:?}", e);
-                if !err_str.contains("already registered") {
-                    tracing::error!("Failed to register shortcut: {} - {:?}", hotkey_str, e);
-                }
-            }
+        } else {
+            tracing::error!("Failed to parse hotkey string: {}", hotkey_str);
+            errors.push(format!("Invalid hotkey format: '{}'", hotkey_str));
         }
     };
 
@@ -107,7 +121,14 @@ fn update_hotkeys(
     register_hotkey(&stopwatch_hotkey, "hotkey-stopwatch");
     register_hotkey(&timer_reset_hotkey, "hotkey-timer-reset");
 
-    Ok(())
+    if errors.is_empty() {
+        tracing::info!("Successfully registered all hotkeys");
+        Ok(())
+    } else {
+        let err_str = errors.join("\n");
+        tracing::error!("Failed to register some hotkeys: {}", err_str);
+        Err(err_str)
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
