@@ -29,6 +29,11 @@ export const useOpenRouterStore = create<OpenRouterState>()(
     {
       name: 'vectorhud-openrouter-draft',
       storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({ 
+        input: state.input, 
+        sidebarOpen: state.sidebarOpen, 
+        currentSessionId: state.currentSessionId 
+      }),
     }
   )
 );

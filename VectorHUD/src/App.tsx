@@ -145,6 +145,7 @@ function App() {
     const unlistenReplay = listen("hotkey-replay", async () => {
       const isReplay = useRecordingStore.getState().isReplayActive;
       if (isReplay) {
+        showToast("⏳ Processing 30s Clip...");
         try {
           const path = await invoke<string>('save_replay_buffer');
           await getDb().then(db => db.execute('INSERT INTO capture_history (file_path, media_type, game_process) VALUES (?1, ?2, ?3)', [path, 'video', 'Desktop']));

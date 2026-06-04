@@ -16,6 +16,13 @@ pub async fn capture_screenshot(window: tauri::Window, app: AppHandle) -> Result
         .map_err(|e| format!("Failed to get cursor: {}", e))?;
     let monitors = Monitor::all().map_err(|e| format!("Failed to get monitors: {}", e))?;
 
+    let fallback_monitors =
+        Monitor::all().map_err(|e| format!("Failed to get fallback monitors: {}", e))?;
+    let fallback = fallback_monitors
+        .into_iter()
+        .next()
+        .ok_or("No monitors found")?;
+
     let target_monitor = monitors
         .into_iter()
         .find(|m| {
@@ -25,7 +32,7 @@ pub async fn capture_screenshot(window: tauri::Window, app: AppHandle) -> Result
             let h = m.height().unwrap_or(0) as f64;
             cursor_pos.x >= x && cursor_pos.x <= x + w && cursor_pos.y >= y && cursor_pos.y <= y + h
         })
-        .unwrap_or_else(|| Monitor::all().unwrap().into_iter().next().unwrap());
+        .unwrap_or(fallback);
 
     // 2. Capture the screen
     let image = target_monitor
@@ -94,6 +101,13 @@ pub async fn capture_screen_base64(
         .map_err(|e| format!("Failed to get cursor: {}", e))?;
     let monitors = Monitor::all().map_err(|e| format!("Failed to get monitors: {}", e))?;
 
+    let fallback_monitors =
+        Monitor::all().map_err(|e| format!("Failed to get fallback monitors: {}", e))?;
+    let fallback = fallback_monitors
+        .into_iter()
+        .next()
+        .ok_or("No monitors found")?;
+
     let target_monitor = monitors
         .into_iter()
         .find(|m| {
@@ -103,7 +117,7 @@ pub async fn capture_screen_base64(
             let h = m.height().unwrap_or(0) as f64;
             cursor_pos.x >= x && cursor_pos.x <= x + w && cursor_pos.y >= y && cursor_pos.y <= y + h
         })
-        .unwrap_or_else(|| Monitor::all().unwrap().into_iter().next().unwrap());
+        .unwrap_or(fallback);
 
     let image = target_monitor
         .capture_image()

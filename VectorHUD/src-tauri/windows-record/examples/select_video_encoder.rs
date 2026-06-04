@@ -1,28 +1,32 @@
+use log::{error, info};
 use std::time::Duration;
 use std::{env, io};
-use log::{error, info};
-use windows_record::{enumerate_video_encoders, VideoEncoderType, Recorder, Result, RecorderConfig};
+use windows_record::{
+    enumerate_video_encoders, Recorder, RecorderConfig, Result, VideoEncoderType,
+};
 
 fn main() -> Result<()> {
     // Set up logging to see resource tracking in debug builds
     env::set_var("RUST_BACKTRACE", "full");
     env::set_var("RUST_LOG", "info,windows_record=info");
     env_logger::init();
-    
+
     // Get list of available video encoders
     let encoders = enumerate_video_encoders()?;
-    
+
     info!("Available video encoders:");
     for (i, encoder) in encoders.iter().enumerate() {
         info!("{}. {}", i + 1, encoder.name);
     }
-    
+
     // Prompt user to select an encoder
     println!("Enter encoder number (or 0 for default): ");
     let mut input = String::new();
-    io::stdin().read_line(&mut input).expect("Failed to read input");
+    io::stdin()
+        .read_line(&mut input)
+        .expect("Failed to read input");
     let encoder_idx: usize = input.trim().parse().unwrap_or(0);
-    
+
     // Get selected encoder type or default
     let selected_encoder_type = if encoder_idx > 0 && encoder_idx <= encoders.len() {
         match encoders[encoder_idx - 1].name.as_str() {
@@ -33,14 +37,14 @@ fn main() -> Result<()> {
     } else {
         VideoEncoderType::default()
     };
-    
+
     let encoder_name = match selected_encoder_type {
         VideoEncoderType::H264 => "H.264 (AVC)",
         VideoEncoderType::HEVC => "H.265 (HEVC)",
     };
-    
+
     info!("Selected encoder: {}", encoder_name);
-    
+
     // Create a recorder with the selected encoder
     let config = RecorderConfig::builder()
         .fps(30, 1)
@@ -51,10 +55,9 @@ fn main() -> Result<()> {
         .video_encoder(selected_encoder_type)
         .output_path("encoder_test.mp4")
         .build();
-    
+
     // Create and start the recorder
-    let recorder = Recorder::new(config)?
-        .with_process_name("Chrome");
+    let recorder = Recorder::new(config)?.with_process_name("Chrome");
 
     info!("Starting recording with {} encoder.", encoder_name);
 
@@ -70,13 +73,13 @@ fn main() -> Result<()> {
             return Err(e);
         }
     }
-    
+
     // Record for 10 seconds
     info!("Recording for 10 seconds...");
     std::thread::sleep(Duration::from_secs(10));
 
     // Stop recording
     recorder.stop_recording()?;
-    
+
     Ok(())
 }

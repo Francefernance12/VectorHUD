@@ -10,6 +10,9 @@ pub struct RecorderManager {
     replay_recorder: Option<Recorder>,
     is_recording: bool,
     is_replay_active: bool,
+    was_replay_active: bool,
+    last_mic_enabled: bool,
+    last_audio_enabled: bool,
 }
 
 impl RecorderManager {
@@ -20,6 +23,9 @@ impl RecorderManager {
             replay_recorder: None,
             is_recording: false,
             is_replay_active: false,
+            was_replay_active: false,
+            last_mic_enabled: true,
+            last_audio_enabled: true,
         }
     }
 }
@@ -64,10 +70,15 @@ pub async fn start_video_recording(
         return Err("A video recording is already in progress".to_string());
     }
     if manager.is_replay_active {
-        return Err(
-            "Cannot start recording while replay buffer is active. Stop replay buffer first."
-                .to_string(),
-        );
+        // Stop replay buffer gracefully to allow standard recording
+        if let Some(replay_rec) = manager.replay_recorder.take() {
+            let _ = replay_rec.stop_recording();
+        }
+        manager.is_replay_active = false;
+        manager.was_replay_active = true;
+        tracing::info!("Paused replay buffer to allow standard recording");
+    } else {
+        manager.was_replay_active = false;
     }
 
     let video_dir = get_video_dir(&app)?;
@@ -219,6 +230,8 @@ pub async fn start_replay_buffer(
 
     manager.replay_recorder = Some(recorder);
     manager.is_replay_active = true;
+    manager.last_mic_enabled = mic_enabled;
+    manager.last_audio_enabled = audio_enabled;
 
     tracing::info!("Replay buffer started successfully (rolling 30s)");
     Ok(())

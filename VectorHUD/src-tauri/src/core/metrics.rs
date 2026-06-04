@@ -17,6 +17,8 @@ pub struct HardwareMetrics {
     pub fps: u32,
     pub active_app: Option<String>,
     pub is_fullscreen: Option<bool>,
+    pub hud_cpu_usage: f32,
+    pub hud_ram_usage_mb: f32,
 }
 
 #[cfg(windows)]
@@ -247,7 +249,14 @@ impl FpsMonitor {
                 }
             };
 
-            let stdout = child.stdout.take().unwrap();
+            let stdout = match child.stdout.take() {
+                Some(s) => s,
+                None => {
+                    tracing::error!("PresentMon64 stdout not available");
+                    let _ = child.kill();
+                    return;
+                }
+            };
             let reader = BufReader::new(stdout);
 
             let mut last_update = std::time::Instant::now();
@@ -404,6 +413,22 @@ pub fn spawn_metrics_thread(app: AppHandle, shutdown: Arc<AtomicBool>) {
                 (None, None)
             };
 
+            let mut hud_cpu_usage = 0.0;
+            let mut hud_ram_usage_mb = 0.0;
+
+            // Get current process ID
+            if let Ok(pid) = sysinfo::get_current_pid() {
+                sys.refresh_processes_specifics(
+                    sysinfo::ProcessesToUpdate::Some(&[pid]),
+                    true,
+                    sysinfo::ProcessRefreshKind::nothing().with_cpu().with_memory(),
+                );
+                if let Some(proc) = sys.process(pid) {
+                    hud_cpu_usage = proc.cpu_usage();
+                    hud_ram_usage_mb = proc.memory() as f32 / 1_048_576.0;
+                }
+            }
+
             let metrics = HardwareMetrics {
                 cpu_usage,
                 ram_usage_percent: ram_percent,
@@ -415,6 +440,8 @@ pub fn spawn_metrics_thread(app: AppHandle, shutdown: Arc<AtomicBool>) {
                 fps,
                 active_app,
                 is_fullscreen,
+                hud_cpu_usage,
+                hud_ram_usage_mb,
             };
 
             // Emit the event to the frontend
