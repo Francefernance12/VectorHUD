@@ -34,7 +34,6 @@ function App() {
   
   const activeWidgetIds = useWidgetStore(useShallow((state) => Object.keys(state.activeWidgets)));
   
-  const interactablePins = useSettingsStore((state) => state.interactablePins);
   const isRecording = useRecordingStore((state) => state.isRecording);
 
   // Global Toast Store
@@ -183,6 +182,11 @@ function App() {
       else startSw();
     });
 
+    const unlistenTimerReset = listen("hotkey-timer-reset", () => {
+      useTimerStore.getState().resetCd();
+      useTimerStore.getState().resetSw();
+    });
+
     const handleBlur = () => {
       if (useShellStore.getState().isInteractive) {
         setInteractive(false);
@@ -215,6 +219,7 @@ function App() {
       unlistenForceInteractive.then((fn) => fn());
       unlistenTimer.then((fn) => fn());
       unlistenStopwatch.then((fn) => fn());
+      unlistenTimerReset.then((fn) => fn());
       window.removeEventListener('blur', handleBlur);
       window.removeEventListener('error', handleGlobalError);
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
@@ -226,7 +231,7 @@ function App() {
   return (
     <>
       {/* HUD Toasts */}
-      <div className="fixed top-16 left-1/2 -translate-x-1/2 z-[9999] pointer-events-none flex flex-col items-center gap-2">
+      <div className="fixed inset-x-0 top-16 z-[9999] pointer-events-none flex flex-col items-center gap-2">
         <AnimatePresence>
           {toasts.map((toast) => (
             <motion.div
@@ -244,7 +249,7 @@ function App() {
 
       {/* Floating persistent recording status bar */}
       {isRecording && (
-        <div className={isInteractive || interactablePins ? 'pointer-events-auto' : 'pointer-events-none'}>
+        <div className={isInteractive ? 'pointer-events-auto' : 'pointer-events-none'}>
           <RecordingStatusBar />
         </div>
       )}
@@ -252,7 +257,25 @@ function App() {
       {/* Floating persistent timer status bar */}
       <TimerStatusBar />
 
-      {/* Widget Layer (Always rendered above the overlay so widgets stay bright and interactive) */}
+      {/* Interactive Overlay UI Backdrop */}
+      <AnimatePresence>
+        {isInteractive && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 shadow-[inset_0_0_100px_rgba(var(--accent-amber-rgb,0,0,0),0.1)] backdrop-blur-sm transition-all duration-300 pointer-events-auto z-[40]"
+            onClick={(e) => {
+              // Only dismiss if they clicked directly on the backdrop, not on the widgets inside
+              if (e.target === e.currentTarget) {
+                setInteractive(false);
+              }
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Widget Layer (Rendered at z-50 so it is above the backdrop but below the settings modal) */}
       <div className="fixed inset-0 z-50 pointer-events-none overflow-hidden" id="widget-bounds">
         <AnimatePresence>
           {activeWidgetIds.map((id) => (
@@ -273,26 +296,13 @@ function App() {
         </AnimatePresence>
       </div>
 
-
-
-      {/* Interactive Overlay UI Backdrop & Dock */}
+      {/* Dock and Settings Modal Layer (Rendered at z-[60] so they are above everything) */}
       <AnimatePresence>
         {isInteractive && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-overlay backdrop-blur-sm transition-all duration-300 pointer-events-auto z-40"
-            onClick={(e) => {
-              // Only dismiss if they clicked directly on the backdrop, not on the widgets inside
-              if (e.target === e.currentTarget) {
-                setInteractive(false);
-              }
-            }}
-          >
+          <div className="fixed inset-0 pointer-events-none z-[60]">
             <Dock />
             <SettingsModal />
-          </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </>

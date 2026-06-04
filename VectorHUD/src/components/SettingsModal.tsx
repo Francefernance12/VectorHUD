@@ -14,8 +14,10 @@ export function SettingsModal() {
     setOpenRouterModel, 
     globalFontSize, 
     setGlobalFontSize, 
-    interactablePins, 
-    setInteractablePins,
+    theme,
+    setTheme,
+    customColor,
+    setCustomColor,
     recordMicrophone,
     setRecordMicrophone,
     recordSystemAudio,
@@ -31,7 +33,9 @@ export function SettingsModal() {
     timerHotkey,
     setTimerHotkey,
     stopwatchHotkey,
-    setStopwatchHotkey
+    setStopwatchHotkey,
+    timerResetHotkey,
+    setTimerResetHotkey
   } = useSettingsStore(
     useShallow((state) => ({
       isSettingsOpen: state.isSettingsOpen,
@@ -40,8 +44,10 @@ export function SettingsModal() {
       setOpenRouterModel: state.setOpenRouterModel,
       globalFontSize: state.globalFontSize,
       setGlobalFontSize: state.setGlobalFontSize,
-      interactablePins: state.interactablePins,
-      setInteractablePins: state.setInteractablePins,
+      theme: state.theme,
+      setTheme: state.setTheme,
+      customColor: state.customColor,
+      setCustomColor: state.setCustomColor,
       recordMicrophone: state.recordMicrophone,
       setRecordMicrophone: state.setRecordMicrophone,
       recordSystemAudio: state.recordSystemAudio,
@@ -58,6 +64,8 @@ export function SettingsModal() {
       setTimerHotkey: state.setTimerHotkey,
       stopwatchHotkey: state.stopwatchHotkey,
       setStopwatchHotkey: state.setStopwatchHotkey,
+      timerResetHotkey: state.timerResetHotkey,
+      setTimerResetHotkey: state.setTimerResetHotkey,
     }))
   );
 
@@ -155,12 +163,13 @@ export function SettingsModal() {
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
         transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[500px] bg-[#0F0F0F]/95 backdrop-blur-xl border border-border-wire rounded-2xl shadow-2xl overflow-hidden flex flex-col z-[100] pointer-events-auto"
+        className={`absolute inset-0 flex items-center justify-center z-[100] pointer-events-none bg-surface/50`}
       >
+        <div className="w-[600px] h-[500px] bg-[#0F0F0F]/95 backdrop-blur-xl border border-border-wire rounded-2xl shadow-2xl overflow-hidden flex flex-col pointer-events-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border-wire/50 bg-black/20">
           <h2 className="text-lg font-bold text-white tracking-widest uppercase flex items-center gap-2">
@@ -210,14 +219,23 @@ export function SettingsModal() {
                   </h3>
                   
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">API Key</label>
+                    <label className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">API Key</label>
                     <input 
                       type="password"
                       value={openRouterKey}
                       onChange={(e) => setOpenRouterKey(e.target.value)}
                       placeholder="sk-or-v1-..."
-                      className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 focus:outline-none focus:border-primary transition-colors"
+                      className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-base text-zinc-200 focus:outline-none focus:border-primary transition-colors"
                     />
+                    <div className="bg-zinc-800/40 p-3 rounded-md mt-2 border border-white/5">
+                      <p className="text-xs text-zinc-400">
+                        VectorHUD uses OpenRouter to provide access to top AI models (like GPT-4o and Claude).
+                        <br/><br/>
+                        1. Create an account at <a href="https://openrouter.ai" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline">openrouter.ai</a>.
+                        <br/>
+                        2. Generate a new API key and paste it above.
+                      </p>
+                    </div>
                   </div>
 
                   <div className="space-y-1">
@@ -225,12 +243,13 @@ export function SettingsModal() {
                     <select
                       value={openRouterModel}
                       onChange={(e) => setOpenRouterModel(e.target.value)}
-                      className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 focus:outline-none focus:border-primary transition-colors appearance-none"
+                      className="w-full bg-zinc-800 border border-zinc-600 rounded-lg px-4 py-2 text-sm text-zinc-100 focus:outline-none focus:border-primary transition-colors appearance-none"
                     >
-                      <option value="openai/gpt-4o">GPT-4o (Recommended)</option>
-                      <option value="anthropic/claude-sonnet-4">Claude Sonnet 4</option>
-                      <option value="google/gemini-2.5-flash">Gemini 2.5 Flash</option>
-                      <option value="deepseek/deepseek-chat-v3-0324">DeepSeek V3</option>
+                      <option value="openai/gpt-4o">GPT-4o [Vision] (Recommended)</option>
+                      <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet [Vision]</option>
+                      <option value="google/gemini-2.5-flash">Gemini 2.5 Flash [Vision] (Free)</option>
+                      <option value="google/gemini-2.0-flash-lite-preview-02-05:free">Gemini 2.0 Flash Lite [Vision] (Free)</option>
+                      <option value="deepseek/deepseek-chat">DeepSeek V3 (Text Only)</option>
                     </select>
                   </div>
                 </div>
@@ -241,25 +260,43 @@ export function SettingsModal() {
                   </h3>
                   
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Integration Secret</label>
+                    <label className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Integration Secret</label>
                     <input 
                       type="password"
                       value={notionKey}
                       onChange={(e) => setNotionKey(e.target.value)}
                       placeholder="secret_..."
-                      className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 focus:outline-none focus:border-primary transition-colors"
+                      className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-base text-zinc-200 focus:outline-none focus:border-primary transition-colors"
                     />
                   </div>
                   
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Database ID</label>
+                  <div className="space-y-1 mt-4">
+                    <label className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Database ID or Shared Link</label>
                     <input 
-                      type="password"
+                      type="text"
                       value={notionDbId}
-                      onChange={(e) => setNotionDbId(e.target.value)}
-                      placeholder="..."
-                      className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 focus:outline-none focus:border-primary transition-colors"
+                      onChange={(e) => {
+                        let val = e.target.value;
+                        const match = val.match(/([a-f0-9]{32})/i);
+                        if (match) val = match[1];
+                        setNotionDbId(val);
+                      }}
+                      placeholder="e.g., 68482d8c90384a8..."
+                      className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-base text-zinc-200 focus:outline-none focus:border-primary transition-colors"
                     />
+                    
+                    <div className="bg-zinc-800/40 p-3 rounded-md mt-2 border border-white/5 space-y-2">
+                      <p className="text-xs text-zinc-400 font-bold">How to connect an empty Notion Database:</p>
+                      <p className="text-xs text-zinc-400 leading-relaxed">
+                        1. Go to <a href="https://www.notion.so/my-integrations" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline">Notion Integrations</a> and create a new integration to get your <b>Internal Integration Secret</b>.
+                        <br/>
+                        2. Create a new empty page in Notion and type <code>/database</code> to add a full-page database.
+                        <br/>
+                        3. Click the <code>...</code> menu in the top right of your database page, go to <b>Connections</b>, and add the integration you just created.
+                        <br/>
+                        4. Click <b>Share</b>, select "Copy Link", and paste the entire link directly into the box above. VectorHUD will automatically extract the 32-character Database ID.
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -287,21 +324,41 @@ export function SettingsModal() {
                   />
                 </div>
 
-                <div className="flex justify-between items-center bg-black/40 p-3 rounded-lg border border-white/5">
-                  <div>
-                    <label className="text-sm font-semibold text-zinc-200">Interactable Pins</label>
-                    <p className="text-xs text-zinc-500 mt-0.5">Keep pinned widgets interactable when overlay is closed.</p>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      className="sr-only peer" 
-                      checked={interactablePins}
-                      onChange={(e) => setInteractablePins(e.target.checked)}
-                    />
-                    <div className="w-11 h-6 bg-zinc-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent-green"></div>
-                  </label>
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">HUD Theme</label>
+                  <select
+                    value={theme}
+                    onChange={(e) => setTheme(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2 text-sm text-zinc-100 focus:outline-none focus:border-primary transition-colors appearance-none"
+                  >
+                    <option value="default">Default</option>
+                    <option value="amber">Cyberpunk Amber</option>
+                    <option value="neon_blue">Neon Blue</option>
+                    <option value="matrix_green">Matrix Green</option>
+                    <option value="outrun_pink">Outrun Pink</option>
+                    <option value="custom">Custom Color (RGB)</option>
+                  </select>
                 </div>
+
+                {theme === 'custom' && (
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Custom Hex Color</label>
+                    <div className="flex gap-2 items-center">
+                      <input 
+                        type="color" 
+                        defaultValue={customColor}
+                        onBlur={(e) => setCustomColor(e.target.value)}
+                        className="w-10 h-10 rounded bg-transparent border-none cursor-pointer"
+                      />
+                      <input 
+                        type="text" 
+                        defaultValue={customColor}
+                        onBlur={(e) => setCustomColor(e.target.value)}
+                        className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2 text-sm text-zinc-100 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <h3 className="text-md font-semibold text-white flex items-center gap-2 border-b border-white/10 pb-2 mt-6">
                   <Palette size={16} className="text-purple-400" /> Video & Replay Recording
@@ -411,6 +468,16 @@ export function SettingsModal() {
                       className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-primary transition-colors uppercase"
                     />
                   </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-zinc-400 mb-2 tracking-wider">Reset Timers</label>
+                    <input 
+                      type="text"
+                      value={timerResetHotkey}
+                      onChange={(e) => setTimerResetHotkey(e.target.value)}
+                      placeholder="ctrl+alt+y"
+                      className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-primary transition-colors uppercase"
+                    />
+                  </div>
                 </div>
                 <p className="text-xs text-zinc-500 italic mt-4">
                   Note: Updating hotkeys requires an application restart to take effect. Supported modifiers: ctrl, alt, shift, super.
@@ -436,6 +503,7 @@ export function SettingsModal() {
               </>
             )}
           </button>
+        </div>
         </div>
       </motion.div>
     </AnimatePresence>

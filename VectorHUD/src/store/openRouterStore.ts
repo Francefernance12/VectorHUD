@@ -8,6 +8,8 @@ interface OpenRouterState {
   setInput: (input: string) => void;
   setDraftImagePath: (path: string | null) => void;
   setSidebarOpen: (isOpen: boolean) => void;
+  currentSessionId: string;
+  setCurrentSessionId: (id: string) => void;
   clearDraft: () => void;
 }
 
@@ -20,6 +22,8 @@ export const useOpenRouterStore = create<OpenRouterState>()(
       setInput: (input) => set({ input }),
       setDraftImagePath: (draftImagePath) => set({ draftImagePath }),
       setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
+      currentSessionId: '',
+      setCurrentSessionId: (currentSessionId) => set({ currentSessionId }),
       clearDraft: () => set({ input: '', draftImagePath: null }),
     }),
     {

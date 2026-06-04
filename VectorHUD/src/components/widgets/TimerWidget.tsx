@@ -1,8 +1,8 @@
 import { useTimerStore } from '../../store/timerStore';
-import { useState } from 'react';
 
 export function TimerWidget() {
-  const [activeTab, setActiveTab] = useState<'stopwatch' | 'countdown'>('countdown');
+  const activeTab = useTimerStore(state => state.activeTab);
+  const setActiveTab = useTimerStore(state => state.setActiveTab);
   
   const swTime = useTimerStore(state => state.swTime);
   const swIsRunning = useTimerStore(state => state.swIsRunning);
@@ -30,13 +30,13 @@ export function TimerWidget() {
       {/* Tabs */}
       <div className="flex border-b border-border-wire mb-4">
         <button
-          className={`flex-1 pb-2 text-center transition-colors ${activeTab === 'countdown' ? 'text-accent-amber border-b-2 border-accent-amber font-bold' : 'text-text-muted hover:text-text-primary'}`}
+          className={`flex-1 pb-2 text-center transition-colors ${activeTab === 'countdown' ? 'text-accent-amber border-b-2 border-accent-amber font-bold' : 'text-zinc-500 hover:text-zinc-300'}`}
           onClick={() => setActiveTab('countdown')}
         >
           COUNTDOWN
         </button>
         <button
-          className={`flex-1 pb-2 text-center transition-colors ${activeTab === 'stopwatch' ? 'text-accent-cyan border-b-2 border-accent-cyan font-bold' : 'text-text-muted hover:text-text-primary'}`}
+          className={`flex-1 pb-2 text-center transition-colors ${activeTab === 'stopwatch' ? 'text-accent-green border-b-2 border-accent-green font-bold' : 'text-zinc-500 hover:text-zinc-300'}`}
           onClick={() => setActiveTab('stopwatch')}
         >
           STOPWATCH
@@ -45,13 +45,13 @@ export function TimerWidget() {
 
       {activeTab === 'countdown' ? (
         <div className="flex flex-col flex-1 items-center justify-center space-y-6">
-          <div className={`text-6xl font-bold tracking-wider ${cdFinished ? 'text-accent-rose animate-pulse' : 'text-accent-amber'}`}>
+          <div className={`text-6xl font-bold tracking-wider ${cdFinished ? 'text-red-500 animate-pulse' : 'text-accent-amber'}`}>
             {formatTime(cdTime)}
           </div>
           
           <div className="flex space-x-4">
             <button
-              className="px-4 py-2 bg-overlay-light border border-border-wire rounded-md hover:bg-overlay-hover transition-colors text-xs"
+              className="px-4 py-2 bg-black/40 border border-border-wire rounded-md hover:bg-white/5 transition-colors text-xs text-zinc-300"
               onClick={() => {
                 setCdInput(Math.max(0, cdInput - 60));
               }}
@@ -59,7 +59,7 @@ export function TimerWidget() {
               -1M
             </button>
             <button
-              className="px-4 py-2 bg-overlay-light border border-border-wire rounded-md hover:bg-overlay-hover transition-colors text-xs"
+              className="px-4 py-2 bg-black/40 border border-border-wire rounded-md hover:bg-white/5 transition-colors text-xs text-zinc-300"
               onClick={() => {
                 setCdInput(cdInput + 60);
               }}
@@ -70,7 +70,7 @@ export function TimerWidget() {
 
           <div className="flex space-x-4 mt-auto">
             <button
-              className="px-6 py-2 bg-accent-amber text-black font-bold rounded-md hover:bg-yellow-400 transition-colors w-24"
+              className="px-6 py-2 bg-accent-amber text-black font-bold rounded-md hover:brightness-110 transition-all w-24 shadow-[0_0_15px_rgba(255,176,0,0.3)]"
               onClick={() => {
                 if (cdIsRunning) pauseCd();
                 else startCd();
@@ -79,7 +79,7 @@ export function TimerWidget() {
               {cdIsRunning ? 'PAUSE' : 'START'}
             </button>
             <button
-              className="px-6 py-2 bg-overlay-light border border-border-wire rounded-md hover:bg-overlay-hover transition-colors w-24 text-accent-rose"
+              className="px-6 py-2 bg-black/40 border border-border-wire rounded-md hover:bg-red-500/20 transition-colors w-24 text-red-400"
               onClick={resetCd}
             >
               RESET
@@ -88,13 +88,13 @@ export function TimerWidget() {
         </div>
       ) : (
         <div className="flex flex-col flex-1 items-center justify-center space-y-6">
-          <div className="text-6xl font-bold tracking-wider text-accent-cyan">
+          <div className="text-6xl font-bold tracking-wider text-accent-green">
             {formatTime(swTime)}
           </div>
           
           <div className="flex space-x-4 mt-auto">
             <button
-              className="px-6 py-2 bg-accent-cyan text-black font-bold rounded-md hover:bg-cyan-400 transition-colors w-24"
+              className="px-6 py-2 bg-accent-green text-black font-bold rounded-md hover:brightness-110 transition-all w-24 shadow-[0_0_15px_rgba(74,246,38,0.3)]"
               onClick={() => {
                 if (swIsRunning) pauseSw();
                 else startSw();
@@ -103,7 +103,7 @@ export function TimerWidget() {
               {swIsRunning ? 'PAUSE' : 'START'}
             </button>
             <button
-              className="px-6 py-2 bg-overlay-light border border-border-wire rounded-md hover:bg-overlay-hover transition-colors w-24 text-accent-rose"
+              className="px-6 py-2 bg-black/40 border border-border-wire rounded-md hover:bg-red-500/20 transition-colors w-24 text-red-400"
               onClick={resetSw}
             >
               RESET

@@ -7,7 +7,7 @@ import { getErrorMessage } from '../../types';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useToastStore } from '../../store/toastStore';
 import { useOpenRouterStore } from '../../store/openRouterStore';
-import { Plus, MessageSquare, Trash2, Camera } from 'lucide-react';
+import { Plus, MessageSquare, Trash2, Camera, Edit3 } from 'lucide-react';
 
 interface Message {
   id?: number;
@@ -16,6 +16,7 @@ interface Message {
   content: string;
   image_path?: string;
   timestamp?: string;
+  tokens?: number;
 }
 
 interface ChatSession {
@@ -27,7 +28,6 @@ interface ChatSession {
 export function OpenRouterWidget() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [currentSessionId, setCurrentSessionId] = useState<string>('');
   
   const { 
     input, 
@@ -36,10 +36,14 @@ export function OpenRouterWidget() {
     setDraftImagePath, 
     sidebarOpen, 
     setSidebarOpen, 
+    currentSessionId,
+    setCurrentSessionId,
     clearDraft 
   } = useOpenRouterStore();
   
   const [isTyping, setIsTyping] = useState(false);
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editSessionTitle, setEditSessionTitle] = useState<string>('');
   
   const openRouterModel = useSettingsStore(state => state.openRouterModel);
   const showToast = useToastStore(state => state.showToast);
@@ -70,17 +74,18 @@ export function OpenRouterWidget() {
       const db = await getDb();
       // Group by session_id to get unique sessions. We use the first message's content as title.
       // SQLite doesn't have an easy FIRST() aggregator, so we do MIN(id) logic.
-      const res = await db.select<{ session_id: string, content: string, timestamp: string }[]>(`
-        SELECT session_id, content, MIN(timestamp) as timestamp 
-        FROM ai_chat_history 
-        WHERE session_id IS NOT NULL 
-        GROUP BY session_id 
+      const res = await db.select<{ session_id: string, content: string, timestamp: string, custom_title: string | null }[]>(`
+        SELECT h.session_id, h.content, MIN(h.timestamp) as timestamp, t.title as custom_title
+        FROM ai_chat_history h
+        LEFT JOIN session_titles t ON h.session_id = t.session_id
+        WHERE h.session_id IS NOT NULL 
+        GROUP BY h.session_id 
         ORDER BY timestamp DESC
       `);
       
       const mappedSessions = res.map(row => ({
         id: row.session_id,
-        title: row.content.substring(0, 30) + (row.content.length > 30 ? '...' : ''),
+        title: row.custom_title || (row.content.substring(0, 30) + (row.content.length > 30 ? '...' : '')),
         timestamp: row.timestamp
       }));
       
@@ -120,8 +125,8 @@ export function OpenRouterWidget() {
   const saveMessage = async (msg: Message) => {
     try {
       await executeQuery(
-        'INSERT INTO ai_chat_history (session_id, role, content, image_path) VALUES (?, ?, ?, ?)',
-        [msg.session_id, msg.role, msg.content, msg.image_path || null]
+        'INSERT INTO ai_chat_history (session_id, role, content, image_path, tokens) VALUES (?, ?, ?, ?, ?)',
+        [msg.session_id, msg.role, msg.content, msg.image_path || null, msg.tokens || null]
       );
       // Refresh sessions if it's the first message
       if (messages.length === 0) {
@@ -150,6 +155,19 @@ export function OpenRouterWidget() {
       }
     } catch (err) {
       logger.error(`Failed to delete session: ${getErrorMessage(err)}`);
+    }
+  };
+
+  const renameSession = async (sessionId: string, newTitle: string) => {
+    try {
+      await executeQuery(
+        'INSERT INTO session_titles (session_id, title) VALUES (?, ?) ON CONFLICT(session_id) DO UPDATE SET title=excluded.title',
+        [sessionId, newTitle]
+      );
+      setEditingSessionId(null);
+      loadSessions();
+    } catch (err) {
+      logger.error(`Failed to rename session: ${getErrorMessage(err)}`);
     }
   };
 
@@ -247,7 +265,8 @@ export function OpenRouterWidget() {
       }
 
       const assistantReply = data.choices[0].message.content;
-      const assistantMsg: Message = { session_id: sessionId, role: 'assistant', content: assistantReply };
+      const totalTokens = data.usage?.total_tokens || 0;
+      const assistantMsg: Message = { session_id: sessionId, role: 'assistant', content: assistantReply, tokens: totalTokens };
       
       setMessages(prev => [...prev, assistantMsg]);
       await saveMessage(assistantMsg);
@@ -265,38 +284,58 @@ export function OpenRouterWidget() {
     <div className="flex h-full bg-black/60 font-mono overflow-hidden">
       {/* Sidebar */}
       {sidebarOpen && (
-        <div className="w-1/3 border-r border-border-wire flex flex-col bg-black/40">
-          <div className="p-3 border-b border-border-wire flex justify-between items-center bg-black/80">
-            <span className="text-[10px] font-bold text-accent-amber tracking-widest uppercase">History</span>
-            <button 
-              onClick={createNewSession}
-              className="text-zinc-400 hover:text-accent-green transition-colors p-1 rounded hover:bg-white/5"
-              title="New Chat"
-            >
-              <Plus size={14} />
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
-            {sessions.map(session => (
-              <div 
-                key={session.id}
-                onClick={() => setCurrentSessionId(session.id)}
-                className={`flex items-center justify-between p-2 rounded-sm cursor-pointer transition-colors group ${
-                  currentSessionId === session.id 
-                    ? 'bg-accent-amber/10 border border-accent-amber/30 text-accent-amber' 
-                    : 'hover:bg-white/5 border border-transparent text-zinc-400'
-                }`}
-              >
-                <div className="flex items-center gap-2 overflow-hidden">
-                  <MessageSquare size={12} className="flex-shrink-0 opacity-70" />
-                  <span className="text-xs truncate">{session.title}</span>
-                </div>
-                <button
-                  onClick={(e) => deleteSession(session.id, e)}
-                  className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-400 transition-all p-1"
-                >
-                  <Trash2 size={12} />
+        <div className="w-64 border-r border-zinc-800 bg-black flex flex-col shrink-0 overflow-hidden">
+          <div className="p-3 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50">
+                <h3 className="text-[10px] font-bold tracking-widest text-zinc-500 uppercase">Chat Sessions</h3>
+                <button onClick={createNewSession} className="text-zinc-400 hover:text-accent-amber transition-colors" title="New Session">
+                  <Plus size={14} />
                 </button>
+              </div>
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
+            {sessions.map(s => (
+              <div 
+                key={s.id}
+                onClick={() => setCurrentSessionId(s.id)}
+                className={`group p-3 border-b border-zinc-900/50 flex justify-between items-center cursor-pointer transition-colors ${currentSessionId === s.id ? 'bg-zinc-800/50 border-l-2 border-l-accent-amber' : 'hover:bg-zinc-900'}`}
+              >
+                {editingSessionId === s.id ? (
+                  <input
+                    autoFocus
+                    type="text"
+                    value={editSessionTitle}
+                    onChange={(e) => setEditSessionTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') renameSession(s.id, editSessionTitle);
+                      if (e.key === 'Escape') setEditingSessionId(null);
+                    }}
+                    onBlur={() => renameSession(s.id, editSessionTitle)}
+                    className="flex-1 bg-black border border-zinc-700 text-xs text-zinc-200 px-1 py-0.5 outline-none"
+                  />
+                ) : (
+                  <div className="flex flex-col overflow-hidden mr-2">
+                    <span className="text-xs text-zinc-300 truncate font-semibold">{s.title}</span>
+                    <span className="text-[9px] text-zinc-600 font-mono mt-1 uppercase">{new Date(s.timestamp).toLocaleDateString()}</span>
+                  </div>
+                )}
+                
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditSessionTitle(s.title);
+                      setEditingSessionId(s.id);
+                    }}
+                    className="text-zinc-500 hover:text-accent-amber transition-colors p-1"
+                  >
+                    <Edit3 size={12} />
+                  </button>
+                  <button 
+                    onClick={(e) => deleteSession(s.id, e)}
+                    className="text-zinc-500 hover:text-red-400 transition-colors p-1"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
               </div>
             ))}
             {sessions.length === 0 && (
@@ -351,6 +390,11 @@ export function OpenRouterWidget() {
                   </div>
                 ) : (
                   <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
+                )}
+                {msg.tokens && (
+                  <div className="mt-2 text-[9px] text-zinc-500 font-mono italic flex justify-end">
+                    [{msg.tokens} TOKENS USED]
+                  </div>
                 )}
               </div>
             </div>
