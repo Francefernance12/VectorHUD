@@ -24,14 +24,15 @@ Update this file after every meaningful implementation change.
 - Session 8B: Metrics+ (Hardware - GPU, VRAM, and FPS polling; Timer utility).
 - Session 9A: Integrations (AI+Notion - Vision buffer parsing, Notion block-level parsing for floating checklists).
 - Session 10A: Architecture & Scaling (Notion interactive status patches, AI context drafts via Zustand persist layer).
+- Session 10B: Optimization (Performance & UI/UX, Native GPU PDH, PresentMon FPS, Taskbar z-index fixes).
 
 ## In Progress
-- Session 10B: Optimization (Performance & UI/UX)
+- Session 11: Polish & Bug Fixes (TBD)
 
 ## Next Up
 | Session | Unit Name | Focus | Goal |
 | :--- | :--- | :--- | :--- |
-| 10B | Optimization | Performance & UI/UX | Backend memory profiling, UI/UX polish, React rendering optimization, WMI polling efficiency. |
+| 11 | Polish | Stability | Clean up edge cases, optimize startup sequence, final UI polish. |
 
 ## Architecture Decisions
 - See [Decisions.md](./Decisions.md) for a comprehensive list of architectural and design decisions.

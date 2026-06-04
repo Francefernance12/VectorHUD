@@ -7,6 +7,7 @@
 | UI | React + TypeScript + Tailwind | Rendering the Tactical/HUD widgets. |
 | Backend | Rust | System APIs, logging, and heavy lifting. |
 | Database | SQLite (`tauri-plugin-sql`) | Analytics, persistent structured data. |
+| Telemetry | PresentMon64 (Sidecar) | Headless background process for game FPS tracing via ETW. |
 | Key-Value | `tauri-plugin-store` | Fast UI settings and widget coordinates. |
 | Logging | `tracing` (Rust) | Centralized, rolling file logs. |
 
