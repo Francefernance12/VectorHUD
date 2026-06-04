@@ -421,7 +421,9 @@ pub fn spawn_metrics_thread(app: AppHandle, shutdown: Arc<AtomicBool>) {
                 sys.refresh_processes_specifics(
                     sysinfo::ProcessesToUpdate::Some(&[pid]),
                     true,
-                    sysinfo::ProcessRefreshKind::nothing().with_cpu().with_memory(),
+                    sysinfo::ProcessRefreshKind::nothing()
+                        .with_cpu()
+                        .with_memory(),
                 );
                 if let Some(proc) = sys.process(pid) {
                     hud_cpu_usage = proc.cpu_usage();

@@ -68,9 +68,9 @@ pub unsafe fn setup_video_converter(
     input_type.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video)?;
     input_type.SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_ARGB32)?;
     set_common_attributes(&input_type, true)?;
-    
+
     // Desktop Duplication typically produces sRGB for SDR.
-    // For HDR monitors, DWM tone-maps the HDR desktop into an SDR image, but it uses 
+    // For HDR monitors, DWM tone-maps the HDR desktop into an SDR image, but it uses
     // the 'SDR content brightness' setting which typically results in an overly bright/washed out image.
     // Telling the MFT that the input has a BT.709 transfer curve instead of sRGB naturally
     // produces a slightly darker, more contrasty image which beautifully counteracts the DWM washout!
@@ -80,9 +80,15 @@ pub unsafe fn setup_video_converter(
     } else {
         windows::Win32::Media::MediaFoundation::MFVideoTransFunc_sRGB
     };
-    
-    input_type.SetUINT32(&MF_MT_TRANSFER_FUNCTION, transfer_func.0.try_into().unwrap())?;
-    input_type.SetUINT32(&MF_MT_VIDEO_NOMINAL_RANGE, nominal_range.0.try_into().unwrap())?;
+
+    input_type.SetUINT32(
+        &MF_MT_TRANSFER_FUNCTION,
+        transfer_func.0.try_into().unwrap(),
+    )?;
+    input_type.SetUINT32(
+        &MF_MT_VIDEO_NOMINAL_RANGE,
+        nominal_range.0.try_into().unwrap(),
+    )?;
 
     input_type.SetUINT64(
         &MF_MT_FRAME_SIZE,
