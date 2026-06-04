@@ -29,6 +29,7 @@ fn update_hotkeys(
     replay_hotkey: String,
     timer_hotkey: String,
     stopwatch_hotkey: String,
+    timer_reset_hotkey: String,
 ) -> Result<(), String> {
     use std::str::FromStr;
     use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
@@ -67,10 +68,9 @@ fn update_hotkeys(
                                             let ly = y / scale;
                                             let lw = w / scale;
                                             let lh = h / scale;
-                                            let _ = window
-                                                .set_position(tauri::LogicalPosition::new(lx, ly));
-                                            let _ =
-                                                window.set_size(tauri::LogicalSize::new(lw, lh));
+                                            let _ = window.set_position(tauri::LogicalPosition::new(lx, ly));
+                                            let _ = window.set_size(tauri::LogicalSize::new(lw, lh));
+                                            let _ = window.set_decorations(false);
                                             let _ = window.set_skip_taskbar(true);
                                             let _ = window.set_focus();
                                             break;
@@ -101,6 +101,7 @@ fn update_hotkeys(
     register_hotkey(&replay_hotkey, "hotkey-replay");
     register_hotkey(&timer_hotkey, "hotkey-timer");
     register_hotkey(&stopwatch_hotkey, "hotkey-stopwatch");
+    register_hotkey(&timer_reset_hotkey, "hotkey-timer-reset");
 
     Ok(())
 }
@@ -195,6 +196,7 @@ pub fn run() {
                             size.width as f64 / scale,
                             size.height as f64 / scale,
                         ));
+                        let _ = window.set_decorations(false);
                     }
 
                     // Exclude from capture so it doesn't show up in recordings
@@ -318,6 +320,25 @@ pub fn run() {
                         ",
                             kind: tauri_plugin_sql::MigrationKind::Up,
                         },
+                        tauri_plugin_sql::Migration {
+                            version: 7,
+                            description: "add_tokens_to_chat",
+                            sql: "
+                        ALTER TABLE ai_chat_history ADD COLUMN tokens INTEGER;
+                        ",
+                            kind: tauri_plugin_sql::MigrationKind::Up,
+                        },
+                        tauri_plugin_sql::Migration {
+                            version: 8,
+                            description: "add_session_titles",
+                            sql: "
+                        CREATE TABLE IF NOT EXISTS session_titles (
+                            session_id TEXT PRIMARY KEY,
+                            title TEXT NOT NULL
+                        );
+                        ",
+                            kind: tauri_plugin_sql::MigrationKind::Up,
+                        },
                     ],
                 )
                 .build(),
@@ -329,10 +350,13 @@ pub fn run() {
             commands::api::sync_to_notion,
             commands::api::save_local_note,
             commands::api::open_notes_folder,
+            commands::api::open_capture_folder,
             commands::api::ensure_notion_schema,
             commands::api::fetch_notion_notes,
             commands::api::delete_notion_note,
             commands::api::update_notion_status,
+            commands::api::update_notion_page,
+            commands::api::update_notion_page_full,
             commands::api::fetch_notion_blocks,
             commands::api::toggle_notion_task,
             core::capture::capture_screenshot,

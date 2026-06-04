@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { FolderOpen, Edit3, Database, Plus, Trash2, Loader2, CheckSquare, Save, ChevronDown, ChevronRight, Check } from 'lucide-react';
+import { FolderOpen, Edit3, Database, Plus, Trash2, Loader2, CheckSquare, Save, ChevronDown, ChevronRight, Check, RefreshCw } from 'lucide-react';
 import { logger } from '../../utils/logger';
 import { getErrorMessage } from '../../types';
 import { getDb } from '../../utils/db';
@@ -22,20 +22,27 @@ interface NotionBlock {
 }
 
 export function NotionCaptureWidget() {
-  const [activeTab, setActiveTab] = useState<'draft' | 'notes'>('draft');
+  const { 
+    draft, updateDraft, clearDraft, 
+    activeTab, setActiveTab,
+    notes, setNotes,
+    expandedNoteId, setExpandedNoteId,
+    noteBlocks, setNoteBlocks
+  } = useNotionStore();
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
-
-  const { draft, updateDraft, clearDraft } = useNotionStore();
   
-  const [notes, setNotes] = useState<NotionNote[]>([]);
   const [isLoadingNotes, setIsLoadingNotes] = useState(false);
   const [schemaEnsured, setSchemaEnsured] = useState(false);
-  
-  // Interactive states
-  const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
-  const [noteBlocks, setNoteBlocks] = useState<Record<string, NotionBlock[]>>({});
   const [isLoadingBlocks, setIsLoadingBlocks] = useState<Record<string, boolean>>({});
+  
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editContent, setEditContent] = useState('');
+  const [editTasks, setEditTasks] = useState<string[]>([]);
+  const [isEditingLoading, setIsEditingLoading] = useState(false);
 
   useEffect(() => {
     if (activeTab === 'notes') {
@@ -143,6 +150,29 @@ export function NotionCaptureWidget() {
     }
   };
 
+  const handleUpdateNote = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+        const creds = await getNotionCreds();
+        await invoke('update_notion_page_full', { 
+            token: creds.token, 
+            pageId: id,
+            title: editTitle,
+            description: editDesc,
+            content: editContent,
+            tasks: editTasks
+        });
+        setNotes(notes.map(n => n.id === id ? { ...n, title: editTitle, description: editDesc } : n));
+        setEditingNoteId(null);
+        // Refresh blocks just in case
+        const blocks = await invoke<NotionBlock[]>('fetch_notion_blocks', { token: creds.token, blockId: id });
+        setNoteBlocks({ ...noteBlocks, [id]: blocks });
+        logger.info(`Updated note ${id}`);
+    } catch (err) {
+        logger.error(`Failed to update note: ${getErrorMessage(err)}`);
+    }
+  };
+
   const handleStatusChange = async (id: string, newStatus: string, e: React.ChangeEvent<HTMLSelectElement>) => {
     e.stopPropagation();
     try {
@@ -152,6 +182,30 @@ export function NotionCaptureWidget() {
         logger.info(`Updated status for note ${id} to ${newStatus}`);
     } catch (err) {
         logger.error(`Failed to update status: ${getErrorMessage(err)}`);
+    }
+  };
+
+  const handleEditClick = async (note: NotionNote, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditTitle(note.title);
+    setEditDesc(note.description);
+    setEditingNoteId(note.id);
+    setExpandedNoteId(note.id);
+    setIsEditingLoading(true);
+    setEditContent('');
+    setEditTasks([]);
+
+    try {
+        const creds = await getNotionCreds();
+        const blocks = await invoke<NotionBlock[]>('fetch_notion_blocks', { token: creds.token, blockId: note.id });
+        const contentStr = blocks.filter(b => b.b_type === 'paragraph').map(b => b.task_text).join('\n');
+        const tasksArr = blocks.filter(b => b.b_type === 'to_do').map(b => b.task_text);
+        setEditContent(contentStr);
+        setEditTasks(tasksArr);
+    } catch (err) {
+        logger.error(`Failed to fetch blocks for editing: ${getErrorMessage(err)}`);
+    } finally {
+        setIsEditingLoading(false);
     }
   };
 
@@ -166,7 +220,7 @@ export function NotionCaptureWidget() {
         try {
             const creds = await getNotionCreds();
             const blocks = await invoke<NotionBlock[]>('fetch_notion_blocks', { token: creds.token, blockId: id });
-            setNoteBlocks(prev => ({ ...prev, [id]: blocks }));
+            setNoteBlocks({ ...noteBlocks, [id]: blocks });
         } catch (err) {
             logger.error(`Failed to fetch blocks: ${getErrorMessage(err)}`);
         } finally {
@@ -180,10 +234,8 @@ export function NotionCaptureWidget() {
     try {
         const creds = await getNotionCreds();
         await invoke('toggle_notion_task', { token: creds.token, blockId, checked: !currentChecked });
-        setNoteBlocks(prev => {
-            const updated = prev[pageId].map(b => b.id === blockId ? { ...b, checked: !currentChecked } : b);
-            return { ...prev, [pageId]: updated };
-        });
+        const updated = noteBlocks[pageId].map(b => b.id === blockId ? { ...b, checked: !currentChecked } : b);
+        setNoteBlocks({ ...noteBlocks, [pageId]: updated });
     } catch (err) {
         logger.error(`Failed to toggle task: ${getErrorMessage(err)}`);
     }
@@ -230,6 +282,15 @@ export function NotionCaptureWidget() {
             <span className={`text-[9px] px-2 py-0.5 border font-bold uppercase tracking-widest animate-pulse ${statusMsg.includes('FAIL') || statusMsg.includes('Err') ? 'text-red-400 border-red-500/30 bg-red-500/10' : 'text-accent-green border-accent-green/30 bg-accent-green/10'}`}>
               {statusMsg}
             </span>
+          )}
+          {activeTab === 'notes' && (
+            <button 
+              onClick={fetchNotes}
+              className="text-zinc-500 hover:text-accent-green transition-colors p-1.5 rounded hover:bg-white/5 opacity-0 group-hover:opacity-100"
+              title="Refresh Database"
+            >
+              <RefreshCw size={14} className={isLoadingNotes ? 'animate-spin text-accent-green' : ''} />
+            </button>
           )}
           <button 
             onClick={() => invoke('open_notes_folder')}
@@ -372,19 +433,51 @@ export function NotionCaptureWidget() {
                         {expandedNoteId === note.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                       </div>
                       <div className="flex flex-col gap-1 min-w-0">
-                        <span className="text-sm font-bold text-zinc-200 truncate">{note.title}</span>
-                        {note.description && (
-                          <span className="text-xs text-zinc-500 line-clamp-1">{note.description}</span>
-                        )}
-                        {note.date && (
-                          <span className="text-[9px] text-zinc-600 uppercase tracking-widest font-bold mt-1">
-                            {new Date(note.date).toLocaleDateString()}
-                          </span>
+                        {editingNoteId === note.id ? (
+                          <div className="flex flex-col gap-2" onClick={e => e.stopPropagation()}>
+                            <input
+                              type="text"
+                              value={editTitle}
+                              onChange={(e) => setEditTitle(e.target.value)}
+                              className="bg-black/50 border border-zinc-700 px-2 py-1 text-sm font-bold text-zinc-200 outline-none w-full"
+                              placeholder="Title"
+                              disabled={isEditingLoading}
+                            />
+                            <textarea
+                              value={editDesc}
+                              onChange={(e) => setEditDesc(e.target.value)}
+                              className="bg-black/50 border border-zinc-700 px-2 py-1 text-xs text-zinc-400 outline-none w-full resize-none min-h-[40px] custom-scrollbar"
+                              placeholder="Description"
+                              disabled={isEditingLoading}
+                            />
+                            
+                          </div>
+                        ) : (
+                          <>
+                            <span className="text-base font-bold text-zinc-100 truncate">{note.title}</span>
+                            {note.description && (
+                              <span className="text-sm text-zinc-400 line-clamp-2 mt-0.5">{note.description}</span>
+                            )}
+                            {note.date && (
+                              <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold mt-2">
+                                {new Date(note.date).toLocaleDateString()}
+                              </span>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>
                     
                     <div className="flex items-center gap-2 flex-shrink-0">
+                      {editingNoteId !== note.id && (
+                        <button 
+                          onClick={(e) => handleEditClick(note, e)}
+                          className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-accent-amber transition-all p-1.5 rounded hover:bg-accent-amber/10"
+                          title="Edit Note"
+                        >
+                          <Edit3 size={12} />
+                        </button>
+                      )}
                       <select 
                         value={note.status}
                         onChange={(e) => handleStatusChange(note.id, e.target.value, e)}
@@ -411,18 +504,68 @@ export function NotionCaptureWidget() {
 
                   {/* Expanded Area for Tasks */}
                   {expandedNoteId === note.id && (
-                    <div className="border-t border-zinc-800 p-3 bg-black/40">
-                      <div className="text-[9px] text-zinc-600 font-bold tracking-widest uppercase mb-2">SUB_ROUTINES</div>
-                      {isLoadingBlocks[note.id] ? (
-                        <div className="flex items-center gap-2 text-xs text-zinc-500 py-2">
-                          <Loader2 size={12} className="animate-spin" /> Fetching blocks...
+                    <div className="border-t border-zinc-800 p-4 bg-black/40">
+                      <div className="text-[10px] text-zinc-500 font-bold tracking-widest uppercase mb-3">PAGE CONTENTS</div>
+                      
+                      {editingNoteId === note.id ? (
+                        <div className="flex flex-col gap-3 w-full" onClick={e => e.stopPropagation()}>
+                           {isEditingLoading ? (
+                              <div className="text-sm text-zinc-500 py-2 flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Fetching content...</div>
+                           ) : (
+                             <>
+                               <textarea
+                                  value={editContent}
+                                  onChange={(e) => setEditContent(e.target.value)}
+                                  className="bg-black/50 border border-zinc-700 px-3 py-2 text-sm text-zinc-300 outline-none w-full resize-none min-h-[250px] custom-scrollbar leading-relaxed"
+                                  placeholder="Content (paragraphs)"
+                               />
+                               <div className="flex flex-col gap-2 mt-2">
+                                  <div className="text-[10px] text-zinc-500 font-bold tracking-widest uppercase">Tasks</div>
+                                  {editTasks.map((t, idx) => (
+                                    <div key={idx} className="flex items-center gap-3">
+                                      <input
+                                        type="text"
+                                        value={t}
+                                        onChange={(e) => {
+                                          const newTasks = [...editTasks];
+                                          newTasks[idx] = e.target.value;
+                                          setEditTasks(newTasks);
+                                        }}
+                                        className="bg-black/50 border border-zinc-800 px-3 py-2 text-sm text-zinc-300 outline-none flex-1"
+                                      />
+                                      <button 
+                                        onClick={() => setEditTasks(editTasks.filter((_, i) => i !== idx))}
+                                        className="text-zinc-600 hover:text-red-400 p-2"
+                                      >
+                                        <Trash2 size={14} />
+                                      </button>
+                                    </div>
+                                  ))}
+                                  <button 
+                                    onClick={() => setEditTasks([...editTasks, ''])}
+                                    className="text-[10px] px-3 py-1.5 bg-white/5 text-zinc-400 border border-white/10 uppercase tracking-widest font-bold self-start mt-1 hover:bg-white/10 hover:text-white transition-colors"
+                                  >
+                                    + Add Task
+                                  </button>
+                               </div>
+                               
+                               <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-zinc-800/50">
+                                  <button onClick={(e) => { e.stopPropagation(); setEditingNoteId(null); }} className="text-xs px-4 py-2 bg-zinc-800 text-zinc-400 border border-zinc-700 hover:bg-zinc-700 hover:text-white transition-colors uppercase tracking-widest font-bold">Cancel</button>
+                                  <button onClick={(e) => handleUpdateNote(note.id, e)} disabled={isEditingLoading} className="text-xs px-4 py-2 bg-accent-green/20 text-accent-green border border-accent-green/30 hover:bg-accent-green hover:text-black transition-colors uppercase tracking-widest font-bold disabled:opacity-50">Save Changes</button>
+                               </div>
+                             </>
+                           )}
+                        </div>
+                      ) : isLoadingBlocks[note.id] ? (
+                        <div className="flex items-center gap-2 text-sm text-zinc-500 py-3">
+                          <Loader2 size={14} className="animate-spin" /> Fetching blocks...
                         </div>
                       ) : noteBlocks[note.id]?.length > 0 ? (
-                        <div className="space-y-1.5">
+                        <div className="space-y-2">
                           {noteBlocks[note.id].map(block => {
                             if (block.b_type === 'paragraph') {
                               return (
-                                <div key={block.id} className="text-xs text-zinc-400 py-1 px-1 break-words whitespace-pre-wrap">
+                                <div key={block.id} className="text-sm text-zinc-300 py-1.5 px-1 break-words whitespace-pre-wrap leading-relaxed">
                                   {block.task_text}
                                 </div>
                               );
@@ -430,13 +573,13 @@ export function NotionCaptureWidget() {
                             return (
                               <div 
                                 key={block.id} 
-                                className="flex items-center gap-2 group/block cursor-pointer hover:bg-zinc-800/50 p-1 rounded transition-colors"
+                                className="flex items-center gap-3 group/block cursor-pointer hover:bg-zinc-800/50 p-2 rounded-md transition-colors"
                                 onClick={(e) => toggleTaskBlock(note.id, block.id, block.checked, e)}
                               >
-                                <div className={`w-3.5 h-3.5 border rounded-sm flex items-center justify-center transition-colors ${block.checked ? 'bg-accent-green/20 border-accent-green/50 text-accent-green' : 'border-zinc-600 text-transparent group-hover/block:border-zinc-400'}`}>
-                                  <Check size={10} />
+                                <div className={`w-4 h-4 border rounded-sm flex items-center justify-center transition-colors flex-shrink-0 ${block.checked ? 'bg-accent-green/20 border-accent-green/50 text-accent-green' : 'border-zinc-500 text-transparent group-hover/block:border-zinc-400'}`}>
+                                  <Check size={12} />
                                 </div>
-                                <span className={`text-xs transition-colors ${block.checked ? 'text-zinc-600 line-through' : 'text-zinc-300 group-hover/block:text-zinc-100'}`}>
+                                <span className={`text-sm transition-colors ${block.checked ? 'text-zinc-600 line-through' : 'text-zinc-200 group-hover/block:text-white'}`}>
                                   {block.task_text || 'Untitled Task'}
                                 </span>
                               </div>

@@ -5,7 +5,8 @@ interface SettingsState {
   isSettingsOpen: boolean;
   openRouterModel: string;
   globalFontSize: number;
-  interactablePins: boolean;
+  theme: string;
+  customColor: string;
   recordMicrophone: boolean;
   recordSystemAudio: boolean;
   overlayHotkey: string;
@@ -14,11 +15,13 @@ interface SettingsState {
   replayHotkey: string;
   timerHotkey: string;
   stopwatchHotkey: string;
+  timerResetHotkey: string;
   
   toggleSettings: () => void;
   setOpenRouterModel: (model: string) => Promise<void>;
   setGlobalFontSize: (size: number) => Promise<void>;
-  setInteractablePins: (interactable: boolean) => Promise<void>;
+  setTheme: (theme: string) => Promise<void>;
+  setCustomColor: (color: string) => Promise<void>;
   setRecordMicrophone: (enabled: boolean) => Promise<void>;
   setRecordSystemAudio: (enabled: boolean) => Promise<void>;
   setOverlayHotkey: (hotkey: string) => Promise<void>;
@@ -27,14 +30,49 @@ interface SettingsState {
   setReplayHotkey: (hotkey: string) => Promise<void>;
   setTimerHotkey: (hotkey: string) => Promise<void>;
   setStopwatchHotkey: (hotkey: string) => Promise<void>;
+  setTimerResetHotkey: (hotkey: string) => Promise<void>;
   loadPreferences: () => Promise<void>;
 }
+
+const applyThemeColors = (theme: string, customColor: string) => {
+  const root = document.documentElement;
+  const hexToRgb = (hex: string) => {
+    let c = hex.substring(1);      // strip #
+    if (c.length === 3) c = c.split('').map(x => x + x).join('');
+    return `${parseInt(c.slice(0, 2), 16)}, ${parseInt(c.slice(2, 4), 16)}, ${parseInt(c.slice(4, 6), 16)}`;
+  };
+
+  const setColors = (hex: string) => {
+    root.style.setProperty('--accent-amber', hex);
+    root.style.setProperty('--accent-green', hex);
+    root.style.setProperty('--accent-amber-rgb', hexToRgb(hex));
+    root.style.setProperty('--accent-green-rgb', hexToRgb(hex));
+  };
+
+  if (theme === 'custom' && customColor) {
+    setColors(customColor);
+  } else if (theme === 'amber') {
+    setColors('#FFB000');
+  } else if (theme === 'neon_blue') {
+    setColors('#00F0FF');
+  } else if (theme === 'matrix_green') {
+    setColors('#00FF41');
+  } else if (theme === 'outrun_pink') {
+    setColors('#FF00FF');
+  } else {
+    // Default
+    root.style.setProperty('--accent-amber', '#FFB000');
+    root.style.setProperty('--accent-amber-rgb', '255, 176, 0');
+    root.style.setProperty('--accent-green', '#4AF626');
+  }
+};
 
 export const useSettingsStore = create<SettingsState>((set) => ({
   isSettingsOpen: false,
   openRouterModel: 'openai/gpt-4o', // Default model
   globalFontSize: 14,
-  interactablePins: false,
+  theme: 'default',
+  customColor: '#FF0000',
   recordMicrophone: false,
   recordSystemAudio: true,
   overlayHotkey: 'ctrl+alt+o',
@@ -43,6 +81,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   replayHotkey: 'ctrl+alt+b',
   timerHotkey: 'ctrl+alt+t',
   stopwatchHotkey: 'ctrl+alt+w',
+  timerResetHotkey: 'ctrl+alt+y',
 
   toggleSettings: () => set((state) => ({ isSettingsOpen: !state.isSettingsOpen })),
 
@@ -62,11 +101,20 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     document.documentElement.style.setProperty('--base-font-size', `${size}px`);
   },
 
-  setInteractablePins: async (interactable) => {
+  setTheme: async (theme) => {
     const store = await getSettingsStore();
-    await store.set('interactablePins', interactable);
+    await store.set('theme', theme);
     await store.save();
-    set({ interactablePins: interactable });
+    set({ theme });
+    applyThemeColors(theme, useSettingsStore.getState().customColor);
+  },
+
+  setCustomColor: async (customColor) => {
+    const store = await getSettingsStore();
+    await store.set('customColor', customColor);
+    await store.save();
+    set({ customColor });
+    applyThemeColors(useSettingsStore.getState().theme, customColor);
   },
 
   setRecordMicrophone: async (enabled) => {
@@ -125,11 +173,19 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     set({ stopwatchHotkey: hotkey });
   },
 
+  setTimerResetHotkey: async (hotkey) => {
+    const store = await getSettingsStore();
+    await store.set('timerResetHotkey', hotkey);
+    await store.save();
+    set({ timerResetHotkey: hotkey });
+  },
+
   loadPreferences: async () => {
     const store = await getSettingsStore();
     const model = await store.get<string>('openRouterModel');
     const fontSize = await store.get<number>('globalFontSize');
-    const interactable = await store.get<boolean>('interactablePins');
+    const theme = await store.get<string>('theme');
+    const customColor = await store.get<string>('customColor');
     const mic = await store.get<boolean>('recordMicrophone');
     const systemAudio = await store.get<boolean>('recordSystemAudio');
     const oHot = await store.get<string>('overlayHotkey');
@@ -138,11 +194,16 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     const rpHot = await store.get<string>('replayHotkey');
     const tHot = await store.get<string>('timerHotkey');
     const swHot = await store.get<string>('stopwatchHotkey');
+    const trHot = await store.get<string>('timerResetHotkey');
+
+    const finalTheme = theme || 'default';
+    const finalColor = customColor || '#FF0000';
 
     set({
       openRouterModel: model || 'openai/gpt-4o',
       globalFontSize: fontSize || 14,
-      interactablePins: interactable || false,
+      theme: finalTheme,
+      customColor: finalColor,
       recordMicrophone: mic !== undefined ? mic : false,
       recordSystemAudio: systemAudio !== undefined ? systemAudio : true,
       overlayHotkey: oHot || 'ctrl+alt+o',
@@ -151,7 +212,10 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       replayHotkey: rpHot || 'ctrl+alt+b',
       timerHotkey: tHot || 'ctrl+alt+t',
       stopwatchHotkey: swHot || 'ctrl+alt+w',
+      timerResetHotkey: trHot || 'ctrl+alt+y',
     });
+
+    applyThemeColors(finalTheme, finalColor);
 
     try {
       const { invoke } = await import('@tauri-apps/api/core');
@@ -161,7 +225,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
         recordHotkey: rHot || 'ctrl+alt+r',
         replayHotkey: rpHot || 'ctrl+alt+b',
         timerHotkey: tHot || 'ctrl+alt+t',
-        stopwatchHotkey: swHot || 'ctrl+alt+w'
+        stopwatchHotkey: swHot || 'ctrl+alt+w',
+        timerResetHotkey: trHot || 'ctrl+alt+y'
       });
     } catch (err) {
       console.error("Failed to sync hotkeys to Rust backend:", err);

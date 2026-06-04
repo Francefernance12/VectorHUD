@@ -68,12 +68,12 @@ export function HardwareWidget() {
       {/* GPU Section */}
       <div className="flex flex-col space-y-1">
         <div className="flex justify-between items-center text-xs">
-          <span className="font-bold text-accent-cyan tracking-widest">GPU</span>
-          <span className="text-accent-cyan font-bold">{gpuUsage}%</span>
+          <span className="font-bold text-accent-green tracking-widest">GPU</span>
+          <span className="text-accent-green font-bold">{gpuUsage}%</span>
         </div>
         <div className="w-full h-2 bg-black border border-border-wire rounded-sm overflow-hidden relative">
           <div 
-            className="h-full bg-accent-cyan transition-all duration-500 ease-in-out"
+            className="h-full bg-accent-green transition-all duration-500 ease-in-out"
             style={{ width: `${gpuUsage}%` }}
           />
         </div>
@@ -96,12 +96,12 @@ export function HardwareWidget() {
       {/* VRAM Section */}
       <div className="flex flex-col space-y-1">
         <div className="flex justify-between items-center text-xs">
-          <span className="font-bold text-accent-rose tracking-widest">VRAM</span>
-          <span className="text-accent-rose font-bold">{vramUsed} GB</span>
+          <span className="font-bold text-accent-green tracking-widest">VRAM</span>
+          <span className="text-accent-green font-bold">{vramUsed} GB</span>
         </div>
         <div className="w-full h-2 bg-black border border-border-wire rounded-sm overflow-hidden relative">
           <div 
-            className="h-full bg-accent-rose transition-all duration-500 ease-in-out"
+            className="h-full bg-accent-green transition-all duration-500 ease-in-out"
             style={{ width: `${vramUsage}%` }}
           />
         </div>

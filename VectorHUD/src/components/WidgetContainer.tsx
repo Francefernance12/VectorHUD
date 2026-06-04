@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { motion, useDragControls } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { X, GripHorizontal, Pin, PinOff } from 'lucide-react';
 import { useWidgetStore, WIDGETS } from '../store/widgetStore';
 import { useShellStore } from '../store/shellStore';
@@ -11,7 +11,6 @@ interface WidgetContainerProps {
 }
 
 export function WidgetContainer({ id, children }: WidgetContainerProps) {
-  const controls = useDragControls();
   
   // Use granular selectors to prevent re-rendering when OTHER widgets update
   const instance = useWidgetStore(state => state.activeWidgets[id]);
@@ -31,51 +30,60 @@ export function WidgetContainer({ id, children }: WidgetContainerProps) {
 
   return (
     <motion.div
-      drag
-      dragControls={controls}
-      dragListener={false}
-      dragMomentum={false}
-      onDragEnd={(_, info) => {
-         updateWidgetBounds(id, {
-             x: instance.x + info.offset.x,
-             y: instance.y + info.offset.y
-         });
-      }}
-      dragConstraints={{ 
-        left: 0, 
-        top: 0, 
-        right: typeof window !== 'undefined' ? window.innerWidth - instance.width : 1000, 
-        bottom: typeof window !== 'undefined' ? window.innerHeight - instance.height : 1000 
-      }}
       onPointerDown={() => bringToFront(id)}
-      initial={{ scale: 0.9, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      exit={{ scale: 0.9, opacity: 0 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
       style={{
         position: 'absolute',
         zIndex: instance.zIndex,
         width: instance.width,
         height: instance.height,
-        x: instance.x,
-        y: instance.y,
+        left: Math.round(instance.x),
+        top: Math.round(instance.y),
       }}
       className="flex flex-col border rounded-xl overflow-hidden transition-colors bg-surface border-border-wire shadow-2xl"
     >
       {/* Draggable Header (Only show if interactive) */}
       {isInteractive && (
         <div 
-          onPointerDown={(e) => controls.start(e)}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            bringToFront(id);
+            const startX = e.clientX;
+            const startY = e.clientY;
+            const initialWidgetX = instance.x;
+            const initialWidgetY = instance.y;
+            
+            const onPointerMove = (moveEvent: PointerEvent) => {
+              const maxW = typeof window !== 'undefined' ? window.innerWidth - instance.width : 2000;
+              const maxH = typeof window !== 'undefined' ? window.innerHeight - instance.height : 1000;
+              updateWidgetBounds(id, {
+                x: Math.round(Math.max(0, Math.min(initialWidgetX + (moveEvent.clientX - startX), maxW))),
+                y: Math.round(Math.max(0, Math.min(initialWidgetY + (moveEvent.clientY - startY), maxH)))
+              });
+            };
+            
+            const onPointerUp = () => {
+              window.removeEventListener('pointermove', onPointerMove);
+              window.removeEventListener('pointerup', onPointerUp);
+            };
+            
+            window.addEventListener('pointermove', onPointerMove);
+            window.addEventListener('pointerup', onPointerUp);
+          }}
           className="flex items-center justify-between px-3 py-2 bg-zinc-900/80 border-b border-border-wire/50 cursor-move group shrink-0"
         >
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 pointer-events-none">
             <GripHorizontal className="w-4 h-4 text-zinc-500 group-hover:text-primary transition-colors" />
             <span className="text-[10px] font-mono font-bold tracking-widest text-primary uppercase">
               {widgetDef.label}
             </span>
           </div>
           
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 pointer-events-auto">
             <button 
+              onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
                 togglePin(id);
@@ -90,6 +98,7 @@ export function WidgetContainer({ id, children }: WidgetContainerProps) {
               {instance.isPinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />}
             </button>
             <button 
+              onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
                 toggleWidget(id);
@@ -119,9 +128,11 @@ export function WidgetContainer({ id, children }: WidgetContainerProps) {
             const startH = instance.height;
             
             const onPointerMove = (moveEvent: PointerEvent) => {
+              const maxW = typeof window !== 'undefined' ? window.innerWidth - instance.x : 2000;
+              const maxH = typeof window !== 'undefined' ? window.innerHeight - instance.y : 1000;
               updateWidgetBounds(id, {
-                width: Math.max(200, startW + (moveEvent.clientX - startX)),
-                height: Math.max(150, startH + (moveEvent.clientY - startY))
+                width: Math.round(Math.max(200, Math.min(startW + (moveEvent.clientX - startX), maxW))),
+                height: Math.round(Math.max(150, Math.min(startH + (moveEvent.clientY - startY), maxH)))
               });
             };
             

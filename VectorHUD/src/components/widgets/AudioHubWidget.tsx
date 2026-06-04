@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Volume2, VolumeX, Music, Play, Pause, SkipForward, SkipBack } from 'lucide-react';
+import { Volume2, VolumeX, Music, Play, Pause, SkipForward, SkipBack, Star } from 'lucide-react';
 import { logger } from '../../utils/logger';
+import { useAudioStore } from '../../store/audioStore';
 
 interface AudioSession {
   process_id: number;
@@ -26,6 +27,7 @@ interface MediaMetadata {
 export function AudioHubWidget() {
   const [audioState, setAudioState] = useState<SystemAudio | null>(null);
   const [mediaState, setMediaState] = useState<MediaMetadata | null>(null);
+  const { favoriteApps, toggleFavoriteApp } = useAudioStore();
 
   const fetchAudioState = async () => {
     try {
@@ -155,10 +157,30 @@ export function AudioHubWidget() {
       <div className="flex flex-col space-y-4">
         <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider">App Mixer</div>
         
-        {audioState?.sessions.filter(s => s.name !== "Unknown").map((session) => (
-          <div key={session.process_id} className="flex flex-col space-y-1">
+        {audioState?.sessions
+          .filter(s => s.name !== "Unknown")
+          .sort((a, b) => {
+            const aFav = favoriteApps.includes(a.name);
+            const bFav = favoriteApps.includes(b.name);
+            if (aFav && !bFav) return -1;
+            if (!aFav && bFav) return 1;
+            return a.name.localeCompare(b.name);
+          })
+          .map((session) => (
+          <div key={session.process_id} className="flex flex-col space-y-1 group">
             <div className="flex justify-between items-center text-xs text-zinc-300">
-              <span className="truncate pr-2">{session.name}</span>
+              <div className="flex items-center gap-2 truncate pr-2">
+                <button 
+                  onClick={() => toggleFavoriteApp(session.name)}
+                  className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex-shrink-0"
+                >
+                  <Star 
+                    size={12} 
+                    className={favoriteApps.includes(session.name) ? "fill-accent-amber text-accent-amber" : "text-zinc-500 hover:text-accent-amber"} 
+                  />
+                </button>
+                <span className={`truncate ${favoriteApps.includes(session.name) ? 'text-accent-amber font-bold' : ''}`}>{session.name}</span>
+              </div>
               <span>{Math.round(session.volume * 100)}%</span>
             </div>
             <div className="flex items-center gap-3">

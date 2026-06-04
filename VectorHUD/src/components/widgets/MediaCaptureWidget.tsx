@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { listen } from '@tauri-apps/api/event';
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
-import { Trash2, Camera, Zap, Gamepad2, Monitor } from 'lucide-react';
+import { Trash2, Camera, Zap, Gamepad2, Monitor, FolderOpen } from 'lucide-react';
 import { getDb, executeQuery } from '../../utils/db';
 import { logger } from '../../utils/logger';
 import { CaptureHistory } from '../../types';
@@ -12,13 +12,9 @@ import { useRecordingStore } from '../../store/recordingStore';
 export function MediaCaptureWidget() {
   const [captures, setCaptures] = useState<CaptureHistory[]>([]);
   const [isCapturing, setIsCapturing] = useState(false);
-  const { isRecording, setRecording, isReplayActive, setReplayActive } = useRecordingStore();
+  const { isRecording, setRecording, isReplayActive, setReplayActive, activeApp, setActiveApp, isFullscreen, setIsFullscreen, isKnownGame, setIsKnownGame } = useRecordingStore();
 
   const [expandedCapture, setExpandedCapture] = useState<CaptureHistory | null>(null);
-  
-  const [activeApp, setActiveApp] = useState<string>('Desktop');
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isKnownGame, setIsKnownGame] = useState(false);
 
   const fetchHistory = async () => {
     try {
@@ -308,8 +304,15 @@ export function MediaCaptureWidget() {
 
       {/* Gallery Section */}
       <div className="flex-1 border border-border-wire bg-black/50 rounded-sm overflow-hidden flex flex-col">
-        <div className="bg-surface/80 border-b border-border-wire px-3 py-1 text-xs text-accent-amber font-bold tracking-widest">
-          RECENT CAPTURES
+        <div className="bg-surface/80 border-b border-border-wire px-3 py-1 flex justify-between items-center text-xs text-accent-amber font-bold tracking-widest">
+          <span>RECENT CAPTURES</span>
+          <button 
+            onClick={() => invoke('open_capture_folder')}
+            className="text-zinc-500 hover:text-accent-amber transition-colors p-1 rounded hover:bg-white/5"
+            title="Open Capture Folder"
+          >
+            <FolderOpen size={14} />
+          </button>
         </div>
         <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar">
           {captures.length === 0 ? (
@@ -332,7 +335,11 @@ export function MediaCaptureWidget() {
                       </>
                     ) : (
                       <>
-                        <Camera size={11} className="text-accent-green" />
+                        <img 
+                          src={convertFileSrc(cap.file_path)} 
+                          alt="Thumbnail" 
+                          className="w-8 h-5 object-cover rounded-[2px] border border-white/10"
+                        />
                         <span className="text-[9px] tracking-widest font-bold text-accent-green uppercase">IMG</span>
                       </>
                     )}
@@ -366,14 +373,14 @@ export function MediaCaptureWidget() {
               src={convertFileSrc(expandedCapture.file_path)} 
               controls 
               autoPlay 
-              className="max-w-full max-h-full object-contain shadow-[0_0_50px_rgba(0,0,0,0.8)] border border-border-wire/50 rounded-sm cursor-default font-sans"
+              className="max-w-[90vw] max-h-[90vh] object-contain shadow-[0_0_50px_rgba(0,0,0,0.8)] border border-border-wire/50 rounded-sm cursor-default font-sans"
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
             <img 
               src={convertFileSrc(expandedCapture.file_path)} 
               alt="Expanded Capture" 
-              className="max-w-full max-h-full object-contain shadow-[0_0_50px_rgba(0,0,0,0.8)] border border-border-wire/50 rounded-sm cursor-default"
+              className="max-w-[90vw] max-h-[90vh] object-contain shadow-[0_0_50px_rgba(0,0,0,0.8)] border border-border-wire/50 rounded-sm cursor-default"
               onClick={(e) => e.stopPropagation()}
             />
           )}

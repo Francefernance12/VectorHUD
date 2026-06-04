@@ -1,12 +1,12 @@
 @import "tailwindcss";
 
 @theme {
-  --color-overlay: rgba(0, 0, 0, 0.4);
-  --color-surface: #0F0F0F;
-  --color-primary: #E0E0E0;
-  --color-accent-green: #4AF626;
-  --color-accent-amber: #FFB000;
-  --color-border-wire: rgba(255, 255, 255, 0.15);
+  --color-overlay: var(--bg-overlay);
+  --color-surface: var(--bg-surface);
+  --color-primary: var(--text-primary);
+  --color-accent-green: var(--accent-green);
+  --color-accent-amber: var(--accent-amber);
+  --color-border-wire: var(--border-wire);
   
   --font-mono: 'JetBrains Mono', monospace;
   --font-sans: 'Inter', 'Geist', sans-serif;
@@ -18,6 +18,8 @@
   --text-primary: #E0E0E0;
   --accent-green: #4AF626;
   --accent-amber: #FFB000;
+  --accent-green-rgb: 74, 246, 38;
+  --accent-amber-rgb: 255, 176, 0;
   --border-wire: rgba(255, 255, 255, 0.15);
 }
 
@@ -32,6 +34,12 @@ html, body, #root {
   font-family: var(--font-sans);
   color: var(--text-primary);
   font-size: var(--base-font-size, 14px);
+  user-select: none; /* Prevent accidental text highlighting */
+}
+
+/* Allow text selection in form inputs */
+input, textarea, [contenteditable="true"] {
+  user-select: text;
 }
 /* Custom Scrollbar Styles */
 .custom-scrollbar::-webkit-scrollbar {

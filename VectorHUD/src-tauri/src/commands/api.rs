@@ -175,6 +175,27 @@ pub fn open_notes_folder() -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+pub fn open_capture_folder() -> Result<(), String> {
+    let pic_dir = dirs::picture_dir().ok_or("Could not find Pictures directory")?;
+    let capture_dir = pic_dir.join("VectorHUD");
+
+    if !capture_dir.exists() {
+        std::fs::create_dir_all(&capture_dir)
+            .map_err(|e| format!("Failed to create VectorHUD capture directory: {}", e))?;
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(&capture_dir)
+            .spawn()
+            .map_err(|e| format!("Failed to open folder: {}", e))?;
+    }
+
+    Ok(())
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct NotionNote {
     pub id: String,
@@ -429,6 +450,128 @@ pub async fn update_notion_status(
         let err = res.text().await.unwrap_or_default();
         return Err(format!("Notion API Error: {}", err));
     }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn update_notion_page(
+    token: String,
+    page_id: String,
+    title: String,
+    description: String,
+) -> Result<(), String> {
+    if token.is_empty() || page_id.is_empty() {
+        return Err("Notion token or Page ID missing".to_string());
+    }
+
+    let client = reqwest::Client::new();
+    let body = serde_json::json!({
+        "properties": {
+            "Title": {
+                "title": [
+                    { "text": { "content": title } }
+                ]
+            },
+            "Description": {
+                "rich_text": [
+                    { "text": { "content": description } }
+                ]
+            }
+        }
+    });
+
+    let res = client
+        .patch(format!("https://api.notion.com/v1/pages/{}", page_id))
+        .header("Authorization", format!("Bearer {}", token))
+        .header("Notion-Version", "2022-06-28")
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Request failed: {}", e))?;
+
+    if !res.status().is_success() {
+        let err = res.text().await.unwrap_or_default();
+        return Err(format!("Notion API Error: {}", err));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn update_notion_page_full(
+    token: String,
+    page_id: String,
+    title: String,
+    description: String,
+    content: String,
+    tasks: Vec<String>,
+) -> Result<(), String> {
+    // 1. Update title and description properties
+    update_notion_page(token.clone(), page_id.clone(), title, description).await?;
+
+    // 2. Fetch existing blocks
+    let blocks = fetch_notion_blocks(token.clone(), page_id.clone()).await?;
+
+    // 3. Delete existing blocks
+    let client = reqwest::Client::new();
+    for block in blocks {
+        let _ = client
+            .delete(format!("https://api.notion.com/v1/blocks/{}", block.id))
+            .header("Authorization", format!("Bearer {}", token))
+            .header("Notion-Version", "2022-06-28")
+            .send()
+            .await;
+    }
+
+    // 4. Append new blocks
+    let mut children = Vec::new();
+    let content_trim = content.trim();
+    if !content_trim.is_empty() {
+        children.push(serde_json::json!({
+            "object": "block",
+            "type": "paragraph",
+            "paragraph": {
+                "rich_text": [
+                    { "type": "text", "text": { "content": content_trim } }
+                ]
+            }
+        }));
+    }
+
+    for task in tasks {
+        let t = task.trim();
+        if !t.is_empty() {
+            children.push(serde_json::json!({
+                "object": "block",
+                "type": "to_do",
+                "to_do": {
+                    "rich_text": [
+                        { "type": "text", "text": { "content": t } }
+                    ],
+                    "checked": false
+                }
+            }));
+        }
+    }
+
+    if !children.is_empty() {
+        let body = serde_json::json!({ "children": children });
+        let res = client
+            .patch(format!("https://api.notion.com/v1/blocks/{}/children", page_id))
+            .header("Authorization", format!("Bearer {}", token))
+            .header("Notion-Version", "2022-06-28")
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| format!("Request failed: {}", e))?;
+
+        if !res.status().is_success() {
+            let err = res.text().await.unwrap_or_default();
+            return Err(format!("Notion API Error: {}", err));
+        }
+    }
+
     Ok(())
 }
 
