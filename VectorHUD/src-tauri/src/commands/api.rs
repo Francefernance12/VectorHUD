@@ -557,7 +557,10 @@ pub async fn update_notion_page_full(
     if !children.is_empty() {
         let body = serde_json::json!({ "children": children });
         let res = client
-            .patch(format!("https://api.notion.com/v1/blocks/{}/children", page_id))
+            .patch(format!(
+                "https://api.notion.com/v1/blocks/{}/children",
+                page_id
+            ))
             .header("Authorization", format!("Bearer {}", token))
             .header("Notion-Version", "2022-06-28")
             .header("Content-Type", "application/json")

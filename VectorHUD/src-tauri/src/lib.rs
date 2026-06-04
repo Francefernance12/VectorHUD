@@ -21,6 +21,7 @@ fn set_interactive_mode(window: tauri::Window, interactive: bool, interactable_p
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 fn update_hotkeys(
     app: tauri::AppHandle,
     overlay_hotkey: String,
@@ -68,8 +69,10 @@ fn update_hotkeys(
                                             let ly = y / scale;
                                             let lw = w / scale;
                                             let lh = h / scale;
-                                            let _ = window.set_position(tauri::LogicalPosition::new(lx, ly));
-                                            let _ = window.set_size(tauri::LogicalSize::new(lw, lh));
+                                            let _ = window
+                                                .set_position(tauri::LogicalPosition::new(lx, ly));
+                                            let _ =
+                                                window.set_size(tauri::LogicalSize::new(lw, lh));
                                             let _ = window.set_decorations(false);
                                             let _ = window.set_skip_taskbar(true);
                                             let _ = window.set_focus();
