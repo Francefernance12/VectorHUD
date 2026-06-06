@@ -703,9 +703,9 @@ export function SettingsModal() {
                             await updateInfo.downloadAndInstall();
                             setUpdateMessage('Restarting app...');
                             await relaunch();
-                          } catch (err) {
+                          } catch (err: any) {
                             console.error(err);
-                            setUpdateMessage('Update failed.');
+                            setUpdateMessage(`Update failed: ${err?.message || err}`);
                             setIsDownloadingUpdate(false);
                           }
                         }}
@@ -741,9 +741,9 @@ export function SettingsModal() {
                               setUpdateMessage('You are on the latest version.');
                               setTimeout(() => setUpdateMessage(''), 3000);
                             }
-                          } catch (err) {
-                            console.error(err);
-                            setUpdateMessage('Failed to check for updates.');
+                          } catch (error: any) {
+                            console.error(`Update check failed: ${error}`);
+                            setUpdateMessage(`Error: ${error?.message || error}`);
                           } finally {
                             setIsCheckingUpdate(false);
                           }

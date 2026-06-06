@@ -41,7 +41,29 @@ npm run tauri build
 ```
 *Note: Building requires configuring your `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` in your environment variables if the updater is enabled.*
 
-## 📦 Release Workflow
+## 📦 Auto-Updater & Release Dataflow
 
-VectorHUD utilizes a manual GitHub Release system combined with a `latest.json` endpoint to deliver updates to users via Tauri's `@tauri-apps/plugin-updater`.
-When creating a new release, make sure to bump the version in `tauri.conf.json` and `package.json`, build the project, and upload the resulting `.msi` and `.sig` along with an updated `latest.json` to the GitHub release.
+VectorHUD utilizes a fully functional, secure auto-update pipeline built on Tauri's `@tauri-apps/plugin-updater`. 
+
+### How The Update Pipeline Works
+1. **The Check**: When the user clicks "Download & Install" in the Settings menu, VectorHUD pings the GitHub Releases endpoint: `https://github.com/Francefernance12/VectorHUD/releases/latest/download/latest.json`.
+2. **Version Comparison**: The updater compares the `"version"` field in `latest.json` against the currently installed app version (from `tauri.conf.json`). If `latest.json` is higher, an update is triggered.
+3. **Signature Verification**: VectorHUD securely verifies the update file using Ed25519 signatures. The app checks the downloaded executable against the signature provided inside `latest.json`, using the **Public Key** embedded in `tauri.conf.json`.
+4. **Execution**: If the signature perfectly matches, the app downloads the `.exe` and automatically spawns the Windows installer wizard to upgrade the user's installation seamlessly.
+
+### Creating a New Release
+When creating a new version of VectorHUD, you must follow these precise steps to satisfy the secure signature checks:
+
+1. **Bump Versions**: Update `"version"` in both `tauri.conf.json` and `package.json` to your new version (e.g., `1.0.1`).
+2. **Set Private Key Environment Variables**: Before building, you must expose your secret key to Tauri:
+   ```powershell
+   $env:TAURI_SIGNING_PRIVATE_KEY = Get-Content -Raw -Path "updater.key"
+   $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
+   ```
+3. **Build the Release**: Run `npm run tauri build`. Tauri will compile the `.exe` and automatically generate a `.sig` file using your private key.
+4. **Update `latest.json`**:
+   - Open `versions/<version>/latest.json`.
+   - Update the `"version"` field to the new version.
+   - Update the `"url"` to point to the new `.exe` name in your next GitHub Release.
+   - **Crucial**: Copy the exact signature text from your newly generated `.sig` file and paste it into the `"signature"` field in `latest.json`.
+5. **Publish to GitHub**: Create a new GitHub Release matching your new version tag. Upload **both** the new `.exe` installer and your updated `latest.json` file.
