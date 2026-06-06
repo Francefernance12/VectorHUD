@@ -1,0 +1,11 @@
+{
+  "version": "1.0.0",
+  "notes": "Initial release",
+  "pub_date": "2024-06-06T20:40:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRYUhHbWNRTzR0dkF2dzNicm5HenNUSTdNV0ZnNFdJb3E3bWRiUElYWWZwdzhKRXBhWmRpVlpEeEpLVU9QT1Joc25velpBZG4zL2tEWUx0RWJERVMwZUhxYTZRQWY4TVEwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgwNzc4MzYwCWZpbGU6dmVjdG9yaHVkXzEuMC4wX3g2NC1zZXR1cC5leGUKcXlaU3hjemp4UXlydk5aY2ZxajlWeXZsQ1Q3VitLMU40Tmc5Um9lYVJ3enVVeElDRTh2RFhmN0grNXhua2V6aHhqK3dOZzVncWg3Y2hZYXRQMmYrQmc9PQo=",
+      "url": "https://github.com/Francefernance12/VectorHUD/releases/download/1.0.0/vectorhud_1.0.0_x64-setup.exe"
+    }
+  }
+}

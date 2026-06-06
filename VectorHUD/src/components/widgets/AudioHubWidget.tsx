@@ -95,6 +95,24 @@ export function AudioHubWidget() {
     }
   };
 
+  const handleMasterMuteToggle = async () => {
+    try {
+      await invoke('toggle_master_mute');
+      fetchAudioState();
+    } catch (err) {
+      logger.error(`Failed to toggle master mute: ${err}`);
+    }
+  };
+
+  const handleAppMuteToggle = async (pid: number) => {
+    try {
+      await invoke('toggle_app_mute', { pid });
+      fetchAudioState();
+    } catch (err) {
+      logger.error(`Failed to toggle app mute: ${err}`);
+    }
+  };
+
   const handlePlayPause = async () => {
     try {
       await invoke('media_play_pause');
@@ -153,11 +171,13 @@ export function AudioHubWidget() {
           <span>{audioState ? Math.round(audioState.master_volume * 100) : 0}%</span>
         </div>
         <div className="flex items-center gap-3">
-          {audioState?.master_muted || (audioState && audioState.master_volume === 0) ? (
-            <VolumeX size={16} className="text-red-400" />
-          ) : (
-            <Volume2 size={16} className="text-accent-green" />
-          )}
+          <button onClick={handleMasterMuteToggle} className="transition-colors hover:opacity-80">
+            {audioState?.master_muted || (audioState && audioState.master_volume === 0) ? (
+              <VolumeX size={16} className="text-red-400" />
+            ) : (
+              <Volume2 size={16} className="text-accent-green" />
+            )}
+          </button>
           <input 
             type="range" 
             min="0" 
@@ -202,7 +222,13 @@ export function AudioHubWidget() {
               <span>{Math.round(session.volume * 100)}%</span>
             </div>
             <div className="flex items-center gap-3">
-              <Volume2 size={14} className="text-zinc-500" />
+              <button onClick={() => handleAppMuteToggle(session.process_id)} className="transition-colors hover:opacity-80">
+                {session.muted || session.volume === 0 ? (
+                  <VolumeX size={14} className="text-red-400" />
+                ) : (
+                  <Volume2 size={14} className="text-zinc-500" />
+                )}
+              </button>
               <input 
                 type="range" 
                 min="0" 

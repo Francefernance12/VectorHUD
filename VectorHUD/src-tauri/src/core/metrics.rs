@@ -233,6 +233,14 @@ impl FpsMonitor {
                 present_mon_path.push("PresentMon64.exe");
             }
 
+            // Cleanup any existing PresentMon zombie processes before launching
+            let _ = Command::new("taskkill")
+                .args(["/F", "/IM", "PresentMon64.exe"])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                .status();
+
             // Launch PresentMon hidden
             let mut child = match Command::new(&present_mon_path)
                 .args([

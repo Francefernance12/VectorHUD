@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Tauri Updater Keys
+updater.key
+updater.key.pub
+test.txt

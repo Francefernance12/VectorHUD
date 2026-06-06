@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { check } from '@tauri-apps/plugin-updater';
 import { AnimatePresence, motion } from "framer-motion";
 import { logger } from "./utils/logger";
 import { getDb } from "./utils/db";
@@ -65,6 +66,17 @@ function App() {
 
         // Hydrate settings
         await useSettingsStore.getState().loadPreferences();
+
+        // Silent Update Check
+        try {
+          const update = await check();
+          if (update?.available) {
+            logger.info(`Update to ${update.version} available!`);
+            useToastStore.getState().showToast(`Update v${update.version} available! Open Settings to install.`);
+          }
+        } catch (e) {
+          logger.error(`Silent update check failed: ${e}`);
+        }
       } catch (err) {
         logger.error(`Persistence verification failed: ${err}`);
       }
@@ -169,7 +181,7 @@ function App() {
             try {
               const micEnabled = useSettingsStore.getState().recordMicrophone;
               const audioEnabled = useSettingsStore.getState().recordSystemAudio;
-              await invoke<string>('start_video_recording', { micEnabled, audioEnabled });
+              await invoke<string>('start_video_recording', { mic_enabled: micEnabled, audio_enabled: audioEnabled });
               useRecordingStore.getState().setRecording(true);
               showToast("🔴 Recording Started");
             } catch (err) {
@@ -196,7 +208,7 @@ function App() {
             try {
               const micEnabled = useSettingsStore.getState().recordMicrophone;
               const audioEnabled = useSettingsStore.getState().recordSystemAudio;
-              await invoke('start_replay_buffer', { micEnabled, audioEnabled });
+              await invoke('start_replay_buffer', { mic_enabled: micEnabled, audio_enabled: audioEnabled });
               useRecordingStore.getState().setReplayActive(true);
               showToast("⏪ Replay Buffer Started");
             } catch (err) {

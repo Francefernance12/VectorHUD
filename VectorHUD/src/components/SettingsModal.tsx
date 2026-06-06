@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Key, Zap, Palette, Save, Settings, Edit3 } from 'lucide-react';
+import { X, Key, Zap, Palette, Save, Settings, Edit3, Download, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { check } from '@tauri-apps/plugin-updater';
+import { relaunch } from '@tauri-apps/plugin-process';
+import { getVersion } from '@tauri-apps/api/app';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { useSettingsStore } from '../store/settingsStore';
 import { useShallow } from 'zustand/react/shallow';
 import { invoke } from '@tauri-apps/api/core';
@@ -71,17 +75,67 @@ export function SettingsModal() {
     }))
   );
 
-  const [activeTab, setActiveTab] = useState<'integrations' | 'preferences' | 'hotkeys'>('integrations');
+  const [activeTab, setActiveTab] = useState<'integrations' | 'preferences' | 'hotkeys' | 'updates'>('integrations');
   const [openRouterKey, setOpenRouterKey] = useState('');
   const [notionKey, setNotionKey] = useState('');
   const [notionDbId, setNotionDbId] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
   const [hotkeyError, setHotkeyError] = useState('');
+  
+  // Updater state
+  const [currentVersion, setCurrentVersion] = useState<string>('0.0.0');
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState<any>(null);
+  const [isDownloadingUpdate, setIsDownloadingUpdate] = useState(false);
+  const [updateMessage, setUpdateMessage] = useState('');
+
+  // Initial states for dirty checking
+  const [initialOpenRouterKey, setInitialOpenRouterKey] = useState('');
+  const [initialNotionKey, setInitialNotionKey] = useState('');
+  const [initialNotionDbId, setInitialNotionDbId] = useState('');
+
+  const [localHotkeys, setLocalHotkeys] = useState({
+    overlay: overlayHotkey,
+    screenshot: screenshotHotkey,
+    record: recordHotkey,
+    replay: replayHotkey,
+    timer: timerHotkey,
+    stopwatch: stopwatchHotkey,
+    timerReset: timerResetHotkey
+  });
+
+  const [localPreferences, setLocalPreferences] = useState({
+    openRouterModel,
+    globalFontSize,
+    theme,
+    customColor,
+    recordMicrophone,
+    recordSystemAudio
+  });
 
   // Load credentials on mount
   useEffect(() => {
     if (!isSettingsOpen) return;
+    
+    setLocalHotkeys({
+      overlay: overlayHotkey,
+      screenshot: screenshotHotkey,
+      record: recordHotkey,
+      replay: replayHotkey,
+      timer: timerHotkey,
+      stopwatch: stopwatchHotkey,
+      timerReset: timerResetHotkey
+    });
+
+    setLocalPreferences({
+      openRouterModel,
+      globalFontSize,
+      theme,
+      customColor,
+      recordMicrophone,
+      recordSystemAudio
+    });
     
     async function loadCredentials() {
       try {
@@ -94,6 +148,7 @@ export function SettingsModal() {
         if (orResult.length > 0) {
           const decrypted = await invoke<string>('decrypt_data', { encoded: orResult[0].encrypted_value });
           setOpenRouterKey(decrypted);
+          setInitialOpenRouterKey(decrypted);
         }
 
         // Load Notion Secret
@@ -103,6 +158,7 @@ export function SettingsModal() {
         if (notionResult.length > 0) {
           const decrypted = await invoke<string>('decrypt_data', { encoded: notionResult[0].encrypted_value });
           setNotionKey(decrypted);
+          setInitialNotionKey(decrypted);
         }
 
         // Load Notion DB ID
@@ -112,12 +168,26 @@ export function SettingsModal() {
         if (dbIdResult.length > 0) {
           const decrypted = await invoke<string>('decrypt_data', { encoded: dbIdResult[0].encrypted_value });
           setNotionDbId(decrypted);
+          setInitialNotionDbId(decrypted);
         }
       } catch (e) {
         console.error("Failed to load credentials:", e);
       }
     }
-    loadCredentials();
+    
+    async function loadVersion() {
+      try {
+        const ver = await getVersion();
+        setCurrentVersion(ver);
+      } catch(e) {
+        console.error("Failed to get version:", e);
+      }
+    }
+
+    if (isSettingsOpen) {
+      loadCredentials();
+      loadVersion();
+    }
   }, [isSettingsOpen]);
 
   const handleSave = async () => {
@@ -151,11 +221,33 @@ export function SettingsModal() {
         );
       }
 
+      // Save Preferences
+      await setOpenRouterModel(localPreferences.openRouterModel);
+      await setGlobalFontSize(localPreferences.globalFontSize);
+      await setTheme(localPreferences.theme);
+      await setCustomColor(localPreferences.customColor);
+      await setRecordMicrophone(localPreferences.recordMicrophone);
+      await setRecordSystemAudio(localPreferences.recordSystemAudio);
+
       // Sync Hotkeys
       try {
+        await setOverlayHotkey(localHotkeys.overlay);
+        await setScreenshotHotkey(localHotkeys.screenshot);
+        await setRecordHotkey(localHotkeys.record);
+        await setReplayHotkey(localHotkeys.replay);
+        await setTimerHotkey(localHotkeys.timer);
+        await setStopwatchHotkey(localHotkeys.stopwatch);
+        await setTimerResetHotkey(localHotkeys.timerReset);
+
         await syncHotkeys();
         setSaveMessage('Saved successfully!');
         setHotkeyError('');
+        
+        // Update initial states to clear dirty flag
+        setInitialOpenRouterKey(openRouterKey);
+        setInitialNotionKey(notionKey);
+        setInitialNotionDbId(notionDbId);
+        
         setTimeout(() => setSaveMessage(''), 2000);
       } catch (hotkeyErr) {
         console.error("Hotkey sync failed:", hotkeyErr);
@@ -172,6 +264,74 @@ export function SettingsModal() {
     }
   };
 
+  const [showConfirmClose, setShowConfirmClose] = useState(false);
+
+  const checkIsDirty = () => {
+    return (
+      openRouterKey !== initialOpenRouterKey ||
+      notionKey !== initialNotionKey ||
+      notionDbId !== initialNotionDbId ||
+      localHotkeys.overlay !== overlayHotkey ||
+      localHotkeys.screenshot !== screenshotHotkey ||
+      localHotkeys.record !== recordHotkey ||
+      localHotkeys.replay !== replayHotkey ||
+      localHotkeys.timer !== timerHotkey ||
+      localHotkeys.stopwatch !== stopwatchHotkey ||
+      localHotkeys.timerReset !== timerResetHotkey ||
+      localPreferences.openRouterModel !== openRouterModel ||
+      String(localPreferences.globalFontSize) !== String(globalFontSize) ||
+      localPreferences.theme !== theme ||
+      localPreferences.customColor !== customColor ||
+      localPreferences.recordMicrophone !== recordMicrophone ||
+      localPreferences.recordSystemAudio !== recordSystemAudio
+    );
+  };
+
+  const handleClose = () => {
+    if (checkIsDirty()) {
+      setShowConfirmClose(true);
+      return;
+    }
+    
+    // No changes, just close
+    toggleSettings();
+  };
+
+  const handleConfirmDiscard = () => {
+    // Reset to initial states to discard changes
+    setOpenRouterKey(initialOpenRouterKey);
+    setNotionKey(initialNotionKey);
+    setNotionDbId(initialNotionDbId);
+    setLocalHotkeys({
+      overlay: overlayHotkey,
+      screenshot: screenshotHotkey,
+      record: recordHotkey,
+      replay: replayHotkey,
+      timer: timerHotkey,
+      stopwatch: stopwatchHotkey,
+      timerReset: timerResetHotkey
+    });
+    setLocalPreferences({
+      openRouterModel,
+      globalFontSize,
+      theme,
+      customColor,
+      recordMicrophone,
+      recordSystemAudio
+    });
+    
+    setShowConfirmClose(false);
+    toggleSettings();
+  };
+
+  // Allow clicking background to close modal
+  const handleBackgroundClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (e.target === e.currentTarget) {
+      handleClose();
+    }
+  };
+
   if (!isSettingsOpen) return null;
 
   return (
@@ -181,15 +341,16 @@ export function SettingsModal() {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-        className={`absolute inset-0 flex items-center justify-center z-[100] pointer-events-none bg-surface/50`}
+        className={`absolute inset-0 flex items-center justify-center z-[100] bg-surface/50 pointer-events-auto`}
+        onClick={handleBackgroundClick}
       >
-        <div className="w-[600px] h-[500px] bg-[#0F0F0F]/95 backdrop-blur-xl border border-border-wire rounded-2xl shadow-2xl overflow-hidden flex flex-col pointer-events-auto">
+        <div className="w-[600px] h-[500px] bg-[#0F0F0F]/95 backdrop-blur-xl border border-border-wire rounded-2xl shadow-2xl overflow-hidden flex flex-col pointer-events-auto" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border-wire/50 bg-black/20">
           <h2 className="text-lg font-bold text-white tracking-widest uppercase flex items-center gap-2">
             <Settings size={20} className="text-primary" /> System Settings
           </h2>
-          <button onClick={toggleSettings} className="p-1 rounded-md hover:bg-white/10 text-zinc-400 hover:text-white transition-colors">
+          <button onClick={handleClose} className="p-1 rounded-md hover:bg-white/10 text-zinc-400 hover:text-white transition-colors">
             <X size={20} />
           </button>
         </div>
@@ -220,6 +381,15 @@ export function SettingsModal() {
               }`}
             >
               <Zap size={16} /> Hotkeys
+            </button>
+            <div className="flex-1"></div>
+            <button
+              onClick={() => setActiveTab('updates')}
+              className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors mt-auto ${
+                activeTab === 'updates' ? 'bg-primary/20 text-primary' : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
+              }`}
+            >
+              <Download size={16} /> About / Updates
             </button>
           </div>
 
@@ -255,8 +425,8 @@ export function SettingsModal() {
                   <div className="space-y-1">
                     <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Vision Model</label>
                     <select
-                      value={openRouterModel}
-                      onChange={(e) => setOpenRouterModel(e.target.value)}
+                      value={localPreferences.openRouterModel}
+                      onChange={(e) => setLocalPreferences(s => ({ ...s, openRouterModel: e.target.value }))}
                       className="w-full bg-zinc-800 border border-zinc-600 rounded-lg px-4 py-2 text-sm text-zinc-100 focus:outline-none focus:border-primary transition-colors appearance-none"
                     >
                       <option value="openai/gpt-5.5">GPT-5.5 [Vision] (Recommended)</option>
@@ -325,15 +495,15 @@ export function SettingsModal() {
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
                     <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Global Font Size</label>
-                    <span className="text-xs text-primary font-mono">{globalFontSize}px</span>
+                    <span className="text-xs text-primary font-mono">{localPreferences.globalFontSize}px</span>
                   </div>
                   <input 
                     type="range" 
                     min="10" 
                     max="24" 
                     step="1"
-                    value={globalFontSize}
-                    onChange={(e) => setGlobalFontSize(parseInt(e.target.value))}
+                    value={localPreferences.globalFontSize}
+                    onChange={(e) => setLocalPreferences(s => ({ ...s, globalFontSize: parseInt(e.target.value) }))}
                     className="w-full accent-primary"
                   />
                 </div>
@@ -341,8 +511,8 @@ export function SettingsModal() {
                 <div className="space-y-2">
                   <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">HUD Theme</label>
                   <select
-                    value={theme}
-                    onChange={(e) => setTheme(e.target.value)}
+                    value={localPreferences.theme}
+                    onChange={(e) => setLocalPreferences(s => ({ ...s, theme: e.target.value }))}
                     className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2 text-sm text-zinc-100 focus:outline-none focus:border-primary transition-colors appearance-none"
                   >
                     <option value="default">Default</option>
@@ -354,20 +524,20 @@ export function SettingsModal() {
                   </select>
                 </div>
 
-                {theme === 'custom' && (
+                {localPreferences.theme === 'custom' && (
                   <div className="space-y-2">
                     <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Custom Hex Color</label>
                     <div className="flex gap-2 items-center">
                       <input 
                         type="color" 
-                        defaultValue={customColor}
-                        onBlur={(e) => setCustomColor(e.target.value)}
+                        value={localPreferences.customColor}
+                        onChange={(e) => setLocalPreferences(s => ({ ...s, customColor: e.target.value }))}
                         className="w-10 h-10 rounded bg-transparent border-none cursor-pointer"
                       />
                       <input 
                         type="text" 
-                        defaultValue={customColor}
-                        onBlur={(e) => setCustomColor(e.target.value)}
+                        value={localPreferences.customColor}
+                        onChange={(e) => setLocalPreferences(s => ({ ...s, customColor: e.target.value }))}
                         className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2 text-sm text-zinc-100 focus:outline-none"
                       />
                     </div>
@@ -387,8 +557,8 @@ export function SettingsModal() {
                     <input 
                       type="checkbox" 
                       className="sr-only peer" 
-                      checked={recordSystemAudio}
-                      onChange={(e) => setRecordSystemAudio(e.target.checked)}
+                      checked={localPreferences.recordSystemAudio}
+                      onChange={(e) => setLocalPreferences(s => ({ ...s, recordSystemAudio: e.target.checked }))}
                     />
                     <div className="w-11 h-6 bg-zinc-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent-green"></div>
                   </label>
@@ -403,8 +573,8 @@ export function SettingsModal() {
                     <input 
                       type="checkbox" 
                       className="sr-only peer" 
-                      checked={recordMicrophone}
-                      onChange={(e) => setRecordMicrophone(e.target.checked)}
+                      checked={localPreferences.recordMicrophone}
+                      onChange={(e) => setLocalPreferences(s => ({ ...s, recordMicrophone: e.target.checked }))}
                     />
                     <div className="w-11 h-6 bg-zinc-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent-green"></div>
                   </label>
@@ -414,17 +584,22 @@ export function SettingsModal() {
 
             {activeTab === 'hotkeys' && (
               <div className="space-y-6">
-                <h3 className="text-md font-semibold text-white flex items-center gap-2 border-b border-white/10 pb-2">
-                  <Zap size={16} className="text-amber-400" /> Global Hotkeys
-                </h3>
+                <div className="space-y-2">
+                  <h3 className="text-md font-semibold text-white border-b border-white/10 pb-2 flex items-center gap-2">
+                    <Zap size={16} className="text-amber-400" /> Global Hotkeys
+                  </h3>
+                  <p className="text-xs text-zinc-400 mb-4">
+                    Set system-wide hotkeys. Use combinations like <code>CommandOrControl+Shift+X</code>.
+                  </p>
+                </div>
                 
-                <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Main Overlay Toggle</label>
                     <input 
                       type="text"
-                      value={overlayHotkey}
-                      onChange={(e) => setOverlayHotkey(e.target.value)}
+                      value={localHotkeys.overlay}
+                      onChange={(e) => setLocalHotkeys(s => ({ ...s, overlay: e.target.value }))}
                       placeholder="ctrl+alt+o"
                       className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-primary transition-colors uppercase"
                     />
@@ -434,8 +609,8 @@ export function SettingsModal() {
                     <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Capture Screenshot</label>
                     <input 
                       type="text"
-                      value={screenshotHotkey}
-                      onChange={(e) => setScreenshotHotkey(e.target.value)}
+                      value={localHotkeys.screenshot}
+                      onChange={(e) => setLocalHotkeys(s => ({ ...s, screenshot: e.target.value }))}
                       placeholder="ctrl+alt+s"
                       className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-primary transition-colors uppercase"
                     />
@@ -445,50 +620,50 @@ export function SettingsModal() {
                     <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Toggle Recording</label>
                     <input 
                       type="text"
-                      value={recordHotkey}
-                      onChange={(e) => setRecordHotkey(e.target.value)}
+                      value={localHotkeys.record}
+                      onChange={(e) => setLocalHotkeys(s => ({ ...s, record: e.target.value }))}
                       placeholder="ctrl+alt+r"
                       className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-primary transition-colors uppercase"
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-zinc-400 mb-2 tracking-wider">Save Replay Buffer</label>
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Save Replay Buffer</label>
                     <input 
                       type="text"
-                      value={replayHotkey}
-                      onChange={(e) => setReplayHotkey(e.target.value)}
+                      value={localHotkeys.replay}
+                      onChange={(e) => setLocalHotkeys(s => ({ ...s, replay: e.target.value }))}
                       placeholder="ctrl+alt+b"
                       className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-primary transition-colors uppercase"
                     />
                   </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-zinc-400 mb-2 tracking-wider">Toggle Timer</label>
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Toggle Timer</label>
                     <input 
                       type="text"
-                      value={timerHotkey}
-                      onChange={(e) => setTimerHotkey(e.target.value)}
+                      value={localHotkeys.timer}
+                      onChange={(e) => setLocalHotkeys(s => ({ ...s, timer: e.target.value }))}
                       placeholder="ctrl+alt+t"
                       className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-primary transition-colors uppercase"
                     />
                   </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-zinc-400 mb-2 tracking-wider">Toggle Stopwatch</label>
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Reset Timers</label>
                     <input 
                       type="text"
-                      value={stopwatchHotkey}
-                      onChange={(e) => setStopwatchHotkey(e.target.value)}
-                      placeholder="ctrl+alt+w"
+                      value={localHotkeys.timerReset}
+                      onChange={(e) => setLocalHotkeys(s => ({ ...s, timerReset: e.target.value }))}
+                      placeholder="ctrl+alt+y"
                       className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-primary transition-colors uppercase"
                     />
                   </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-zinc-400 mb-2 tracking-wider">Reset Timers</label>
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Toggle Stopwatch</label>
                     <input 
                       type="text"
-                      value={timerResetHotkey}
-                      onChange={(e) => setTimerResetHotkey(e.target.value)}
-                      placeholder="ctrl+alt+y"
+                      value={localHotkeys.stopwatch}
+                      onChange={(e) => setLocalHotkeys(s => ({ ...s, stopwatch: e.target.value }))}
+                      placeholder="ctrl+alt+w"
                       className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-primary transition-colors uppercase"
                     />
                   </div>
@@ -496,6 +671,98 @@ export function SettingsModal() {
                 <p className="text-xs text-zinc-500 italic mt-4">
                   Note: Updating hotkeys requires an application restart to take effect. Supported modifiers: ctrl, alt, shift, super.
                 </p>
+              </div>
+            )}
+
+            {activeTab === 'updates' && (
+              <div className="space-y-6 flex flex-col h-full">
+                <div className="flex flex-col items-center justify-center py-6 text-center">
+                  <div className="w-16 h-16 bg-gradient-to-tr from-primary to-blue-500 rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-primary/20">
+                    <span className="text-3xl font-black text-white italic">V</span>
+                  </div>
+                  <h3 className="text-xl font-bold text-white tracking-wide">VectorHUD</h3>
+                  <p className="text-sm text-zinc-400 mt-1">Version {currentVersion}</p>
+                </div>
+
+                <div className="bg-black/20 border border-white/5 rounded-xl p-5 flex flex-col items-center justify-center gap-4 text-center">
+                  {updateInfo ? (
+                    <>
+                      <div className="flex items-center gap-3 text-green-400 font-semibold">
+                        <Download size={20} />
+                        New Update Available!
+                      </div>
+                      <p className="text-zinc-300 text-sm">
+                        Version <strong className="text-white">{updateInfo.version}</strong> is ready to download.
+                      </p>
+                      
+                      <button
+                        onClick={async () => {
+                          try {
+                            setIsDownloadingUpdate(true);
+                            setUpdateMessage('Downloading and installing...');
+                            await updateInfo.downloadAndInstall();
+                            setUpdateMessage('Restarting app...');
+                            await relaunch();
+                          } catch (err) {
+                            console.error(err);
+                            setUpdateMessage('Update failed.');
+                            setIsDownloadingUpdate(false);
+                          }
+                        }}
+                        disabled={isDownloadingUpdate}
+                        className="px-6 py-2.5 bg-primary text-white font-semibold rounded-lg hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 flex items-center gap-2 mt-2"
+                      >
+                        {isDownloadingUpdate ? (
+                          <><RefreshCw size={16} className="animate-spin" /> Installing...</>
+                        ) : (
+                          <><Download size={16} /> Download & Install</>
+                        )}
+                      </button>
+                      {updateMessage && <p className="text-xs text-zinc-400 mt-2">{updateMessage}</p>}
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-center w-12 h-12 bg-white/5 rounded-full mb-2">
+                        <CheckCircle2 size={24} className="text-zinc-400" />
+                      </div>
+                      <p className="text-zinc-300 font-medium">You're up to date.</p>
+                      <p className="text-xs text-zinc-500">VectorHUD checks for updates automatically.</p>
+                      
+                      <button
+                        onClick={async () => {
+                          try {
+                            setIsCheckingUpdate(true);
+                            setUpdateMessage('Checking...');
+                            const update = await check();
+                            if (update?.available) {
+                              setUpdateInfo(update);
+                              setUpdateMessage('');
+                            } else {
+                              setUpdateMessage('You are on the latest version.');
+                              setTimeout(() => setUpdateMessage(''), 3000);
+                            }
+                          } catch (err) {
+                            console.error(err);
+                            setUpdateMessage('Failed to check for updates.');
+                          } finally {
+                            setIsCheckingUpdate(false);
+                          }
+                        }}
+                        disabled={isCheckingUpdate}
+                        className="mt-2 px-5 py-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+                      >
+                        <RefreshCw size={14} className={isCheckingUpdate ? 'animate-spin' : ''} />
+                        {isCheckingUpdate ? 'Checking...' : 'Check for Updates'}
+                      </button>
+                      {updateMessage && <p className="text-xs text-zinc-400 mt-2">{updateMessage}</p>}
+                    </>
+                  )}
+                </div>
+
+                <div className="mt-auto pt-4 flex justify-between items-center text-xs text-zinc-500 border-t border-white/5">
+                  <p>Built with ❤️ by Fernando</p>
+                  <button onClick={() => openUrl("https://github.com/Francefernance12/VectorHUD")} className="hover:text-white transition-colors cursor-pointer">View on GitHub</button>
+                </div>
               </div>
             )}
           </div>
@@ -529,6 +796,43 @@ export function SettingsModal() {
         </div>
         </div>
       </motion.div>
+
+      {/* Unsaved Changes Confirm Dialog */}
+      <AnimatePresence>
+        {showConfirmClose && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="absolute inset-0 flex items-center justify-center z-[200] bg-black/60 pointer-events-auto"
+            onClick={(e) => { e.stopPropagation(); setShowConfirmClose(false); }}
+          >
+            <div 
+              className="bg-zinc-900 border border-border-wire rounded-xl shadow-2xl p-6 max-w-sm w-full mx-4"
+              onClick={e => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-bold text-white mb-2">Unsaved Changes</h3>
+              <p className="text-zinc-400 text-sm mb-6">
+                You have unsaved changes. Are you sure you want to discard them?
+              </p>
+              <div className="flex justify-end gap-3">
+                <button 
+                  onClick={() => setShowConfirmClose(false)}
+                  className="px-4 py-2 text-sm font-medium text-zinc-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleConfirmDiscard}
+                  className="px-4 py-2 text-sm font-medium bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 rounded-lg transition-colors"
+                >
+                  Discard Changes
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </AnimatePresence>
   );
 }
