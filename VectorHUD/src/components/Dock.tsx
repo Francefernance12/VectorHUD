@@ -25,7 +25,10 @@ export function Dock() {
       transition={{ duration: 0.2 }}
       className="fixed top-6 inset-x-0 flex justify-center pointer-events-none z-[60]"
     >
-      <div className="pointer-events-auto flex items-center p-3 rounded-2xl bg-black border border-accent-green/30 shadow-[0_0_30px_rgba(var(--accent-green-rgb,0,255,0),0.25)] gap-4 flex-wrap max-w-full justify-center transition-all duration-500">
+      <div 
+        className="pointer-events-auto flex items-center p-3 rounded-2xl bg-black border border-accent-green/30 gap-4 flex-wrap max-w-full justify-center transition-all duration-500"
+        style={{ boxShadow: '0 0 30px rgba(var(--accent-green-rgb), 0.25)' }}
+      >
         {WIDGETS.map((widget) => {
           const Icon = iconMap[widget.iconName];
           const isActive = !!activeWidgets[widget.id];

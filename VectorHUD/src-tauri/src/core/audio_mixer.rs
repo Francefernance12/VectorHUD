@@ -156,3 +156,67 @@ pub async fn set_master_volume(volume: f32) -> Result<(), String> {
         Ok(())
     }
 }
+
+#[command]
+pub async fn toggle_master_mute() -> Result<(), String> {
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        let enumerator: IMMDeviceEnumerator =
+            CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).map_err(|e| e.to_string())?;
+        let device: IMMDevice = enumerator
+            .GetDefaultAudioEndpoint(eRender, eConsole)
+            .map_err(|e| e.to_string())?;
+        let endpoint_volume: IAudioEndpointVolume = device
+            .Activate(CLSCTX_ALL, None)
+            .map_err(|e| e.to_string())?;
+
+        let current_mute = endpoint_volume.GetMute().map_err(|e| e.to_string())?;
+        let new_mute = if current_mute == BOOL::from(true) {
+            BOOL::from(false)
+        } else {
+            BOOL::from(true)
+        };
+        endpoint_volume
+            .SetMute(new_mute, std::ptr::null())
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+}
+
+#[command]
+pub async fn toggle_app_mute(pid: u32) -> Result<(), String> {
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        toggle_app_mute_impl(pid).map_err(|e| e.to_string())
+    }
+}
+
+unsafe fn toggle_app_mute_impl(target_pid: u32) -> WinResult<()> {
+    let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
+    let device: IMMDevice = enumerator.GetDefaultAudioEndpoint(eRender, eConsole)?;
+    let session_manager: IAudioSessionManager2 = device.Activate(CLSCTX_ALL, None)?;
+    let session_enumerator: IAudioSessionEnumerator = session_manager.GetSessionEnumerator()?;
+
+    let count = session_enumerator.GetCount()?;
+
+    for i in 0..count {
+        if let Ok(session) = session_enumerator.GetSession(i) {
+            if let Ok(session2) = session.cast::<IAudioSessionControl2>() {
+                if let Ok(pid) = session2.GetProcessId() {
+                    if pid == target_pid {
+                        let simple_volume: ISimpleAudioVolume = session.cast()?;
+                        let current_mute = simple_volume.GetMute().unwrap_or(BOOL::from(false));
+                        let new_mute = if current_mute == BOOL::from(true) {
+                            BOOL::from(false)
+                        } else {
+                            BOOL::from(true)
+                        };
+                        simple_volume.SetMute(new_mute, std::ptr::null())?;
+                        return Ok(());
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}

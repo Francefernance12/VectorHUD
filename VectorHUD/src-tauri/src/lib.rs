@@ -263,6 +263,8 @@ pub fn run() {
         })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations(
@@ -403,6 +405,8 @@ pub fn run() {
             core::audio_mixer::get_audio_mixer_state,
             core::audio_mixer::set_app_volume,
             core::audio_mixer::set_master_volume,
+            core::audio_mixer::toggle_master_mute,
+            core::audio_mixer::toggle_app_mute,
             core::media_control::get_current_media,
             core::media_control::media_play_pause,
             core::media_control::media_next,
@@ -414,6 +418,18 @@ pub fn run() {
             if let RunEvent::Exit = event {
                 tracing::info!("Application exit requested — signaling background threads to stop");
                 shutdown_flag_for_exit.store(true, Ordering::Relaxed);
+
+                // Cleanup PresentMon to prevent zombie processes locking the file during updates
+                #[cfg(target_os = "windows")]
+                {
+                    use std::os::windows::process::CommandExt;
+                    let _ = std::process::Command::new("taskkill")
+                        .args(["/F", "/IM", "PresentMon64.exe"])
+                        .stdout(std::process::Stdio::null())
+                        .stderr(std::process::Stdio::null())
+                        .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                        .status();
+                }
             }
         });
 }

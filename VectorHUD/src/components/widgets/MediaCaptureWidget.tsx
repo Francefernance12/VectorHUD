@@ -163,7 +163,7 @@ export function MediaCaptureWidget() {
       try {
         const micEnabled = useSettingsStore.getState().recordMicrophone;
         const audioEnabled = useSettingsStore.getState().recordSystemAudio;
-        const path = await invoke<string>('start_video_recording', { micEnabled, audioEnabled });
+        const path = await invoke<string>('start_video_recording', { mic_enabled: micEnabled, audio_enabled: audioEnabled });
         logger.info(`Video recording started: ${path}`);
         setRecording(true);
       } catch (err) {
@@ -185,7 +185,7 @@ export function MediaCaptureWidget() {
       try {
         const micEnabled = useSettingsStore.getState().recordMicrophone;
         const audioEnabled = useSettingsStore.getState().recordSystemAudio;
-        await invoke('start_replay_buffer', { micEnabled, audioEnabled });
+        await invoke('start_replay_buffer', { mic_enabled: micEnabled, audio_enabled: audioEnabled });
         logger.info('Replay buffer started');
         setReplayActive(true);
       } catch (err) {
