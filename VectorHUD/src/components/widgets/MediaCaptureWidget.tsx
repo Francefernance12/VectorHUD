@@ -9,6 +9,7 @@ import { CaptureHistory } from '../../types';
 import { useToastStore } from '../../store/toastStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useRecordingStore } from '../../store/recordingStore';
+import { useShellStore } from '../../store/shellStore';
 
 export function MediaCaptureWidget() {
   const [captures, setCaptures] = useState<CaptureHistory[]>([]);
@@ -94,7 +95,9 @@ export function MediaCaptureWidget() {
     if (isGameActive && !isReplayActive && !isRecording) {
       const micEnabled = useSettingsStore.getState().recordMicrophone;
       const audioEnabled = useSettingsStore.getState().recordSystemAudio;
-      invoke('start_replay_buffer', { micEnabled, audioEnabled })
+      const res = useSettingsStore.getState().replayResolution;
+      const fps = useSettingsStore.getState().replayFps;
+      invoke('start_replay_buffer', { micEnabled, audioEnabled, resolution: res, fps })
         .then(() => {
           logger.info('Auto-started replay buffer for game');
           setReplayActive(true);
@@ -136,8 +139,10 @@ export function MediaCaptureWidget() {
       );
 
       await fetchHistory();
+      useShellStore.getState().setInteractive(true);
     } catch (err) {
       logger.error(`Screenshot capture failed: ${err}`);
+      useShellStore.getState().setInteractive(true);
     } finally {
       setIsCapturing(false);
     }
@@ -163,7 +168,7 @@ export function MediaCaptureWidget() {
       try {
         const micEnabled = useSettingsStore.getState().recordMicrophone;
         const audioEnabled = useSettingsStore.getState().recordSystemAudio;
-        const path = await invoke<string>('start_video_recording', { mic_enabled: micEnabled, audio_enabled: audioEnabled });
+        const path = await invoke<string>('start_video_recording', { micEnabled, audioEnabled });
         logger.info(`Video recording started: ${path}`);
         setRecording(true);
       } catch (err) {
@@ -185,9 +190,15 @@ export function MediaCaptureWidget() {
       try {
         const micEnabled = useSettingsStore.getState().recordMicrophone;
         const audioEnabled = useSettingsStore.getState().recordSystemAudio;
-        await invoke('start_replay_buffer', { mic_enabled: micEnabled, audio_enabled: audioEnabled });
-        logger.info('Replay buffer started');
-        setReplayActive(true);
+        const res = useSettingsStore.getState().replayResolution;
+        const fps = useSettingsStore.getState().replayFps;
+        try {
+          await invoke('start_replay_buffer', { micEnabled, audioEnabled, resolution: res, fps });
+          logger.info('Replay buffer started');
+          setReplayActive(true);
+        } catch (err) {
+          logger.error(`Start replay buffer failed: ${err}`);
+        }
       } catch (err) {
         logger.error(`Start replay buffer failed: ${err}`);
       }

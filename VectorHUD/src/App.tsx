@@ -181,7 +181,7 @@ function App() {
             try {
               const micEnabled = useSettingsStore.getState().recordMicrophone;
               const audioEnabled = useSettingsStore.getState().recordSystemAudio;
-              await invoke<string>('start_video_recording', { mic_enabled: micEnabled, audio_enabled: audioEnabled });
+              await invoke<string>('start_video_recording', { micEnabled, audioEnabled });
               useRecordingStore.getState().setRecording(true);
               showToast("🔴 Recording Started");
             } catch (err) {
@@ -208,7 +208,9 @@ function App() {
             try {
               const micEnabled = useSettingsStore.getState().recordMicrophone;
               const audioEnabled = useSettingsStore.getState().recordSystemAudio;
-              await invoke('start_replay_buffer', { mic_enabled: micEnabled, audio_enabled: audioEnabled });
+              const res = useSettingsStore.getState().replayResolution;
+              const fps = useSettingsStore.getState().replayFps;
+              await invoke('start_replay_buffer', { micEnabled, audioEnabled, resolution: res, fps });
               useRecordingStore.getState().setReplayActive(true);
               showToast("⏪ Replay Buffer Started");
             } catch (err) {

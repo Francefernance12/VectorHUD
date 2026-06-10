@@ -8,6 +8,7 @@ use windows::Win32::Media::MediaFoundation::*;
 use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_INPROC_SERVER};
 
 pub unsafe fn setup_video_converter(
+    device_manager: &IMFDXGIDeviceManager,
     input_width: u32,
     input_height: u32,
     output_width: u32,
@@ -17,6 +18,9 @@ pub unsafe fn setup_video_converter(
     // Create converter
     let converter: IMFTransform =
         CoCreateInstance(&CLSID_VideoProcessorMFT, None, CLSCTX_INPROC_SERVER)?;
+
+    let device_manager_ptr = windows::core::Interface::as_raw(device_manager) as usize;
+    converter.ProcessMessage(MFT_MESSAGE_SET_D3D_MANAGER, device_manager_ptr)?;
 
     // Helper function to set common attributes
     fn set_common_attributes(media_type: &IMFMediaType, is_progressive: bool) -> Result<()> {
@@ -63,24 +67,31 @@ pub unsafe fn setup_video_converter(
     output_type.SetUINT32(&MF_MT_DEFAULT_STRIDE, output_width as u32)?;
     converter.SetOutputType(0, &output_type, 0)?;
 
-    // Set input media type (BGRA)
-    let input_type: IMFMediaType = MFCreateMediaType()?;
-    input_type.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video)?;
-    input_type.SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_ARGB32)?;
-    set_common_attributes(&input_type, true)?;
+    // Set input media type dynamically based on whether it is HDR
+    let input_subtype = if is_hdr {
+        &MFVideoFormat_A16B16G16R16F
+    } else {
+        &MFVideoFormat_ARGB32
+    };
 
-    // Desktop Duplication typically produces sRGB for SDR.
-    // For HDR monitors, DWM tone-maps the HDR desktop into an SDR image, but it uses
-    // the 'SDR content brightness' setting which typically results in an overly bright/washed out image.
-    // Telling the MFT that the input has a BT.709 transfer curve instead of sRGB naturally
-    // produces a slightly darker, more contrasty image which beautifully counteracts the DWM washout!
-    let nominal_range = MFNominalRange_0_255;
+    let stride = if is_hdr {
+        input_width * 8 // 8 bytes per pixel (Float16 RGBA)
+    } else {
+        input_width * 4 // 4 bytes per pixel (BGRA8)
+    };
+
     let transfer_func = if is_hdr {
-        windows::Win32::Media::MediaFoundation::MFVideoTransFunc_709
+        windows::Win32::Media::MediaFoundation::MFVideoTransFunc_10 // Linear (gamma 1.0)
     } else {
         windows::Win32::Media::MediaFoundation::MFVideoTransFunc_sRGB
     };
 
+    let input_type: IMFMediaType = MFCreateMediaType()?;
+    input_type.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video)?;
+    input_type.SetGUID(&MF_MT_SUBTYPE, input_subtype)?;
+    set_common_attributes(&input_type, true)?;
+
+    let nominal_range = MFNominalRange_0_255;
     input_type.SetUINT32(
         &MF_MT_TRANSFER_FUNCTION,
         transfer_func.0.try_into().unwrap(),
@@ -94,7 +105,7 @@ pub unsafe fn setup_video_converter(
         &MF_MT_FRAME_SIZE,
         ((input_width as u64) << 32) | (input_height as u64),
     )?;
-    input_type.SetUINT32(&MF_MT_DEFAULT_STRIDE, (input_width * 4) as u32)?;
+    input_type.SetUINT32(&MF_MT_DEFAULT_STRIDE, stride)?;
     converter.SetInputType(0, &input_type, 0)?;
 
     // Initialize the converter - only flush once at the beginning instead of each frame
@@ -130,14 +141,26 @@ pub unsafe fn convert_bgra_to_nv12(
     let duration = sample.GetSampleDuration()?;
     let time = sample.GetSampleTime()?;
 
-    // Create NV12 texture and output sample
-    let (nv12_texture, output_sample) = create_nv12_output(device, output_width, output_height)?;
+    // Query stream info to see if MFT provides samples
+    let stream_info = converter.GetOutputStreamInfo(0)?;
 
-    // Process the frame - removed unnecessary flush between frames
+    let provides_samples = (stream_info.dwFlags
+        & (MFT_OUTPUT_STREAM_PROVIDES_SAMPLES.0 as u32
+            | MFT_OUTPUT_STREAM_CAN_PROVIDE_SAMPLES.0 as u32))
+        != 0;
+
+    let (nv12_texture, output_sample) = if !provides_samples {
+        let (tex, samp) = create_nv12_output(device, output_width, output_height)?;
+        (Some(tex), Some(samp))
+    } else {
+        (None, None)
+    };
+
+    // Process the frame
     converter.ProcessInput(0, sample, 0)?;
 
     let mut output = MFT_OUTPUT_DATA_BUFFER {
-        pSample: ManuallyDrop::new(Some(output_sample)),
+        pSample: ManuallyDrop::new(output_sample),
         dwStatus: 0,
         pEvents: ManuallyDrop::new(None),
         dwStreamID: 0,
@@ -158,7 +181,9 @@ pub unsafe fn convert_bgra_to_nv12(
             drop(sample);
         }
         ManuallyDrop::drop(&mut output_slice[0].pEvents);
-        drop(nv12_texture);
+        if let Some(tex) = nv12_texture {
+            drop(tex);
+        }
 
         // Check for device removal
         device.GetDeviceRemovedReason()?;
@@ -168,9 +193,6 @@ pub unsafe fn convert_bgra_to_nv12(
     // Make sure to copy the timestamp and duration from the input sample to the output sample
     final_sample.SetSampleTime(time)?;
     final_sample.SetSampleDuration(duration)?;
-
-    // Release the texture as it's no longer needed
-    drop(nv12_texture);
 
     Ok(final_sample)
 }
@@ -210,17 +232,12 @@ unsafe fn create_nv12_output(
     // Create output sample
     let output_sample: IMFSample = MFCreateSample()?;
 
-    // Cast to IDXGISurface instead of ID3D11Resource
-    let nv12_surface: IDXGISurface = nv12_texture.cast()?;
-
-    // Create a DXGI buffer from the surface
-    let output_buffer = MFCreateDXGISurfaceBuffer(&ID3D11Texture2D::IID, &nv12_surface, 0, FALSE)?;
+    // Create a DXGI buffer from the texture
+    let output_buffer = MFCreateDXGISurfaceBuffer(&ID3D11Texture2D::IID, &nv12_texture, 0, FALSE)?;
 
     // Add the buffer to the sample
     output_sample.AddBuffer(&output_buffer)?;
 
-    // Explicitly release the surface reference after adding the buffer
-    drop(nv12_surface);
     drop(output_buffer);
 
     Ok((nv12_texture, output_sample))

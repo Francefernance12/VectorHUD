@@ -161,8 +161,23 @@ pub unsafe fn get_frames(
     let mut accumulated_delay = Duration::ZERO;
     let mut num_duped = 0;
 
-    let (blank_texture, _blank_resource) =
-        create_blank_dxgi_texture(&device, input_width, input_height)?;
+    // Initialize duplication first to detect if we're on an HDR screen
+    let (mut duplication_result, actual_is_hdr) = match setup_dxgi_duplication(&device) {
+        Ok((dupl, hdr)) => (Ok(dupl), hdr),
+        Err(e) => (Err(e), false),
+    };
+
+    let texture_format = if actual_is_hdr {
+        DXGI_FORMAT_R16G16B16A16_FLOAT
+    } else {
+        DXGI_FORMAT_B8G8R8A8_UNORM
+    };
+
+    let misc_flags = if actual_is_hdr {
+        0
+    } else {
+        D3D11_RESOURCE_MISC_GDI_COMPATIBLE.0 as u32
+    };
 
     // Initialize texture pool for reusable textures (for Media Foundation samples)
     use windows::Win32::Graphics::Direct3D11::*;
@@ -173,15 +188,35 @@ pub unsafe fn get_frames(
         10, // Capacity
         input_width,
         input_height,
-        DXGI_FORMAT_B8G8R8A8_UNORM,
+        texture_format,
         D3D11_USAGE_DEFAULT.0.try_into().unwrap(),
         (D3D11_BIND_SHADER_RESOURCE.0 | D3D11_BIND_RENDER_TARGET.0)
             .try_into()
             .unwrap(),
-        0,                                                        // CPU access flags
-        D3D11_RESOURCE_MISC_GDI_COMPATIBLE.0.try_into().unwrap(), // Misc flags
+        0,                              // CPU access flags
+        misc_flags.try_into().unwrap(), // Misc flags
     )?;
     let texture_pool = Arc::new(texture_pool);
+
+    // Create blank texture with matching format to prevent CopyResource crashes
+    let blank_desc = D3D11_TEXTURE2D_DESC {
+        Width: input_width,
+        Height: input_height,
+        MipLevels: 1,
+        ArraySize: 1,
+        Format: texture_format,
+        SampleDesc: DXGI_SAMPLE_DESC {
+            Count: 1,
+            Quality: 0,
+        },
+        Usage: D3D11_USAGE_DEFAULT,
+        BindFlags: D3D11_BIND_SHADER_RESOURCE,
+        CPUAccessFlags: D3D11_CPU_ACCESS_FLAG(0),
+        MiscFlags: D3D11_RESOURCE_MISC_FLAG(0),
+    };
+    let mut blank_texture = None;
+    device.CreateTexture2D(&blank_desc, None, Some(&mut blank_texture))?;
+    let blank_texture = blank_texture.unwrap();
 
     // Create a pool for IMFSample objects that are bound to the textures
     let sample_pool = SamplePool::new(fps_num, 10);
@@ -190,8 +225,7 @@ pub unsafe fn get_frames(
     // Signal that we're ready
     started.wait();
 
-    // Initialize duplication
-    let mut duplication_result = setup_dxgi_duplication(&device).map(|(d, _)| d);
+    let mut staging_texture = None;
 
     // Main recording loop
     while recording.load(Ordering::Relaxed) {
@@ -220,6 +254,7 @@ pub unsafe fn get_frames(
             &mut num_duped,
             &texture_pool,
             &sample_pool,
+            &mut staging_texture,
         ) {
             Ok(_) => {
                 frame_count += 1;
@@ -276,6 +311,7 @@ unsafe fn process_frame(
     num_duped: &mut u64,
     texture_pool: &Arc<TexturePool>,
     sample_pool: &Arc<SamplePool>,
+    staging_texture: &mut Option<ID3D11Texture2D>,
 ) -> std::result::Result<(), FrameError> {
     let mut resource: Option<IDXGIResource> = None;
     let mut info = windows::Win32::Graphics::Dxgi::DXGI_OUTDUPL_FRAME_INFO::default();
@@ -305,72 +341,80 @@ unsafe fn process_frame(
         });
 
         if should_show_content {
-            // Copy content from source to pooled texture
+            use windows::Win32::Graphics::Direct3D11::*;
+            use windows::Win32::Graphics::Dxgi::Common::*;
+
+            let mut desc = D3D11_TEXTURE2D_DESC::default();
+            source_texture.GetDesc(&mut desc);
+
+            // Copy resource directly on the GPU (incredibly fast GPU-to-GPU copy)
             context.CopyResource(&pooled_texture, &source_texture);
 
-            // Draw Mouse Cursor
-            use windows::Win32::Graphics::Dxgi::IDXGISurface1;
-            use windows::Win32::Graphics::Gdi::{
-                GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTOPRIMARY,
-            };
-            use windows::Win32::UI::WindowsAndMessaging::{
-                DrawIconEx, GetCursorInfo, GetForegroundWindow, CURSORINFO, CURSOR_SHOWING,
-                DI_NORMAL,
-            };
+            // Draw Mouse Cursor only if NOT HDR (since GDI/GetDC does not support float16 formats)
+            if desc.Format != DXGI_FORMAT_R16G16B16A16_FLOAT {
+                use windows::Win32::Graphics::Dxgi::IDXGISurface1;
+                use windows::Win32::Graphics::Gdi::{
+                    GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTOPRIMARY,
+                };
+                use windows::Win32::UI::WindowsAndMessaging::{
+                    DrawIconEx, GetCursorInfo, GetForegroundWindow, CURSORINFO, CURSOR_SHOWING,
+                    DI_NORMAL,
+                };
 
-            if let Ok(surface) = pooled_texture.cast::<IDXGISurface1>() {
-                match surface.GetDC(false) {
-                    Ok(hdc) => {
-                        let mut cursor_info = CURSORINFO {
-                            cbSize: std::mem::size_of::<CURSORINFO>() as u32,
-                            ..Default::default()
-                        };
+                if let Ok(surface) = pooled_texture.cast::<IDXGISurface1>() {
+                    match surface.GetDC(false) {
+                        Ok(hdc) => {
+                            let mut cursor_info = CURSORINFO {
+                                cbSize: std::mem::size_of::<CURSORINFO>() as u32,
+                                ..Default::default()
+                            };
 
-                        let hwnd = GetForegroundWindow();
-                        let target_hmonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY);
-                        let mut minfo = MONITORINFO {
-                            cbSize: std::mem::size_of::<MONITORINFO>() as u32,
-                            ..Default::default()
-                        };
+                            let hwnd = GetForegroundWindow();
+                            let target_hmonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY);
+                            let mut minfo = MONITORINFO {
+                                cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+                                ..Default::default()
+                            };
 
-                        let mut offset_x = 0;
-                        let mut offset_y = 0;
-                        if GetMonitorInfoW(target_hmonitor, &mut minfo).into() {
-                            offset_x = minfo.rcMonitor.left;
-                            offset_y = minfo.rcMonitor.top;
-                        }
-
-                        if GetCursorInfo(&mut cursor_info).into()
-                            && cursor_info.flags.0 == CURSOR_SHOWING.0
-                        {
-                            let mut pos = cursor_info.ptScreenPos;
-                            // Adjust to local texture coordinates
-                            pos.x -= offset_x;
-                            pos.y -= offset_y;
-
-                            let res = DrawIconEx(
-                                hdc,
-                                pos.x,
-                                pos.y,
-                                cursor_info.hCursor,
-                                0,
-                                0,
-                                0,
-                                None,
-                                DI_NORMAL,
-                            );
-                            if res.0 == 0 {
-                                log::warn!("DrawIconEx failed");
+                            let mut offset_x = 0;
+                            let mut offset_y = 0;
+                            if GetMonitorInfoW(target_hmonitor, &mut minfo).into() {
+                                offset_x = minfo.rcMonitor.left;
+                                offset_y = minfo.rcMonitor.top;
                             }
+
+                            if GetCursorInfo(&mut cursor_info).into()
+                                && cursor_info.flags.0 == CURSOR_SHOWING.0
+                            {
+                                let mut pos = cursor_info.ptScreenPos;
+                                // Adjust to local texture coordinates
+                                pos.x -= offset_x;
+                                pos.y -= offset_y;
+
+                                let res = DrawIconEx(
+                                    hdc,
+                                    pos.x,
+                                    pos.y,
+                                    cursor_info.hCursor,
+                                    0,
+                                    0,
+                                    0,
+                                    None,
+                                    DI_NORMAL,
+                                );
+                                if res.0 == 0 {
+                                    log::warn!("DrawIconEx failed");
+                                }
+                            }
+                            let _ = surface.ReleaseDC(None);
                         }
-                        let _ = surface.ReleaseDC(None);
+                        Err(e) => {
+                            log::warn!("GetDC failed: {:?}", e);
+                        }
                     }
-                    Err(e) => {
-                        log::warn!("GetDC failed: {:?}", e);
-                    }
+                } else {
+                    log::warn!("Failed to cast pooled_texture to IDXGISurface1");
                 }
-            } else {
-                log::warn!("Failed to cast pooled_texture to IDXGISurface1");
             }
         } else {
             // Fill with black if not focused

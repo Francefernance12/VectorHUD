@@ -1,6 +1,6 @@
 use std::ptr;
 
-use windows::core::{Result, GUID};
+use windows::core::{ComInterface, Result, GUID};
 use windows::Win32::Media::Audio::{WAVEFORMATEX, WAVE_FORMAT_PCM};
 use windows::Win32::Media::MediaFoundation::*;
 
@@ -14,9 +14,10 @@ pub unsafe fn create_sink_writer(
     capture_microphone: bool,
     video_bitrate: u32,
     video_encoder_id: &GUID,
+    device_manager: Option<&IMFDXGIDeviceManager>,
 ) -> Result<IMFSinkWriter> {
     // Create and configure attributes
-    let attributes = create_sink_attributes()?;
+    let attributes = create_sink_attributes(device_manager)?;
 
     // Create sink writer
     let sink_writer: IMFSinkWriter = MFCreateSinkWriterFromURL(
@@ -89,13 +90,19 @@ unsafe fn create_mixed_audio_input_type() -> Result<IMFMediaType> {
     Ok(input_type)
 }
 
-unsafe fn create_sink_attributes() -> Result<Option<IMFAttributes>> {
+unsafe fn create_sink_attributes(
+    device_manager: Option<&IMFDXGIDeviceManager>,
+) -> Result<Option<IMFAttributes>> {
     let mut attributes: Option<IMFAttributes> = None;
     MFCreateAttributes(&mut attributes, 0)?;
 
     if let Some(attrs) = &attributes {
         attrs.SetUINT32(&MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, 1)?;
         attrs.SetUINT32(&MF_SINK_WRITER_DISABLE_THROTTLING, 1)?;
+        if let Some(dev_mgr) = device_manager {
+            let unknown: windows::core::IUnknown = dev_mgr.cast()?;
+            attrs.SetUnknown(&MF_SINK_WRITER_D3D_MANAGER, &unknown)?;
+        }
     }
 
     Ok(attributes)

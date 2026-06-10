@@ -10,6 +10,10 @@
 | Telemetry | PresentMon64 (Sidecar) & PDH/DXGI | Headless background processes and kernel bindings for accurate FPS/GPU hardware metrics without COM conflicts. |
 | Key-Value | `tauri-plugin-store` | Fast UI settings, keybinds, and widget coordinates. |
 | Logging | `tracing` (Rust) | Centralized, rolling file logs mapping both backend and frontend telemetry. |
+| AI Planning | Gemini (Planning mode) | Architecture decisions, session planning, implementation plans |
+| AI Execution | Antigravity IDE (Gemini/Claude) | Code implementation, file editing, command execution |
+| Version Control | GitHub | Session-based branches merged to `main` after verification |
+| CI/CD | GitHub Actions + Husky | Pre-commit `cargo fmt`/`cargo clippy` enforcement |
 
 ## System Boundaries
 - `src-tauri/src/commands/` — Rust functions exposed to the React frontend.

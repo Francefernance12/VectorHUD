@@ -8,6 +8,7 @@ use std::thread::JoinHandle;
 use windows::core::{ComInterface, Result};
 use windows::Win32::Graphics::Direct3D::*;
 use windows::Win32::Graphics::Direct3D11::*;
+use windows::Win32::Media::MediaFoundation::{IMFDXGIDeviceManager, MFCreateDXGIDeviceManager};
 use windows::Win32::System::Performance::QueryPerformanceCounter;
 
 use super::config::RecorderConfig;
@@ -25,6 +26,8 @@ pub struct RecorderInner {
     collect_microphone_handle: RefCell<Option<JoinHandle<Result<()>>>>,
     replay_buffer: RefCell<Option<Arc<ReplayBuffer>>>,
     config: RecorderConfig,
+    device: Option<Arc<ID3D11Device>>,
+    device_manager: Option<crate::types::SendableDeviceManager>,
 }
 
 impl RecorderInner {
@@ -116,9 +119,49 @@ impl RecorderInner {
         let mut collect_audio_handle: Option<JoinHandle<Result<()>>> = None;
         let mut collect_microphone_handle: Option<JoinHandle<Result<()>>> = None;
 
-        unsafe {
+        let (device, sendable_device_manager, context_mutex, is_hdr) = unsafe {
             // Initialize Media Foundation
             media::init_media_foundation()?;
+
+            // Create D3D11 device and context
+            let (device, context) = create_d3d11_device()?;
+            let device = Arc::new(device);
+            let context_mutex = Arc::new(std::sync::Mutex::new(context));
+
+            // Create DXGI device manager and reset it with the D3D11 device
+            let mut reset_token = 0;
+            let mut device_manager: Option<IMFDXGIDeviceManager> = None;
+            MFCreateDXGIDeviceManager(&mut reset_token, &mut device_manager)?;
+            let device_manager = device_manager.ok_or_else(|| {
+                windows::core::Error::new(
+                    windows::Win32::Foundation::E_FAIL,
+                    "Failed to create IMFDXGIDeviceManager".into(),
+                )
+            })?;
+            device_manager.ResetDevice(&*device, reset_token)?;
+            let sendable_device_manager =
+                crate::types::SendableDeviceManager(device_manager.clone());
+
+            // Get the REAL physical monitor dimensions from DXGI early
+            let mut detected_hdr = false;
+            if let Ok((duplication, has_hdr)) =
+                crate::capture::dxgi::setup_dxgi_duplication(&device)
+            {
+                detected_hdr = has_hdr;
+                let mut desc = windows::Win32::Graphics::Dxgi::DXGI_OUTDUPL_DESC::default();
+                duplication.GetDesc(&mut desc);
+
+                input_width = desc.ModeDesc.Width;
+                input_height = desc.ModeDesc.Height;
+                output_width = desc.ModeDesc.Width;
+                output_height = desc.ModeDesc.Height;
+                info!(
+                    "DXGI returned ACTUAL physical monitor resolution: {}x{}",
+                    input_width, input_height
+                );
+            } else {
+                info!("Failed to get DXGI monitor resolution early, falling back to logical resolution");
+            }
 
             // Get the video encoder
             let video_encoder = get_video_encoder_by_type(config.video_encoder())?;
@@ -134,6 +177,7 @@ impl RecorderInner {
                 capture_microphone,
                 video_bitrate,
                 &video_encoder.id,
+                Some(&device_manager),
             )?;
 
             // We no longer need to find a specific target window since we are recording the whole desktop.
@@ -157,34 +201,6 @@ impl RecorderInner {
             let (sender_audio, receiver_audio) = channel::<SendableSample>();
             let (sender_microphone, receiver_microphone) = channel::<SendableSample>();
 
-            // Create D3D11 device and context
-            let (device, context) = create_d3d11_device()?;
-            let device = Arc::new(device);
-            let context_mutex = Arc::new(std::sync::Mutex::new(context));
-
-            // Get the REAL physical monitor dimensions from DXGI
-            // Windows display scaling causes user32/xcap to report logical resolution.
-            // DXGI ALWAYS captures at physical resolution. We MUST match it or D3D11 crashes.
-            let mut is_hdr = false;
-            if let Ok((duplication, detected_hdr)) =
-                crate::capture::dxgi::setup_dxgi_duplication(&device)
-            {
-                is_hdr = detected_hdr;
-                let mut desc = windows::Win32::Graphics::Dxgi::DXGI_OUTDUPL_DESC::default();
-                unsafe { duplication.GetDesc(&mut desc) };
-
-                input_width = desc.ModeDesc.Width;
-                input_height = desc.ModeDesc.Height;
-                output_width = desc.ModeDesc.Width;
-                output_height = desc.ModeDesc.Height;
-                info!(
-                    "DXGI returned ACTUAL physical monitor resolution: {}x{}",
-                    input_width, input_height
-                );
-            } else {
-                info!("Failed to get DXGI monitor resolution early, falling back to logical resolution");
-            }
-
             // Set up synchronization barrier
             let barrier = Arc::new(Barrier::new(
                 if capture_audio { 1 } else { 0 } + if capture_microphone { 1 } else { 0 } + 1,
@@ -195,6 +211,7 @@ impl RecorderInner {
             let dev_clone = device.clone();
             let barrier_clone = barrier.clone();
             let process_name_clone = process_name.to_string();
+            let ctx_mutex_clone = context_mutex.clone();
             collect_video_handle = Some(std::thread::spawn(move || {
                 get_frames(
                     sender_video,
@@ -207,7 +224,7 @@ impl RecorderInner {
                     input_height,
                     barrier_clone,
                     dev_clone,
-                    context_mutex,
+                    ctx_mutex_clone,
                     use_exact_match,
                 )
             }));
@@ -252,7 +269,8 @@ impl RecorderInner {
             // Start processing thread
             let rec_clone = recording.clone();
             let buffer_clone = replay_buffer.clone();
-            // is_hdr is already in scope
+            let dev_clone = device.clone();
+            let dm_clone = sendable_device_manager.clone();
             process_handle = Some(std::thread::spawn(move || {
                 process_samples(
                     sendable_sink,
@@ -264,16 +282,19 @@ impl RecorderInner {
                     input_height,  // Capture dimensions
                     output_width,  // Target dimensions
                     output_height, // Target dimensions
-                    device,
+                    dev_clone,
+                    dm_clone,
                     capture_audio,
                     capture_microphone,
                     system_volume,
                     microphone_volume,
                     buffer_clone,
-                    is_hdr,
+                    detected_hdr,
                 )
             }));
-        }
+
+            (device, sendable_device_manager, context_mutex, detected_hdr)
+        };
 
         info!("Recorder initialized successfully");
         Ok(Self {
@@ -284,6 +305,8 @@ impl RecorderInner {
             collect_microphone_handle: RefCell::new(collect_microphone_handle),
             replay_buffer: RefCell::new(replay_buffer),
             config: config.clone(),
+            device: Some(device),
+            device_manager: Some(sendable_device_manager),
         })
     }
 
@@ -373,6 +396,7 @@ impl RecorderInner {
                 self.config.capture_microphone(),
                 self.config.video_bitrate(),
                 &video_encoder.id,
+                self.device_manager.as_ref().map(|dm| &dm.0),
             )?;
             info!("Created sink writer");
 
