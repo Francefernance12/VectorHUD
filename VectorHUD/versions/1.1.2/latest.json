@@ -1,0 +1,11 @@
+{
+  "version": "1.1.2",
+  "notes": "VectorHUD v1.1.2. Resolves video playback loading issues in production builds by whitelisting the asset protocol inside the WebView's Content Security Policy (CSP).",
+  "pub_date": "2026-06-10T14:55:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRTFhZYW11cVlZb2ZaWnFsQU1FMW9hRlZ3Mml3eDMrWDJKb2FDNDhFaFM2QUIwQUpCQktBcGR1R2kzVU9pbWplSlRwd0hPZVc2dkVCNXRkY2tzZTVlQ0U4UGlLSmU2c0FNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgxMTAwMzkzCWZpbGU6dmVjdG9yaHVkXzEuMS4yX3g2NC1zZXR1cC5leGUKVXp3aGI4ckV1eTlUK0hwQUFYWUpCUnNCQkNyVy9BL3dwanNNR0d1dFNWQjcweVdtNGhNRmo1aG9LL09HR3E5ei9PYWRBNHJoenY1YndqUWdCSUg1QXc9PQo=",
+      "url": "https://github.com/Francefernance12/VectorHUD/releases/download/v1.1.2/vectorhud_1.1.2_x64-setup.exe"
+    }
+  }
+}
