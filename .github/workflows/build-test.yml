@@ -33,6 +33,10 @@ jobs:
         working-directory: ./VectorHUD
         run: npm install
 
+      - name: Setup FFmpeg Sidecar
+        shell: powershell
+        run: ./VectorHUD/src-tauri/download-ffmpeg.ps1
+
       - name: Build Tauri App
         working-directory: ./VectorHUD
         run: npm run tauri build

@@ -41,6 +41,10 @@ jobs:
           workspaces: |
             VectorHUD/src-tauri
           
+      - name: Setup FFmpeg Sidecar
+        shell: powershell
+        run: ./VectorHUD/src-tauri/download-ffmpeg.ps1
+
       - name: Run cargo fmt
         working-directory: ./VectorHUD
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
