@@ -1,0 +1,11 @@
+{
+  "version": "1.1.1",
+  "notes": "VectorHUD V1.1.1 Release. Fixes the repeating timer finished toast on boot, resolves range request loading errors for standard video recordings by normalizing path backslashes to forward slashes in database records, and removes the unused replay buffer resolution and FPS settings from the system modal.",
+  "pub_date": "2026-06-10T04:20:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRTFhZYW11cVlZb2MyREJBQ1hmNTcwK3phWno2dzlyczV3STVOZ0hsYlhMMC9qQ0w4cC9pRE41Z1ROcFVZY0hZMjgzTDdUc3Y2Q3N6ZXN6eTJKUitGM3BlUGcxaEdjQXc4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgxMDY0ODc5CWZpbGU6dmVjdG9yaHVkXzEuMS4xX3g2NC1zZXR1cC5leGUKZURKVEp2eEhsNlgyNmJ3R0dXMVkxSUJ5dWo4N3NmbDk1UmVOR2NMS1dhbGRpTVZRUjZ2UDBmSHRTaTNaWVU5RWhOc0ZNRXlNTlQvdGVGUUtPN01BQVE9PQo=",
+      "url": "https://github.com/Francefernance12/VectorHUD/releases/download/v1.1.1/vectorhud_1.1.1_x64-setup.exe"
+    }
+  }
+}

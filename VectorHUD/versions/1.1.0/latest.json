@@ -1,0 +1,11 @@
+{
+  "version": "1.1.0",
+  "notes": "VectorHUD V1.1.0 Release. Incorporates the GPU-accelerated Hybrid Capture Engine (with zero CPU-stall HDR video tone mapping and piecewise soft-knee HDR-to-SDR screenshot mapping), advanced per-application Audio Mixer, real-time GPU/FPS monitoring via PresentMon/PDH kernel bindings, and a fully robust offline Notion checklist sync.",
+  "pub_date": "2026-06-10T03:50:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRTFhZYW11cVlZb2MrdGFvT1VCcG8vdmVwVU92UVVMVDZhRkVsQURPNDhnbE5vMnAyVjMySmhoM1V1TTlJV08zWXpiMENGazRCMm9PQ3FIbHRidkoxaDh4MnlCRjRlbWdJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgxMDYzMDgxCWZpbGU6dmVjdG9yaHVkXzEuMS4wX3g2NC1zZXR1cC5leGUKZDEvTGRUKzBIcmduSlNzcU45VmRxZUZTdWRzTjBCTEcra2hJemVsVFFLbEhSK0ZOajUyK3o3L0F2RGhrcVE2Nk1jUlluSnRTNnhBT2lLWXgzS1ZIQkE9PQo=",
+      "url": "https://github.com/Francefernance12/VectorHUD/releases/download/v1.1.0/vectorhud_1.1.0_x64-setup.exe"
+    }
+  }
+}

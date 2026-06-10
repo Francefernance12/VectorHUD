@@ -67,6 +67,10 @@ function App() {
         // Hydrate settings
         await useSettingsStore.getState().loadPreferences();
 
+        // Reset countdown and stopwatch states on boot to clear legacy persisted states
+        useTimerStore.getState().resetCd();
+        useTimerStore.getState().resetSw();
+
         // Silent Update Check
         try {
           const update = await check();
@@ -155,7 +159,8 @@ function App() {
         const unlistenScreenshot = await listen("hotkey-screenshot", async () => {
           try {
             const path = await invoke<string>('capture_screenshot');
-            await getDb().then(db => db.execute('INSERT INTO capture_history (file_path, media_type, game_process) VALUES (?1, ?2, ?3)', [path, 'screenshot', 'Desktop']));
+            const normalizedPath = path.replace(/\\/g, '/');
+            await getDb().then(db => db.execute('INSERT INTO capture_history (file_path, media_type, game_process) VALUES (?1, ?2, ?3)', [normalizedPath, 'screenshot', 'Desktop']));
             window.dispatchEvent(new Event('refresh-capture-history'));
             showToast("📸 Screenshot Saved");
           } catch (err) {
@@ -170,7 +175,8 @@ function App() {
           if (isRec) {
             try {
               const path = await invoke<string>('stop_video_recording');
-              await getDb().then(db => db.execute('INSERT INTO capture_history (file_path, media_type, game_process) VALUES (?1, ?2, ?3)', [path, 'video', 'Desktop']));
+              const normalizedPath = path.replace(/\\/g, '/');
+              await getDb().then(db => db.execute('INSERT INTO capture_history (file_path, media_type, game_process) VALUES (?1, ?2, ?3)', [normalizedPath, 'video', 'Desktop']));
               useRecordingStore.getState().setRecording(false);
               window.dispatchEvent(new Event('refresh-capture-history'));
               showToast("⏹️ Recording Saved");
@@ -198,7 +204,8 @@ function App() {
             showToast("⏳ Processing 30s Clip...");
             try {
               const path = await invoke<string>('save_replay_buffer');
-              await getDb().then(db => db.execute('INSERT INTO capture_history (file_path, media_type, game_process) VALUES (?1, ?2, ?3)', [path, 'video', 'Desktop']));
+              const normalizedPath = path.replace(/\\/g, '/');
+              await getDb().then(db => db.execute('INSERT INTO capture_history (file_path, media_type, game_process) VALUES (?1, ?2, ?3)', [normalizedPath, 'video', 'Desktop']));
               window.dispatchEvent(new Event('refresh-capture-history'));
               showToast("⚡ Replay Clip Saved");
             } catch (err) {
