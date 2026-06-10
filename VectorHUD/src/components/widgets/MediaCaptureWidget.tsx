@@ -25,9 +25,10 @@ export function MediaCaptureWidget() {
       
       const validCaptures: CaptureHistory[] = [];
       for (const cap of res) {
-        const exists = await invoke<boolean>('check_file_exists', { path: cap.file_path });
+        const normalizedPath = cap.file_path.replace(/\\/g, '/');
+        const exists = await invoke<boolean>('check_file_exists', { path: normalizedPath });
         if (exists) {
-          validCaptures.push(cap);
+          validCaptures.push({ ...cap, file_path: normalizedPath });
         } else {
           logger.info(`Cleaning up ghost capture record for ${cap.file_path}`);
           await db.execute('DELETE FROM capture_history WHERE id = ?1', [cap.id]);
@@ -131,11 +132,12 @@ export function MediaCaptureWidget() {
     setIsCapturing(true);
     try {
       const path = await invoke<string>('capture_screenshot');
-      logger.info(`Screenshot saved to: ${path}`);
+      const normalizedPath = path.replace(/\\/g, '/');
+      logger.info(`Screenshot saved to: ${normalizedPath}`);
       
       await executeQuery(
         'INSERT INTO capture_history (file_path, media_type, game_process) VALUES (?1, ?2, ?3)',
-        [path, 'screenshot', 'Desktop']
+        [normalizedPath, 'screenshot', 'Desktop']
       );
 
       await fetchHistory();
@@ -152,11 +154,12 @@ export function MediaCaptureWidget() {
     if (isRecording) {
       try {
         const path = await invoke<string>('stop_video_recording');
-        logger.info(`Video recording saved to: ${path}`);
+        const normalizedPath = path.replace(/\\/g, '/');
+        logger.info(`Video recording saved to: ${normalizedPath}`);
         
         await executeQuery(
           'INSERT INTO capture_history (file_path, media_type, game_process) VALUES (?1, ?2, ?3)',
-          [path, 'video', 'Desktop']
+          [normalizedPath, 'video', 'Desktop']
         );
 
         setRecording(false);
@@ -209,11 +212,12 @@ export function MediaCaptureWidget() {
     useToastStore.getState().showToast("⏳ Processing 30s Clip...");
     try {
       const path = await invoke<string>('save_replay_buffer');
-      logger.info(`Replay clip saved: ${path}`);
+      const normalizedPath = path.replace(/\\/g, '/');
+      logger.info(`Replay clip saved: ${normalizedPath}`);
 
       await executeQuery(
         'INSERT INTO capture_history (file_path, media_type, game_process) VALUES (?1, ?2, ?3)',
-        [path, 'video', 'Desktop']
+        [normalizedPath, 'video', 'Desktop']
       );
 
       await fetchHistory();
