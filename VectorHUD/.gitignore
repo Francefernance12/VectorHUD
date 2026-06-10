@@ -27,3 +27,11 @@ dist-ssr
 updater.key
 updater.key.pub
 test.txt
+
+# Test files and captures
+/test.png
+/test_video.mp4
+
+# Sidecar binaries and test files in src-tauri
+/src-tauri/ffmpeg-*.exe
+/src-tauri/test_*.rs
