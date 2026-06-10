@@ -55,8 +55,8 @@ unsafe fn get_active_monitor_dimensions() -> (u32, u32) {
     };
 
     if GetMonitorInfoW(target_hmonitor, &mut minfo).into() {
-        let width = (minfo.rcMonitor.right - minfo.rcMonitor.left).abs() as u32;
-        let height = (minfo.rcMonitor.bottom - minfo.rcMonitor.top).abs() as u32;
+        let width = (minfo.rcMonitor.right - minfo.rcMonitor.left).unsigned_abs();
+        let height = (minfo.rcMonitor.bottom - minfo.rcMonitor.top).unsigned_abs();
         (width, height)
     } else {
         (1920, 1080)

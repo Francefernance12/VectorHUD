@@ -12,9 +12,7 @@ unsafe fn take_native_hdr_screenshot(app: &AppHandle) -> Result<String, String> 
 
     // Swap B and R channels to convert BGRA to RGBA for image crate
     for chunk in bgra_data.chunks_exact_mut(4) {
-        let tmp = chunk[0];
-        chunk[0] = chunk[2];
-        chunk[2] = tmp;
+        chunk.swap(0, 2);
     }
 
     let picture_dir = app

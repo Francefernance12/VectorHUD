@@ -32,6 +32,7 @@ Update this file after every meaningful implementation change.
 - Session 14: Documentation Pass (Journey Retrospective, Codebase Guide).
 - Session 15: Bug Fixes (Resolved compilation errors in capture.rs, expanded assetProtocol scope for OneDrive support, unified replay buffer folder output, and tweaked HDR screenshot tone-mapping values).
 - Session 16: HDR Tone Mapping & Replay Buffer Fixes (Quality, Stability & Duration - Replaced xcap screenshots with `windows_record::capture_raw_frame` and utilized `IDXGIOutput5::DuplicateOutput1` to capture linear float16 scRGB data. Implemented a CPU Reinhard tone-mapping and sRGB gamma correction pass for both screenshots and recordings to prevent washed-out HDR colors, and reverted the Media Foundation transfer function hack/FFmpeg `eq` filter. Aligned GDI monitor enumeration with DXGI output indices in the replay buffer to prevent wrong monitor capture, and constrained the video encoder keyframe interval (GOP size) to 2 seconds to fix the 2-minute rolling duration bloat).
+- Session 16.1: Clippy Warnings & CI Fixes (Cleaned up all 6 clippy warnings across audio_capture.rs, capture.rs, ffmpeg_manager.rs, and record.rs. Fixed local target directory locking issues by terminating PresentMon64 background processes before checking. Unblocked CI workflow compilation).
 
 ## In Progress
 

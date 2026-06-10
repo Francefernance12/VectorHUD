@@ -55,7 +55,7 @@ pub async fn start_loopback_capture(pipe_name: &str) -> Result<(AudioCapture, u3
 
     let stream = match config.sample_format() {
         cpal::SampleFormat::F32 => device.build_input_stream(
-            config.config().into(),
+            config.config(),
             move |data: &[f32], _: &cpal::InputCallbackInfo| {
                 if !is_running_clone.load(Ordering::Relaxed) {
                     return;

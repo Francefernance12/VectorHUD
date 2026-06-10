@@ -84,22 +84,12 @@ fn get_active_monitor_index() -> i32 {
     }
 }
 
+#[derive(Default)]
 pub struct FfmpegManager {
     pub replay_buffer_process: Option<CommandChild>,
     pub is_replay_active: bool,
     pub replay_m3u8_path: Option<PathBuf>,
     pub audio_capture: Option<crate::core::audio_capture::AudioCapture>,
-}
-
-impl Default for FfmpegManager {
-    fn default() -> Self {
-        Self {
-            replay_buffer_process: None,
-            is_replay_active: false,
-            replay_m3u8_path: None,
-            audio_capture: None,
-        }
-    }
 }
 
 pub struct FfmpegState(pub Mutex<FfmpegManager>);
@@ -178,7 +168,7 @@ pub async fn start_replay_buffer(
         ),
     ];
 
-    let pipe_name = format!(r"\\.\pipe\vectorhud_audio_replay");
+    let pipe_name = r"\\.\pipe\vectorhud_audio_replay".to_string();
 
     if _audio_enabled {
         match crate::core::audio_capture::start_loopback_capture(&pipe_name).await {
