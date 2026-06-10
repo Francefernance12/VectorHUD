@@ -9,6 +9,8 @@ interface SettingsState {
   customColor: string;
   recordMicrophone: boolean;
   recordSystemAudio: boolean;
+  replayResolution: string;
+  replayFps: number;
   overlayHotkey: string;
   screenshotHotkey: string;
   recordHotkey: string;
@@ -24,6 +26,8 @@ interface SettingsState {
   setCustomColor: (color: string) => Promise<void>;
   setRecordMicrophone: (enabled: boolean) => Promise<void>;
   setRecordSystemAudio: (enabled: boolean) => Promise<void>;
+  setReplayResolution: (res: string) => Promise<void>;
+  setReplayFps: (fps: number) => Promise<void>;
   setOverlayHotkey: (hotkey: string) => Promise<void>;
   setScreenshotHotkey: (hotkey: string) => Promise<void>;
   setRecordHotkey: (hotkey: string) => Promise<void>;
@@ -76,6 +80,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   customColor: '#FF0000',
   recordMicrophone: false,
   recordSystemAudio: true,
+  replayResolution: '720p',
+  replayFps: 30,
   overlayHotkey: 'ctrl+alt+o',
   screenshotHotkey: 'ctrl+alt+s',
   recordHotkey: 'ctrl+alt+r',
@@ -130,6 +136,20 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     await store.set('recordSystemAudio', enabled);
     await store.save();
     set({ recordSystemAudio: enabled });
+  },
+
+  setReplayResolution: async (res) => {
+    const store = await getSettingsStore();
+    await store.set('replayResolution', res);
+    await store.save();
+    set({ replayResolution: res });
+  },
+
+  setReplayFps: async (fps) => {
+    const store = await getSettingsStore();
+    await store.set('replayFps', fps);
+    await store.save();
+    set({ replayFps: fps });
   },
 
   setOverlayHotkey: async (hotkey) => {
@@ -189,6 +209,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const customColor = await store.get<string>('customColor');
     const mic = await store.get<boolean>('recordMicrophone');
     const systemAudio = await store.get<boolean>('recordSystemAudio');
+    const rRes = await store.get<string>('replayResolution');
+    const rFps = await store.get<number>('replayFps');
     const oHot = await store.get<string>('overlayHotkey');
     const sHot = await store.get<string>('screenshotHotkey');
     const rHot = await store.get<string>('recordHotkey');
@@ -207,6 +229,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       customColor: finalColor,
       recordMicrophone: mic !== undefined ? mic : false,
       recordSystemAudio: systemAudio !== undefined ? systemAudio : true,
+      replayResolution: rRes || '720p',
+      replayFps: rFps || 30,
       overlayHotkey: oHot || 'ctrl+alt+o',
       screenshotHotkey: sHot || 'ctrl+alt+s',
       recordHotkey: rHot || 'ctrl+alt+r',

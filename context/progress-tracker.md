@@ -21,7 +21,7 @@ Update this file after every meaningful implementation change.
 - Session 6A: Enhancement (Performance - Zustand `useShallow` re-render fix, `sysinfo` targeted booting, React Error boundaries, Autostart).
 - Session 6B: Settings (UI & Auth) - Building a settings modal and secure Rust-based credential storage.
 - Session 7A: UI Polish (Expandable dock, pin toggles (interactable), custom scrollbars).
-- Session 7B: Capture+ (Media - 30s rolling video buffer, standard recording, mic toggling, windows-record forked to fix focus tracking limitations, fixed HDR washout and sound mixing deadlocks).
+- Session 7B: Capture+ (Media - Hybrid Capture Engine. 30s rolling video buffer uses FFmpeg HLS to keep RAM footprint minimal, while screenshots and standard recordings use native DXGI/Media Foundation Windows APIs with CPU HDR tone mapping to prevent washed-out colors).
 - Session 8A: Audio Hub (Mixer - Hook Core Audio API for app-specific volume, mic/output switcher, music player).
 - Session 8B: Metrics+ (Hardware - GPU, VRAM, and FPS polling; Timer utility).
 - Session 9A: Integrations (AI+Notion - Vision buffer parsing, Notion block-level parsing for floating checklists).
@@ -30,10 +30,14 @@ Update this file after every meaningful implementation change.
 - Session 11: Deployment (Tauri build prep, settings endpoints updates).
 - Session 12 & 13: Hardening (Code Review Sweeps: Memory leaks, hotkey handling, DB validation, race conditions).
 - Session 14: Documentation Pass (Journey Retrospective, Codebase Guide).
+- Session 15: Bug Fixes (Resolved compilation errors in capture.rs, expanded assetProtocol scope for OneDrive support, unified replay buffer folder output, and tweaked HDR screenshot tone-mapping values).
+- Session 16: HDR Tone Mapping & Replay Buffer Fixes (Quality, Stability & Duration - Replaced xcap screenshots with `windows_record::capture_raw_frame` and utilized `IDXGIOutput5::DuplicateOutput1` to capture linear float16 scRGB data. Implemented a CPU Reinhard tone-mapping and sRGB gamma correction pass for both screenshots and recordings to prevent washed-out HDR colors, and reverted the Media Foundation transfer function hack/FFmpeg `eq` filter. Aligned GDI monitor enumeration with DXGI output indices in the replay buffer to prevent wrong monitor capture, and constrained the video encoder keyframe interval (GOP size) to 2 seconds to fix the 2-minute rolling duration bloat).
+- Session 16.1: Clippy Warnings & CI Fixes (Cleaned up all 6 clippy warnings across audio_capture.rs, capture.rs, ffmpeg_manager.rs, and record.rs. Fixed local target directory locking issues by terminating PresentMon64 background processes before checking. Unblocked CI workflow compilation).
 
 ## In Progress
 
-- Session 15: Deployment & Installer Creation (WiX / NSIS).
+- None
+
 
 ## Next Up
 

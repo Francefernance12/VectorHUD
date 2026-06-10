@@ -1,18 +1,12 @@
-use std::fs;
-use std::path::PathBuf;
+use crate::core::ffmpeg_manager::{self, FfmpegState};
 use std::sync::Mutex;
 use tauri::{command, AppHandle, Manager, State};
-use windows_record::Recorder;
+use windows_record::{AudioSource, Recorder};
 
 pub struct RecorderManager {
-    standard_recorder: Option<Recorder>,
-    standard_path: Option<PathBuf>,
-    replay_recorder: Option<Recorder>,
-    is_recording: bool,
-    is_replay_active: bool,
-    was_replay_active: bool,
-    last_mic_enabled: bool,
-    last_audio_enabled: bool,
+    pub standard_recorder: Option<Recorder>,
+    pub standard_path: Option<std::path::PathBuf>,
+    pub is_recording: bool,
 }
 
 impl RecorderManager {
@@ -20,12 +14,7 @@ impl RecorderManager {
         Self {
             standard_recorder: None,
             standard_path: None,
-            replay_recorder: None,
             is_recording: false,
-            is_replay_active: false,
-            was_replay_active: false,
-            last_mic_enabled: true,
-            last_audio_enabled: true,
         }
     }
 }
@@ -38,21 +27,41 @@ pub struct RecordingStatus {
     pub is_replay_active: bool,
 }
 
-/// Helper to get or create target folder in ~/Pictures/VectorHUD
-fn get_video_dir(app: &AppHandle) -> Result<PathBuf, String> {
+fn get_video_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
     let picture_dir = app
         .path()
         .picture_dir()
-        .map_err(|e| format!("Could not find Pictures directory: {}", e))?;
+        .map_err(|_| "Could not find Pictures directory".to_string())?;
+
     let hud_dir = picture_dir.join("VectorHUD");
     if !hud_dir.exists() {
-        fs::create_dir_all(&hud_dir)
+        std::fs::create_dir_all(&hud_dir)
             .map_err(|e| format!("Failed to create VectorHUD video directory: {}", e))?;
     }
     Ok(hud_dir)
 }
 
-// get_active_process_name removed as windows-record now records the entire desktop
+unsafe fn get_active_monitor_dimensions() -> (u32, u32) {
+    use windows::Win32::Graphics::Gdi::{
+        GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTOPRIMARY,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+
+    let hwnd = GetForegroundWindow();
+    let target_hmonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY);
+    let mut minfo = MONITORINFO {
+        cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+        ..Default::default()
+    };
+
+    if GetMonitorInfoW(target_hmonitor, &mut minfo).into() {
+        let width = (minfo.rcMonitor.right - minfo.rcMonitor.left).unsigned_abs();
+        let height = (minfo.rcMonitor.bottom - minfo.rcMonitor.top).unsigned_abs();
+        (width, height)
+    } else {
+        (1920, 1080)
+    }
+}
 
 #[command]
 pub async fn start_video_recording(
@@ -69,49 +78,25 @@ pub async fn start_video_recording(
     if manager.is_recording {
         return Err("A video recording is already in progress".to_string());
     }
-    if manager.is_replay_active {
-        // Stop replay buffer gracefully to allow standard recording
-        if let Some(replay_rec) = manager.replay_recorder.take() {
-            let _ = replay_rec.stop_recording();
-        }
-        manager.is_replay_active = false;
-        manager.was_replay_active = true;
-        tracing::info!("Paused replay buffer to allow standard recording");
-    } else {
-        manager.was_replay_active = false;
-    }
 
     let video_dir = get_video_dir(&app)?;
     let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
     let file_name = format!("video_{}.mp4", timestamp);
     let file_path = video_dir.join(file_name);
 
-    let mut width = 1920;
-    let mut height = 1080;
-
-    // Get the primary monitor resolution to prevent DXGI/D3D11 crash
-    // when copying the desktop duplication texture to the texture pool
-    if let Ok(monitors) = xcap::Monitor::all() {
-        if let Some(monitor) = monitors
-            .into_iter()
-            .find(|m| m.is_primary().unwrap_or(false))
-            .or_else(|| xcap::Monitor::all().unwrap_or_default().into_iter().next())
-        {
-            width = monitor.width().unwrap_or(1920);
-            height = monitor.height().unwrap_or(1080);
-            tracing::info!(
-                "Using primary monitor resolution for recording: {}x{}",
-                width,
-                height
-            );
-        }
-    }
+    // Get the exact dimensions of the active monitor using Windows APIs
+    let (width, height) = unsafe { get_active_monitor_dimensions() };
+    tracing::info!(
+        "Using active monitor resolution for recording: {}x{}",
+        width,
+        height
+    );
 
     let config = Recorder::builder()
         .fps(30, 1)
         .input_dimensions(width, height)
         .output_dimensions(width, height)
-        .audio_source(windows_record::AudioSource::Desktop)
+        .audio_source(AudioSource::Desktop)
         .capture_audio(audio_enabled)
         .capture_microphone(mic_enabled)
         .enable_replay_buffer(false)
@@ -170,141 +155,72 @@ pub async fn stop_video_recording(state: State<'_, RecorderState>) -> Result<Str
 #[command]
 pub async fn start_replay_buffer(
     app: AppHandle,
-    state: State<'_, RecorderState>,
+    state: State<'_, FfmpegState>,
     mic_enabled: bool,
     audio_enabled: bool,
-) -> Result<(), String> {
-    let mut manager = state
-        .0
-        .lock()
-        .map_err(|e| format!("Failed to lock state: {}", e))?;
+    resolution: Option<String>,
+    fps: Option<u32>,
+) -> Result<String, String> {
+    let mut manager = state.0.lock().await;
 
-    if manager.is_replay_active {
-        return Err("Replay buffer is already active".to_string());
-    }
-    if manager.is_recording {
-        return Err("Cannot start replay buffer while a standard recording is active".to_string());
-    }
+    ffmpeg_manager::start_replay_buffer(
+        &app,
+        &mut manager,
+        mic_enabled,
+        audio_enabled,
+        resolution,
+        fps,
+    )
+    .await?;
 
-    let video_dir = get_video_dir(&app)?;
-    let fallback_path = video_dir.join("replay_buffer_fallback.mp4");
+    Ok("Replay buffer started successfully".to_string())
+}
 
-    let mut width = 1920;
-    let mut height = 1080;
+#[command]
+pub async fn stop_replay_buffer(state: State<'_, FfmpegState>) -> Result<String, String> {
+    let mut manager = state.0.lock().await;
 
-    if let Ok(monitors) = xcap::Monitor::all() {
-        if let Some(monitor) = monitors
-            .into_iter()
-            .find(|m| m.is_primary().unwrap_or(false))
-            .or_else(|| xcap::Monitor::all().unwrap_or_default().into_iter().next())
-        {
-            width = monitor.width().unwrap_or(1920);
-            height = monitor.height().unwrap_or(1080);
-            tracing::info!(
-                "Using primary monitor resolution for replay buffer: {}x{}",
-                width,
-                height
-            );
-        }
-    }
-
-    let config = Recorder::builder()
-        .fps(30, 1)
-        .input_dimensions(width, height)
-        .output_dimensions(width, height)
-        .audio_source(windows_record::AudioSource::Desktop)
-        .capture_audio(audio_enabled)
-        .capture_microphone(mic_enabled)
-        .enable_replay_buffer(true)
-        .replay_buffer_seconds(30)
-        .output_path(fallback_path.to_string_lossy().to_string())
-        .build();
-
-    let recorder = Recorder::new(config)
-        .map_err(|e| format!("Failed to initialize replay recorder: {}", e))?
-        .with_process_name("Desktop");
-
-    recorder
-        .start_recording()
-        .map_err(|e| format!("Failed to start replay buffer: {}", e))?;
-
-    manager.replay_recorder = Some(recorder);
-    manager.is_replay_active = true;
-    manager.last_mic_enabled = mic_enabled;
-    manager.last_audio_enabled = audio_enabled;
-
-    tracing::info!("Replay buffer started successfully (rolling 30s)");
-    Ok(())
+    ffmpeg_manager::stop_replay_buffer(&mut manager)?;
+    Ok("Replay buffer stopped successfully".to_string())
 }
 
 #[command]
 pub async fn save_replay_buffer(
     app: AppHandle,
-    state: State<'_, RecorderState>,
+    state: State<'_, FfmpegState>,
 ) -> Result<String, String> {
-    let manager = state
-        .0
-        .lock()
-        .map_err(|e| format!("Failed to lock state: {}", e))?;
+    let m3u8_path = {
+        let manager = state.0.lock().await;
 
-    if !manager.is_replay_active {
-        return Err("Replay buffer is not active".to_string());
-    }
+        if !manager.is_replay_active {
+            return Err("Replay buffer is not active".to_string());
+        }
 
-    let recorder = manager
-        .replay_recorder
-        .as_ref()
-        .ok_or("Replay recorder instance missing")?;
-    let video_dir = get_video_dir(&app)?;
-    let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
-    let file_name = format!("replay_{}.mp4", timestamp);
-    let file_path = video_dir.join(file_name);
+        manager
+            .replay_m3u8_path
+            .clone()
+            .ok_or("No m3u8 path found")?
+    };
 
-    let file_path_str = file_path.to_string_lossy();
-    recorder
-        .save_replay(&file_path_str)
-        .map_err(|e| format!("Failed to save replay clip: {}", e))?;
-
-    tracing::info!("Saved replay clip to: {:?}", file_path);
-    Ok(file_path.to_string_lossy().to_string())
-}
-
-#[command]
-pub async fn stop_replay_buffer(state: State<'_, RecorderState>) -> Result<(), String> {
-    let mut manager = state
-        .0
-        .lock()
-        .map_err(|e| format!("Failed to lock state: {}", e))?;
-
-    if !manager.is_replay_active {
-        return Err("Replay buffer is not active".to_string());
-    }
-
-    let recorder = manager
-        .replay_recorder
-        .take()
-        .ok_or("Replay recorder instance missing")?;
-
-    recorder
-        .stop_recording()
-        .map_err(|e| format!("Failed to stop replay buffer: {}", e))?;
-
-    manager.is_replay_active = false;
-
-    tracing::info!("Stopped replay buffer successfully");
-    Ok(())
+    ffmpeg_manager::save_replay_clip(&app, m3u8_path).await
 }
 
 #[command]
 pub async fn get_recording_status(
-    state: State<'_, RecorderState>,
+    recorder_state: State<'_, RecorderState>,
+    ffmpeg_state: State<'_, FfmpegState>,
 ) -> Result<RecordingStatus, String> {
-    let manager = state
-        .0
-        .lock()
-        .map_err(|e| format!("Failed to lock state: {}", e))?;
+    let is_recording = {
+        let rec_manager = recorder_state
+            .0
+            .lock()
+            .map_err(|e| format!("Failed to lock recorder state: {}", e))?;
+        rec_manager.is_recording
+    };
+    let ffmpeg_manager = ffmpeg_state.0.lock().await;
+
     Ok(RecordingStatus {
-        is_recording: manager.is_recording,
-        is_replay_active: manager.is_replay_active,
+        is_recording,
+        is_replay_active: ffmpeg_manager.is_replay_active,
     })
 }

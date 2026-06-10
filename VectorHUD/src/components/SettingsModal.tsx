@@ -26,6 +26,10 @@ export function SettingsModal() {
     setRecordMicrophone,
     recordSystemAudio,
     setRecordSystemAudio,
+    replayResolution,
+    setReplayResolution,
+    replayFps,
+    setReplayFps,
     overlayHotkey,
     setOverlayHotkey,
     screenshotHotkey,
@@ -57,6 +61,10 @@ export function SettingsModal() {
       setRecordMicrophone: state.setRecordMicrophone,
       recordSystemAudio: state.recordSystemAudio,
       setRecordSystemAudio: state.setRecordSystemAudio,
+      replayResolution: state.replayResolution,
+      setReplayResolution: state.setReplayResolution,
+      replayFps: state.replayFps,
+      setReplayFps: state.setReplayFps,
       overlayHotkey: state.overlayHotkey,
       setOverlayHotkey: state.setOverlayHotkey,
       screenshotHotkey: state.screenshotHotkey,
@@ -111,7 +119,9 @@ export function SettingsModal() {
     theme,
     customColor,
     recordMicrophone,
-    recordSystemAudio
+    recordSystemAudio,
+    replayResolution,
+    replayFps
   });
 
   // Load credentials on mount
@@ -134,7 +144,9 @@ export function SettingsModal() {
       theme,
       customColor,
       recordMicrophone,
-      recordSystemAudio
+      recordSystemAudio,
+      replayResolution,
+      replayFps
     });
     
     async function loadCredentials() {
@@ -228,6 +240,8 @@ export function SettingsModal() {
       await setCustomColor(localPreferences.customColor);
       await setRecordMicrophone(localPreferences.recordMicrophone);
       await setRecordSystemAudio(localPreferences.recordSystemAudio);
+      await setReplayResolution(localPreferences.replayResolution);
+      await setReplayFps(localPreferences.replayFps);
 
       // Sync Hotkeys
       try {
@@ -283,7 +297,9 @@ export function SettingsModal() {
       localPreferences.theme !== theme ||
       localPreferences.customColor !== customColor ||
       localPreferences.recordMicrophone !== recordMicrophone ||
-      localPreferences.recordSystemAudio !== recordSystemAudio
+      localPreferences.recordSystemAudio !== recordSystemAudio ||
+      localPreferences.replayResolution !== replayResolution ||
+      localPreferences.replayFps !== replayFps
     );
   };
 
@@ -317,7 +333,9 @@ export function SettingsModal() {
       theme,
       customColor,
       recordMicrophone,
-      recordSystemAudio
+      recordSystemAudio,
+      replayResolution,
+      replayFps
     });
     
     setShowConfirmClose(false);
@@ -578,6 +596,32 @@ export function SettingsModal() {
                     />
                     <div className="w-11 h-6 bg-zinc-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent-green"></div>
                   </label>
+                </div>
+
+                <div className="space-y-2 mt-4">
+                  <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Replay Buffer Resolution</label>
+                  <select
+                    value={localPreferences.replayResolution}
+                    onChange={(e) => setLocalPreferences(s => ({ ...s, replayResolution: e.target.value }))}
+                    className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2 text-sm text-zinc-100 focus:outline-none focus:border-primary transition-colors appearance-none"
+                  >
+                    <option value="1080p">1080p (High Memory)</option>
+                    <option value="720p">720p (Medium Memory)</option>
+                    <option value="480p">480p (Low Memory)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Replay Buffer FPS</label>
+                  <select
+                    value={localPreferences.replayFps}
+                    onChange={(e) => setLocalPreferences(s => ({ ...s, replayFps: parseInt(e.target.value) }))}
+                    className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2 text-sm text-zinc-100 focus:outline-none focus:border-primary transition-colors appearance-none"
+                  >
+                    <option value="60">60 FPS (Smoother, High Memory)</option>
+                    <option value="30">30 FPS (Standard Memory)</option>
+                    <option value="24">24 FPS (Cinematic, Low Memory)</option>
+                  </select>
                 </div>
               </div>
             )}

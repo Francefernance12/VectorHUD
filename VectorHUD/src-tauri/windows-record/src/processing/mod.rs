@@ -23,6 +23,7 @@ pub fn process_samples(
     output_width: u32,
     output_height: u32,
     device: Arc<ID3D11Device>,
+    device_manager: crate::types::SendableDeviceManager,
     capture_audio: bool,
     capture_microphone: bool,
     system_volume: Option<f32>,
@@ -75,9 +76,10 @@ pub fn process_samples(
         None
     };
 
-    // Updated to use input/output dimensions
+    // Updated to use input/output dimensions and device manager
     let converter = unsafe {
         video::setup_video_converter(
+            &device_manager.0,
             input_width,
             input_height,
             output_width,

@@ -27,6 +27,13 @@ For every task, follow this loop:
     - If you skipped a feature or found a non-critical bug, add it to `FutureImplementations.md`.
 6. **Verify:** Run tests and ensure the build completes successfully. Update `progress-tracker.md`.
 
+## Bug Fixing Protocol
+When assigned a bug fix, you must adhere to the following strict process to prioritize system stability and prevent regressions:
+1. **Analyze Dependencies:** Before writing any code, identify every function, variable, or system component in the provided file/context that interacts with or depends on the code being changed.
+2. **Impact Assessment:** Briefly document what could break if the fix is implemented carelessly.
+3. **The Fix:** Provide the corrected code.
+4. **Validation:** Explicitly state why this specific fix will not disrupt the rest of the file system or adjacent logic.
+
 ## Scoping Rules
 - Do not combine UI creation with heavy backend Rust logic in a single prompt.
 - Create dummy data for React widgets first to verify UI, then connect the Rust backend in a separate step.

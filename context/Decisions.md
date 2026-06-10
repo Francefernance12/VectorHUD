@@ -88,3 +88,30 @@ This document tracks all important decisions made throughout the lifecycle of th
 - **Reasoning:** Async listener IPC calls resolve independently of React's lifecycle. If the component unmounts before the IPC resolves, a "zombie" listener is bound to the DOM with stale closure scope.
 - **Decision:** Hard-fail the application boot sequence if the SQLite database is missing its core initialized schema tables (e.g., `widget_analytics`).
 - **Reasoning:** We encountered an issue where a hallucinated table name in the validation query caused silent boot failure, preventing the hydration sequence and hotkey registration. Hard-failing and enforcing an exact table count ensures the DB is healthy before React begins its lifecycle.
+
+## Session 16: Bug Fixes & Stability
+
+- **Decision:** Utilize a background `tokio::time::sleep` loop to periodically invoke `SetWindowPos(HWND_TOPMOST, SWP_NOACTIVATE)` instead of relying on a single initialization call.
+- **Reasoning:** Windows Shell (DWM) silently demotes topmost windows when certain applications (like Opera GX) take focus, causing the taskbar to overlap the overlay. Continuously re-asserting z-order guarantees the overlay stays on top without stealing focus.
+- **Decision:** Decouple `force-interactive` emissions from backend screenshot operations, handling the overlay visibility state purely in the frontend widget where context is known.
+- **Reasoning:** Originally, capturing a screenshot forcefully opened the overlay for all trigger paths, which ruined the UX of the silent global screenshot hotkey. Emitting a passive "screenshot-done" path allows the frontend to decide whether to open the gallery based on the trigger origin.
+- **Decision:** Replace unbounded `Vec` in `windows-record`'s `ReplayBuffer` with a `VecDeque` enforcing a strict `MAX_FRAMES` limit based on configured duration and FPS.
+- **Reasoning:** An unbounded buffer causes RAM usage to match the raw frame sizes of the game being captured, resulting in severe RAM spikes (3GB+). A bounded ring buffer ensures a strict memory ceiling after the initial warmup period.
+- **Decision:** Defer committing React hotkey strings until the `onKeyUp` event of a non-modifier key, enforcing a modifier presence guard.
+- **Reasoning:** Committing on `onKeyDown` immediately bound the hotkey before the user finished pressing the combination, leading to accidental partial binds (e.g., binding "A" when attempting "Ctrl+A").
+
+## Session 16.5: Architectural Shift - Media Engine
+
+- **Decision:** Replaced the custom `windows-record` crate with a bundled, pre-compiled static `ffmpeg.exe` sidecar process.
+- **Reasoning:** The `windows-record` crate (which wrapped DXGI Desktop Duplication and Media Foundation) was causing massive memory spikes (3.6GB+) due to unoptimized circular buffers and missing frames. Offloading the replay buffer to `ffmpeg` utilizing its HLS segmentation muxer natively resolves all RAM issues. Furthermore, FFmpeg provides perfect HDR-to-SDR tone-mapping via `zscale` and Hable curve filters, resolving washed-out HDR screenshots that `windows-record` couldn't properly handle.
+
+## Session 17: Hybrid Capture Engine Architecture
+
+- **Decision:** Shifted to a Hybrid Capture Engine: standard video recording and screenshot capture use the native Windows APIs (DXGI / Media Foundation via `windows-record` crate), while the 30-second Replay Buffer remains powered by FFmpeg HLS segmentation.
+- **Reasoning:** Storing uncompressed frames in memory for the 30-second replay buffer in `windows-record` caused severe RAM spikes (3GB+). Retaining FFmpeg HLS segmentation for the replay buffer writes compressed segments to disk on-the-fly, capping memory usage at ~40MB. Conversely, screenshots and standard recordings do not require memory accumulation (standard recordings encode and stream directly to disk on-the-fly), so they can use native Windows APIs with mathematically perfect HDR-to-SDR tone-mapping, resolving color washout and brightness issues.
+
+## Session 18: HDR scRGB CPU Reinhard Tone-Mapping
+
+- **Decision:** Shifted HDR capture to use `IDXGIOutput5::DuplicateOutput1` with `DXGI_FORMAT_R16G16B16A16_FLOAT` and apply CPU Reinhard tone-mapping + sRGB gamma correction, reverting previous transfer function hacks.
+- **Reasoning:** DXGI Desktop Duplication v1 (`DuplicateOutput1` with `DXGI_FORMAT_B8G8R8A8_UNORM`) forces DWM to perform its own SDR tone-mapping before passing pixels to our application, which corrupts color spaces based on the user's display whites. By requesting linear float16 scRGB data, we receive the raw HDR signal and can perform a mathematically correct CPU-based Reinhard tone-mapping to compress HDR -> SDR and apply sRGB gamma. This ensures screenshots and recordings look perfectly color-accurate without washout.
+

@@ -12,6 +12,13 @@ use windows::Win32::Media::MediaFoundation::{
 };
 pub mod safe_wrapper;
 
+use windows::Win32::Media::MediaFoundation::IMFDXGIDeviceManager;
+
+#[derive(Clone)]
+pub struct SendableDeviceManager(pub IMFDXGIDeviceManager);
+unsafe impl Send for SendableDeviceManager {}
+unsafe impl Sync for SendableDeviceManager {}
+
 /// A wrapper for IMFSample that can be sent between threads
 pub struct SendableSample {
     pub sample: Arc<IMFSample>,
@@ -392,24 +399,17 @@ impl SamplePool {
         texture: &ID3D11Texture2D,
         fps_num: u32,
     ) -> Result<IMFSample> {
-        // Cast the texture to an IDXGISurface
-        let surface: IDXGISurface = texture.cast()?;
-
         // Create a new Media Foundation sample
         let sample: IMFSample = MFCreateSample()?;
 
-        // Create a DXGI buffer from the surface
-        let buffer = MFCreateDXGISurfaceBuffer(&ID3D11Texture2D::IID, &surface, 0, TRUE)?;
+        // Create a DXGI buffer from the texture
+        let buffer = MFCreateDXGISurfaceBuffer(&ID3D11Texture2D::IID, texture, 0, TRUE)?;
 
         // Add the buffer to the sample
         sample.AddBuffer(&buffer)?;
 
         // Set the sample duration based on the frame rate
         sample.SetSampleDuration(10_000_000 / fps_num as i64)?;
-
-        // Explicitly release the surface to avoid a reference leak
-        // The buffer still maintains its reference to the underlying resource
-        drop(surface);
 
         Ok(sample)
     }

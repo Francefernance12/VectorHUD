@@ -248,6 +248,34 @@ pub fn run() {
                             }
                         }
                     });
+
+                    // Background task to re-assert HWND_TOPMOST every 2 seconds
+                    // This prevents the Windows Taskbar from silently overlapping the overlay
+                    // after shell events (like Opera GX gaining focus) without stealing focus.
+                    let window_clone = window.clone();
+                    let shutdown_flag_clone = shutdown_flag.clone();
+                    tauri::async_runtime::spawn(async move {
+                        loop {
+                            if shutdown_flag_clone.load(Ordering::Relaxed) {
+                                break;
+                            }
+                            if let Ok(hwnd) = window_clone.hwnd() {
+                                unsafe {
+                                    let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPos(
+                                        windows::Win32::Foundation::HWND(hwnd.0 as isize),
+                                        windows::Win32::UI::WindowsAndMessaging::HWND_TOPMOST,
+                                        0, 0, 0, 0,
+                                        windows::Win32::UI::WindowsAndMessaging::SWP_NOMOVE
+                                            | windows::Win32::UI::WindowsAndMessaging::SWP_NOSIZE
+                                            | windows::Win32::UI::WindowsAndMessaging::SWP_NOACTIVATE,
+                                    );
+                                }
+                            } else {
+                                tracing::warn!("Failed to get HWND for z-order re-assertion.");
+                            }
+                            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                        }
+                    });
                 }
             }
 
@@ -255,6 +283,9 @@ pub fn run() {
             core::metrics::spawn_metrics_thread(app.handle().clone(), shutdown_flag.clone());
 
             // Initialize video recorder state
+            app.manage(core::ffmpeg_manager::FfmpegState(tokio::sync::Mutex::new(
+                core::ffmpeg_manager::FfmpegManager::default(),
+            )));
             app.manage(core::record::RecorderState(std::sync::Mutex::new(
                 core::record::RecorderManager::new(),
             )));
@@ -264,6 +295,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_sql::Builder::default()
