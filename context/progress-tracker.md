@@ -4,7 +4,7 @@ Update this file after every meaningful implementation change.
 
 ## Current Goal
 
-- Develop Session 11: Polish (Stability & Final UI Polish)
+- Session 19: Documentation & Verification Audit (Check consistency of all context, README, and agent docs against the codebase).
 
 ## Completed
 
@@ -45,7 +45,9 @@ Update this file after every meaningful implementation change.
 
 | Session | Unit Name | Focus     | Goal                                                             |
 | :------ | :-------- | :-------- | :--------------------------------------------------------------- |
-| 15 | Deployment | Setup | Finalize Tauri `.msi` and `.exe` build flags and create installer. |
+| Future | Themes & Dock | UI/UX | Implement theme engine (Light/Dark/Black) and Dock hover icon scale animations. |
+| Future | Cursor Capture | Media | Periodically query cursor position and draw cursor onto D3D11 staging textures for recordings. |
+| Future | Social Sharing | API | Add Discord webhook configuration and "Share to Discord" button in gallery. |
 
 ## Architecture Decisions
 

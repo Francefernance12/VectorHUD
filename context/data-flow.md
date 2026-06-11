@@ -3,7 +3,7 @@
 ## The Communication Bridge
 Tauri uses an asynchronous Inter-Process Communication (IPC) bridge.
 - **Frontend to Backend:** React calls `invoke('command_name', { payload })`.
-- **Backend to Frontend:** Rust uses `app_handle.emit_all("event_name", payload)` to push data.
+- **Backend to Frontend:** Rust uses `app_handle.emit("event_name", payload)` to push data.
 
 ## Metrics Data Flow
 1. Rust background thread wakes up every 1000ms.
