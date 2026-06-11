@@ -694,3 +694,245 @@ pub async fn toggle_notion_task(
     }
     Ok(())
 }
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct UnifiedLlmResponse {
+    pub content: String,
+    pub total_tokens: u32,
+}
+
+fn map_messages_to_anthropic(messages: &Vec<serde_json::Value>) -> Vec<serde_json::Value> {
+    let mut anthropic_messages = Vec::new();
+    for msg in messages {
+        let role = msg.get("role").and_then(|r| r.as_str()).unwrap_or("user");
+        let content_val = msg.get("content");
+
+        if let Some(content) = content_val {
+            if let Some(text_str) = content.as_str() {
+                anthropic_messages.push(serde_json::json!({
+                    "role": role,
+                    "content": text_str
+                }));
+            } else if let Some(arr) = content.as_array() {
+                let mut mapped_content = Vec::new();
+                for block in arr {
+                    let b_type = block.get("type").and_then(|t| t.as_str()).unwrap_or("text");
+                    if b_type == "text" {
+                        let text_val = block.get("text").and_then(|t| t.as_str()).unwrap_or("");
+                        mapped_content.push(serde_json::json!({
+                            "type": "text",
+                            "text": text_val
+                        }));
+                    } else if b_type == "image_url" {
+                        let url_val = block
+                            .get("image_url")
+                            .and_then(|iu| iu.get("url"))
+                            .and_then(|u| u.as_str())
+                            .unwrap_or("");
+
+                        if url_val.starts_with("data:") {
+                            if let Some(comma_idx) = url_val.find(',') {
+                                let header = &url_val[..comma_idx];
+                                let base64_data = &url_val[comma_idx + 1..];
+                                let media_type = header.replace("data:", "").replace(";base64", "");
+
+                                mapped_content.push(serde_json::json!({
+                                    "type": "image",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": media_type,
+                                        "data": base64_data
+                                    }
+                                }));
+                            }
+                        }
+                    }
+                }
+                anthropic_messages.push(serde_json::json!({
+                    "role": role,
+                    "content": mapped_content
+                }));
+            }
+        }
+    }
+    anthropic_messages
+}
+
+#[tauri::command]
+pub async fn call_ai_api(
+    provider: String,
+    model: String,
+    messages: Vec<serde_json::Value>,
+    system_prompt: String,
+    api_key: String,
+) -> Result<UnifiedLlmResponse, String> {
+    tracing::info!("call_ai_api: provider='{}', model='{}'", provider, model);
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|e| {
+            let err = format!("Failed to build HTTP client: {}", e);
+            tracing::error!("{}", err);
+            err
+        })?;
+
+    match provider.as_str() {
+        "openai" | "groq" | "openrouter" => {
+            let url = match provider.as_str() {
+                "openai" => "https://api.openai.com/v1/chat/completions",
+                "groq" => "https://api.groq.com/openai/v1/chat/completions",
+                _ => "https://openrouter.ai/api/v1/chat/completions",
+            };
+
+            let mut body_messages = vec![serde_json::json!({
+                "role": "system",
+                "content": system_prompt
+            })];
+            for msg in messages {
+                body_messages.push(msg);
+            }
+
+            let body = serde_json::json!({
+                "model": model,
+                "messages": body_messages
+            });
+
+            let mut req = client
+                .post(url)
+                .header("Content-Type", "application/json")
+                .header("Authorization", format!("Bearer {}", api_key));
+
+            if provider == "openrouter" {
+                req = req
+                    .header("HTTP-Referer", "http://localhost:1420")
+                    .header("X-Title", "VectorHUD");
+            }
+
+            let res = req.json(&body).send().await.map_err(|e| {
+                let err = format!("HTTP Request to '{}' failed: {}", provider, e);
+                tracing::error!("{}", err);
+                err
+            })?;
+
+            let status = res.status();
+            let raw_text = res.text().await.map_err(|e| {
+                let err = format!("Failed to read response body: {}", e);
+                tracing::error!("{}", err);
+                err
+            })?;
+
+            // Log response body if not successful
+            if !status.is_success() {
+                tracing::error!("AI API Error ({}): Raw Body: {}", status, raw_text);
+
+                // Try to parse error structure
+                if let Ok(data) = serde_json::from_str::<serde_json::Value>(&raw_text) {
+                    if let Some(err_msg) = data
+                        .get("error")
+                        .and_then(|e| e.get("message"))
+                        .and_then(|m| m.as_str())
+                    {
+                        return Err(format!("AI Provider Error: {}", err_msg));
+                    }
+                }
+                return Err(format!("Request failed with status code {}", status));
+            }
+
+            let data: serde_json::Value = serde_json::from_str(&raw_text).map_err(|e| {
+                let err = format!("Failed to parse response JSON: {}", e);
+                tracing::error!("{}", err);
+                err
+            })?;
+
+            let content = data["choices"][0]["message"]["content"]
+                .as_str()
+                .unwrap_or("")
+                .to_string();
+            let total_tokens = data["usage"]["total_tokens"].as_u64().unwrap_or(0) as u32;
+
+            tracing::info!("call_ai_api success: tokens={}", total_tokens);
+            Ok(UnifiedLlmResponse {
+                content,
+                total_tokens,
+            })
+        }
+        "anthropic" => {
+            let mapped_messages = map_messages_to_anthropic(&messages);
+            let body = serde_json::json!({
+                "model": model,
+                "system": system_prompt,
+                "messages": mapped_messages,
+                "max_tokens": 4096
+            });
+
+            let res = client
+                .post("https://api.anthropic.com/v1/messages")
+                .header("Content-Type", "application/json")
+                .header("x-api-key", api_key)
+                .header("anthropic-version", "2023-06-01")
+                .json(&body)
+                .send()
+                .await
+                .map_err(|e| {
+                    let err = format!("HTTP Request to Anthropic failed: {}", e);
+                    tracing::error!("{}", err);
+                    err
+                })?;
+
+            let status = res.status();
+            let raw_text = res.text().await.map_err(|e| {
+                let err = format!("Failed to read response body: {}", e);
+                tracing::error!("{}", err);
+                err
+            })?;
+
+            if !status.is_success() {
+                tracing::error!("Anthropic API Error ({}): Raw Body: {}", status, raw_text);
+
+                if let Ok(data) = serde_json::from_str::<serde_json::Value>(&raw_text) {
+                    if let Some(err_msg) = data
+                        .get("error")
+                        .and_then(|e| e.get("message"))
+                        .and_then(|m| m.as_str())
+                    {
+                        return Err(format!("Anthropic Error: {}", err_msg));
+                    }
+                }
+                return Err(format!("Anthropic failed with status code {}", status));
+            }
+
+            let data: serde_json::Value = serde_json::from_str(&raw_text).map_err(|e| {
+                let err = format!("Failed to parse Anthropic JSON: {}", e);
+                tracing::error!("{}", err);
+                err
+            })?;
+
+            let content_arr = data["content"].as_array();
+            let content = if let Some(arr) = content_arr {
+                if !arr.is_empty() {
+                    arr[0]["text"].as_str().unwrap_or("").to_string()
+                } else {
+                    "".to_string()
+                }
+            } else {
+                "".to_string()
+            };
+
+            let input_tokens = data["usage"]["input_tokens"].as_u64().unwrap_or(0);
+            let output_tokens = data["usage"]["output_tokens"].as_u64().unwrap_or(0);
+            let total_tokens = (input_tokens + output_tokens) as u32;
+
+            tracing::info!("call_ai_api success: tokens={}", total_tokens);
+            Ok(UnifiedLlmResponse {
+                content,
+                total_tokens,
+            })
+        }
+        _ => {
+            let err = format!("Unsupported AI provider: {}", provider);
+            tracing::error!("{}", err);
+            Err(err)
+        }
+    }
+}

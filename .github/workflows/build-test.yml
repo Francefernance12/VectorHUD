@@ -39,4 +39,7 @@ jobs:
 
       - name: Build Tauri App
         working-directory: ./VectorHUD
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         run: npm run tauri build

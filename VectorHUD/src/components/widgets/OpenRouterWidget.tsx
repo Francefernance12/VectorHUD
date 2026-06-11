@@ -7,8 +7,10 @@ import { getErrorMessage } from '../../types';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useToastStore } from '../../store/toastStore';
 import { useOpenRouterStore } from '../../store/openRouterStore';
+import { useShallow } from 'zustand/react/shallow';
+import { useShellStore } from '../../store/shellStore';
 import { Plus, MessageSquare, Trash2, Camera, Edit3, Copy, Check } from 'lucide-react';
-import { API_ENDPOINTS, UI_CONSTANTS } from '../../config/constants';
+import { UI_CONSTANTS } from '../../config/constants';
 
 interface Message {
   id?: number;
@@ -46,11 +48,53 @@ export function OpenRouterWidget() {
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editSessionTitle, setEditSessionTitle] = useState<string>('');
   
-  const openRouterModel = useSettingsStore(state => state.openRouterModel);
+  const {
+    aiProvider,
+    openRouterModel,
+    openaiModel,
+    anthropicModel,
+    groqModel,
+    customOpenRouterModel,
+    useCustomOpenRouterModel
+  } = useSettingsStore(
+    useShallow((state) => ({
+      aiProvider: state.aiProvider,
+      openRouterModel: state.openRouterModel,
+      openaiModel: state.openaiModel,
+      anthropicModel: state.anthropicModel,
+      groqModel: state.groqModel,
+      customOpenRouterModel: state.customOpenRouterModel,
+      useCustomOpenRouterModel: state.useCustomOpenRouterModel,
+    }))
+  );
   const showToast = useToastStore(state => state.showToast);
   const chatEndRef = useRef<HTMLDivElement>(null);
   
   const [copiedId, setCopiedId] = useState<number | string | null>(null);
+
+  const getCodeText = (node: any): string => {
+    if (!node) return '';
+    if (typeof node === 'string') return node;
+    if (Array.isArray(node)) return node.map(getCodeText).join('');
+    if (node.props && node.props.children) return getCodeText(node.props.children);
+    return '';
+  };
+
+  const getActiveModelName = () => {
+    switch (aiProvider) {
+      case 'openai':
+        return `OpenAI: ${openaiModel}`;
+      case 'anthropic': {
+        const parts = anthropicModel.split('-');
+        return `Anthropic: ${parts.length > 2 ? parts.slice(1).join('-') : anthropicModel}`;
+      }
+      case 'groq':
+        return `Groq: ${groqModel}`;
+      case 'openrouter':
+      default:
+        return `OpenRouter: ${(useCustomOpenRouterModel && customOpenRouterModel) ? customOpenRouterModel : openRouterModel.split('/').pop()}`;
+    }
+  };
 
   const handleCopy = (text: string, id: number | string | undefined) => {
     navigator.clipboard.writeText(text);
@@ -187,8 +231,10 @@ export function OpenRouterWidget() {
       const base64Image = await invoke<string>('capture_screen_base64');
       setDraftImagePath(base64Image);
       showToast("📸 Vision Buffer Captured");
+      useShellStore.getState().setInteractive(true);
     } catch (err) {
       logger.error(`Failed to analyze screen buffer: ${getErrorMessage(err)}`);
+      useShellStore.getState().setInteractive(true);
     } finally {
       setIsTyping(false);
     }
@@ -218,16 +264,45 @@ export function OpenRouterWidget() {
   const fetchAIResponse = async (currentMessages: Message[], sessionId: string) => {
     try {
       const db = await getDb();
-      const orResult = await db.select<{ encrypted_value: string }[]>(
-        "SELECT encrypted_value FROM user_credentials WHERE id = 'openrouter_key'"
-      );
-      if (orResult.length === 0) {
-        throw new Error("OpenRouter API key is not configured. Please add it in Settings.");
-      }
-      const openRouterKey = await invoke<string>('decrypt_data', { encoded: orResult[0].encrypted_value });
+      let keyId = 'openrouter_key';
+      let friendlyProviderName = 'OpenRouter';
+      let selectedModel = openRouterModel;
 
-      if (!openRouterKey) {
-        throw new Error("OpenRouter API key is invalid.");
+      switch (aiProvider) {
+        case 'openai':
+          keyId = 'openai_key';
+          friendlyProviderName = 'OpenAI';
+          selectedModel = openaiModel;
+          break;
+        case 'anthropic':
+          keyId = 'anthropic_key';
+          friendlyProviderName = 'Anthropic';
+          selectedModel = anthropicModel;
+          break;
+        case 'groq':
+          keyId = 'groq_key';
+          friendlyProviderName = 'Groq';
+          selectedModel = groqModel;
+          break;
+        case 'openrouter':
+        default:
+          keyId = 'openrouter_key';
+          friendlyProviderName = 'OpenRouter';
+          selectedModel = (useCustomOpenRouterModel && customOpenRouterModel) ? customOpenRouterModel : openRouterModel;
+          break;
+      }
+
+      const keyResult = await db.select<{ encrypted_value: string }[]>(
+        "SELECT encrypted_value FROM user_credentials WHERE id = ?",
+        [keyId]
+      );
+      if (keyResult.length === 0) {
+        throw new Error(`${friendlyProviderName} API key is not configured. Please add it in Settings.`);
+      }
+
+      const apiKey = await invoke<string>('decrypt_data', { encoded: keyResult[0].encrypted_value });
+      if (!apiKey) {
+        throw new Error(`${friendlyProviderName} API key is invalid or empty.`);
       }
 
       const apiMessages = currentMessages.map(msg => {
@@ -235,8 +310,8 @@ export function OpenRouterWidget() {
           return {
             role: msg.role,
             content: [
-              { type: 'text' as const, text: msg.content || "Analyze this image." },
-              { type: 'image_url' as const, image_url: { url: msg.image_path } }
+              { type: 'text', text: msg.content || "Analyze this image." },
+              { type: 'image_url', image_url: { url: msg.image_path } }
             ]
           };
         }
@@ -246,35 +321,31 @@ export function OpenRouterWidget() {
         };
       });
 
-      const response = await fetch(API_ENDPOINTS.OPEN_ROUTER_CHAT, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${openRouterKey}`,
-          "HTTP-Referer": "http://localhost:1420",
-          "X-Title": "VectorHUD",
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: openRouterModel,
-          system: UI_CONSTANTS.CHAT_SYSTEM_PROMPT,
-          messages: apiMessages
-        })
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error?.message || "OpenRouter API request failed");
+      interface UnifiedLlmResponse {
+        content: string;
+        total_tokens: number;
       }
 
-      const assistantReply = data.choices[0].message.content;
-      const totalTokens = data.usage?.total_tokens || 0;
-      const assistantMsg: Message = { session_id: sessionId, role: 'assistant', content: assistantReply, tokens: totalTokens };
+      const result = await invoke<UnifiedLlmResponse>('call_ai_api', {
+        provider: aiProvider || 'openrouter',
+        model: selectedModel,
+        messages: apiMessages,
+        systemPrompt: UI_CONSTANTS.CHAT_SYSTEM_PROMPT,
+        apiKey: apiKey
+      });
+
+      const assistantMsg: Message = {
+        session_id: sessionId,
+        role: 'assistant',
+        content: result.content,
+        tokens: result.total_tokens
+      };
       
       setMessages(prev => [...prev, assistantMsg]);
       await saveMessage(assistantMsg);
 
     } catch (err: unknown) {
-      logger.error(`OpenRouter Chat Failed: ${getErrorMessage(err)}`);
+      logger.error(`AI Chat Failed (${aiProvider}): ${getErrorMessage(err)}`);
       const errorMsg: Message = { session_id: sessionId, role: 'assistant', content: `Error: ${getErrorMessage(err)}` };
       setMessages(prev => [...prev, errorMsg]);
     } finally {
@@ -283,7 +354,7 @@ export function OpenRouterWidget() {
   };
 
   return (
-    <div className="flex h-full bg-black/60 font-mono overflow-hidden">
+    <div className="flex h-full bg-black/60 font-mono overflow-hidden w-full min-w-0">
       {/* Sidebar */}
       {sidebarOpen && (
         <div className="w-64 border-r border-zinc-800 bg-black flex flex-col shrink-0 overflow-hidden">
@@ -348,7 +419,7 @@ export function OpenRouterWidget() {
       )}
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col relative">
+      <div className="flex-1 flex flex-col relative min-w-0">
         <div className="p-3 border-b border-border-wire bg-black/80 flex items-center justify-between shadow-sm z-10">
           <div className="flex items-center gap-3">
             <button 
@@ -359,10 +430,10 @@ export function OpenRouterWidget() {
             </button>
             <span className="text-xs font-bold text-zinc-200 tracking-wider">TACTICAL_AI_LINK</span>
           </div>
-          <span className="text-[10px] text-zinc-600 bg-white/5 px-2 py-0.5 rounded-full border border-white/10 uppercase tracking-widest">{openRouterModel.split('/').pop()}</span>
+          <span className="text-[10px] text-zinc-600 bg-white/5 px-2 py-0.5 rounded-full border border-white/10 uppercase tracking-widest">{getActiveModelName()}</span>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar scroll-smooth">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-6 custom-scrollbar scroll-smooth w-full">
           {messages.length === 0 && !isTyping && (
             <div className="h-full flex flex-col items-center justify-center text-zinc-500 space-y-3 opacity-50">
               <MessageSquare size={32} />
@@ -371,14 +442,14 @@ export function OpenRouterWidget() {
           )}
           
           {messages.map((msg, idx) => (
-            <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} group animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+            <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} group animate-in fade-in slide-in-from-bottom-2 duration-300 w-full`}>
               <span className="text-[9px] text-zinc-600 mb-1.5 uppercase tracking-widest px-1 font-bold">
                 {msg.role === 'user' ? 'OPERATOR' : 'VECTOR_AI'}
               </span>
-              <div className={`p-3.5 rounded-sm text-sm max-w-[90%] shadow-lg relative ${
+              <div className={`p-3.5 rounded-sm text-sm w-fit max-w-[90%] min-w-0 shadow-lg relative select-text break-words overflow-hidden ${
                 msg.role === 'user' 
                   ? 'bg-zinc-800/80 border-r-2 border-accent-amber text-zinc-100' 
-                  : 'bg-black/60 border-l-2 border-accent-green text-zinc-300'
+                  : 'bg-black/60 border-l-2 border-accent-green text-zinc-300 shadow-[0_0_15px_rgba(74,246,38,0.05)]'
               }`}>
                 {msg.image_path && (
                   <div className="mb-3 p-2 bg-black/50 border border-white/5 rounded-sm flex items-center gap-2 text-[10px] text-accent-green/80 italic w-fit">
@@ -387,20 +458,187 @@ export function OpenRouterWidget() {
                   </div>
                 )}
                 {msg.role === 'assistant' ? (
-                  <div className="group/msg relative">
-                    <div className="prose prose-invert prose-sm max-w-none prose-p:leading-relaxed prose-pre:bg-black/50 prose-pre:border prose-pre:border-white/10">
-                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  <div className="group/msg relative select-text w-full overflow-hidden">
+                    <div className="prose prose-invert prose-sm max-w-none prose-p:leading-relaxed select-text w-full overflow-hidden">
+                      <ReactMarkdown
+                        components={{
+                          h1({ children }) {
+                            return (
+                              <h1 className="text-xs font-bold text-white tracking-widest uppercase border-b border-zinc-800 pb-1.5 mb-3 mt-5 flex items-center gap-2 font-mono">
+                                <span className="w-1.5 h-3 bg-accent-green inline-block animate-pulse"></span>
+                                {children}
+                              </h1>
+                            );
+                          },
+                          h2({ children }) {
+                            return (
+                              <h2 className="text-[11px] font-bold text-zinc-200 tracking-wider uppercase border-b border-zinc-900 pb-1 mb-2.5 mt-4 flex items-center gap-1.5 font-mono">
+                                <span className="w-1.5 h-2 bg-accent-amber inline-block"></span>
+                                {children}
+                              </h2>
+                            );
+                          },
+                          h3({ children }) {
+                            return (
+                              <h3 className="text-[10px] font-bold text-zinc-400 tracking-wide uppercase mb-2 mt-3 flex items-center gap-1 font-mono">
+                                <span className="text-accent-green select-none font-bold">//</span>
+                                {children}
+                              </h3>
+                            );
+                          },
+                          strong({ children }) {
+                            return (
+                              <strong className="font-bold text-accent-green font-mono">
+                                {children}
+                              </strong>
+                            );
+                          },
+                          em({ children }) {
+                            return (
+                              <em className="italic text-zinc-400 font-mono">
+                                {children}
+                              </em>
+                            );
+                          },
+                          a({ href, children }) {
+                            return (
+                              <a 
+                                href={href} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                className="text-accent-amber hover:text-accent-green underline cursor-pointer transition-colors font-mono font-bold"
+                              >
+                                {children}
+                              </a>
+                            );
+                          },
+                          pre({ children }) {
+                            const codeText = getCodeText(children);
+                            let lang = "CODE";
+                            if (children && (children as any).props && (children as any).props.className) {
+                              const match = /language-(\w+)/.exec((children as any).props.className || '');
+                              if (match) lang = match[1].toUpperCase();
+                            }
+                            return (
+                              <div className="my-3.5 rounded border border-zinc-800 bg-[#070707] shadow-xl max-w-full overflow-hidden">
+                                <div className="flex items-center justify-between px-4 py-2 bg-zinc-950 border-b border-zinc-900 text-[10px] text-zinc-500 font-mono tracking-widest select-none">
+                                  <div className="flex items-center gap-2">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-accent-amber animate-pulse"></span>
+                                    <span>{lang}</span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(codeText.trim());
+                                      showToast("📋 Code Copied");
+                                    }}
+                                    className="hover:text-accent-green transition-colors flex items-center gap-1.5 font-bold uppercase tracking-wider text-[9px]"
+                                  >
+                                    <Copy size={10} /> Copy
+                                  </button>
+                                </div>
+                                <pre className="p-4 text-xs font-mono text-zinc-300 overflow-x-auto custom-scrollbar whitespace-pre select-text bg-[#030303]/60">
+                                  {children}
+                                </pre>
+                              </div>
+                            );
+                          },
+                          code({ className, children, ...props }) {
+                            const codeText = typeof children === 'string' ? children : getCodeText(children);
+                            const isInline = !className && !codeText.includes('\n');
+                            
+                            let lang = "";
+                            if (className) {
+                              const match = /language-(\w+)/.exec(className || '');
+                              if (match) lang = match[1];
+                            }
+
+                            if (!isInline) {
+                              const highlighted = highlightCode(codeText, lang);
+                              return (
+                                <code 
+                                  className="block text-zinc-300 font-mono text-xs select-text whitespace-pre overflow-x-auto"
+                                  dangerouslySetInnerHTML={{ __html: highlighted }}
+                                />
+                              );
+                            }
+                            return (
+                              <code className="px-1.5 py-0.5 rounded bg-zinc-900/80 border border-zinc-800 font-mono text-xs text-accent-amber font-semibold select-text" {...props}>
+                                {children}
+                              </code>
+                            );
+                          },
+                          table({ children }) {
+                            return (
+                              <div className="overflow-x-auto my-3 border border-zinc-800 rounded-md w-full bg-black/40 shadow-inner">
+                                <table className="min-w-full divide-y divide-zinc-800 text-xs font-mono">
+                                  {children}
+                                </table>
+                              </div>
+                            );
+                          },
+                          th({ children }) {
+                            return (
+                              <th className="px-3 py-2 bg-zinc-950 text-left text-[10px] font-bold text-zinc-400 uppercase tracking-widest border-b border-zinc-800 font-mono">
+                                {children}
+                              </th>
+                            );
+                          },
+                          td({ children }) {
+                            return (
+                              <td className="px-3 py-1.5 text-zinc-300 border-b border-zinc-900/50 font-mono">
+                                {children}
+                              </td>
+                            );
+                          },
+                          blockquote({ children }) {
+                            return (
+                              <blockquote className="border-l-2 border-accent-amber/70 pl-3.5 py-2 my-4 italic text-zinc-300 bg-accent-amber/5 rounded-r-md text-xs relative overflow-hidden font-mono shadow-[inset_0_0_10px_rgba(255,176,0,0.02)]">
+                                <span className="absolute top-1 right-2 text-[8px] font-bold text-accent-amber/30 select-none tracking-widest uppercase font-mono">QUOTE</span>
+                                {children}
+                              </blockquote>
+                            );
+                          },
+                          ul({ children }) {
+                            return <ul className="my-3 space-y-1.5 pl-1 text-zinc-300 text-xs font-mono">{children}</ul>;
+                          },
+                          ol({ children }) {
+                            return <ol className="my-3 space-y-1.5 pl-4 text-zinc-300 text-xs font-mono list-decimal">{children}</ol>;
+                          },
+                          li(props: any) {
+                            const { ordered, children } = props;
+                            if (ordered) {
+                              return (
+                                <li className="leading-relaxed text-xs text-zinc-350 font-mono pl-1">
+                                  {children}
+                                </li>
+                              );
+                            }
+                            return (
+                              <li className="flex items-start gap-2 leading-relaxed text-xs text-zinc-350 font-mono">
+                                <span className="text-accent-green select-none font-bold mt-[1px]">›</span>
+                                <div className="flex-1">{children}</div>
+                              </li>
+                            );
+                          },
+                          p({ children }) {
+                            return <p className="mb-2.5 last:mb-0 leading-relaxed text-zinc-200/90 text-xs font-mono">{children}</p>;
+                          }
+                        }}
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
                     </div>
                     <button
                       onClick={() => handleCopy(msg.content, idx)}
-                      className="absolute top-0 right-0 opacity-0 group-hover/msg:opacity-100 p-1.5 bg-zinc-800 rounded text-zinc-400 hover:text-white hover:bg-zinc-700 transition-all border border-white/10 shadow-sm"
+                      className="absolute top-0 right-0 opacity-0 group-hover/msg:opacity-100 p-1.5 bg-zinc-800 rounded text-zinc-400 hover:text-white hover:bg-zinc-700 transition-all border border-white/10 shadow-sm z-10"
                       title="Copy message"
                     >
                       {copiedId === idx ? <Check size={14} className="text-accent-green" /> : <Copy size={14} />}
                     </button>
                   </div>
                 ) : (
-                  <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
+                  <div className="whitespace-pre-wrap leading-relaxed select-text break-words">{msg.content}</div>
                 )}
                 {msg.tokens && (
                   <div className="mt-2 text-[9px] text-zinc-500 font-mono italic flex justify-end">
@@ -466,3 +704,207 @@ export function OpenRouterWidget() {
     </div>
   );
 }
+
+interface Token {
+  type: string;
+  value: string;
+}
+
+const tokenize = (code: string, rules: { type: string; regex: RegExp }[]): Token[] => {
+  const tokens: Token[] = [];
+  let index = 0;
+  
+  while (index < code.length) {
+    let matched = false;
+    const remaining = code.slice(index);
+    
+    for (const rule of rules) {
+      const match = rule.regex.exec(remaining);
+      if (match && match.index === 0) {
+        const value = match[0];
+        tokens.push({ type: rule.type, value });
+        index += value.length;
+        matched = true;
+        break;
+      }
+    }
+    
+    if (!matched) {
+      const char = code[index];
+      const lastToken = tokens[tokens.length - 1];
+      if (lastToken && lastToken.type === 'text') {
+        lastToken.value += char;
+      } else {
+        tokens.push({ type: 'text', value: char });
+      }
+      index++;
+    }
+  }
+  
+  return tokens;
+};
+
+const jsRules = [
+  { type: 'comment', regex: /^\/\/.*|^\/\*[\s\S]*?\*\// },
+  { type: 'string', regex: /^"(?:\\.|[^"\\])*"|^'(?:\\.|[^'\\])*'|^`[\s\S]*?`/ },
+  { type: 'keyword', regex: /^(?:break|case|catch|class|const|continue|debugger|default|delete|do|else|export|extends|finally|for|function|if|import|in|instanceof|new|return|super|switch|this|throw|try|typeof|var|void|while|with|yield|let|package|private|protected|public|static|enum|interface|type|implements|namespace|async|await|as|from|of|get|set)\b/ },
+  { type: 'constant', regex: /^(?:true|false|null|undefined|NaN|Infinity)\b/ },
+  { type: 'function', regex: /^[a-zA-Z_$][a-zA-Z0-9_$]*(?=\s*\()/ },
+  { type: 'number', regex: /^\d+(?:\.\d+)?|^0x[a-fA-F0-9]+/ },
+  { type: 'operator', regex: /^=>|^===|^==|^=|^!==|^!=|^!|^<=|^>=|^<|^>|^\+\+|^\+|^--|^-|^\*|^\/|^&&|^\|\||^\?|^:/ },
+  { type: 'class', regex: /^[A-Z][a-zA-Z0-9_$]*/ },
+];
+
+const pyRules = [
+  { type: 'comment', regex: /^#.*/ },
+  { type: 'string', regex: /^"""[\s\S]*?"""|^'''[\s\S]*?'''|^"(?:\\.|[^"\\])*"|^'(?:\\.|[^'\\])*'/ },
+  { type: 'keyword', regex: /^(?:False|None|True|and|as|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|nonlocal|not|or|pass|raise|return|try|while|with|yield|self)\b/ },
+  { type: 'decorator', regex: /^@[a-zA-Z0-9_]+/ },
+  { type: 'function', regex: /^[a-zA-Z_][a-zA-Z0-9_]*(?=\s*\()/ },
+  { type: 'number', regex: /^\d+(?:\.\d+)?/ },
+  { type: 'operator', regex: /^==|^=|^!=|^<=|^>=|^<|^>|^\+|^--|^-|^\*|^\/|^&&|^\|\||^\?|^:/ },
+];
+
+const csRules = [
+  { type: 'comment', regex: /^\/\/.*|^\/\*[\s\S]*?\*\// },
+  { type: 'string', regex: /^@"(?:""|[^"])*"|^"(?:\\.|[^"\\])*"|^'(?:\\.|[^'\\])*'/ },
+  { type: 'keyword', regex: /^(?:abstract|as|base|bool|break|byte|case|catch|char|checked|class|const|continue|decimal|default|delegate|do|double|else|enum|event|explicit|extern|false|finally|fixed|float|for|foreach|goto|if|implicit|in|int|interface|internal|is|lock|long|namespace|new|null|object|operator|out|override|params|private|protected|public|readonly|ref|return|sbyte|sealed|short|sizeof|stackalloc|static|string|struct|switch|this|throw|true|try|typeof|uint|ulong|unchecked|unsafe|ushort|using|virtual|void|volatile|while|add|alias|ascending|async|await|by|descending|dynamic|equals|from|get|global|group|into|join|let|nameof|on|orderby|partial|remove|select|set|value|var|when|where|yield)\b/ },
+  { type: 'function', regex: /^[a-zA-Z_][a-zA-Z0-9_]*(?=\s*\()/ },
+  { type: 'number', regex: /^\d+(?:\.\d+)?f?/ },
+  { type: 'operator', regex: /^=>|^==|^=|^!=|^<=|^>=|^<|^>|^\+\+|^\+|^--|^-|^\*|^\/|^&&|^\|\||^\?|^:/ },
+  { type: 'class', regex: /^[A-Z][a-zA-Z0-9_]*/ },
+];
+
+const rustRules = [
+  { type: 'comment', regex: /^\/\/.*|^\/\*[\s\S]*?\*\// },
+  { type: 'string', regex: /^b?"(?:\\.|[^"\\])*"|^r#"(?:[\s\S]*?)"#|^'\\?[a-zA-Z0-9_]'/ },
+  { type: 'keyword', regex: /^(?:as|async|await|break|const|continue|crate|dyn|else|enum|extern|false|fn|for|if|impl|import|in|let|loop|match|mod|move|mut|pub|ref|return|self|Self|static|struct|super|trait|true|type|union|unsafe|use|where|while|macro_rules)\b/ },
+  { type: 'function', regex: /^[a-zA-Z_][a-zA-Z0-9_]*(?=\s*\(|!\s*\()/ },
+  { type: 'number', regex: /^\d+(?:_\d+)*(?:\.\d+)?(?:u8|u16|u32|u64|u128|i8|i16|i32|i64|i128|f32|f64)?/ },
+  { type: 'operator', regex: /^=>|^==|^=|^!=|^<=|^>=|^<|^>|^\+|^--|^-|^\*|^\/|^&&|^\|\||^\?|^:/ },
+];
+
+const jsonRules = [
+  { type: 'string', regex: /^"(?:\\.|[^"\\])*"/ },
+  { type: 'number', regex: /^-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/ },
+  { type: 'constant', regex: /^(?:true|false|null)\b/ },
+  { type: 'operator', regex: /^:|{|}|\[|\]|,/ },
+];
+
+const htmlRules = [
+  { type: 'comment', regex: /^<!--[\s\S]*?-->/ },
+  { type: 'doctype', regex: /^<!DOCTYPE[^>]*>/i },
+  { type: 'tag', regex: /^<\/?[a-zA-Z0-9:-]+(?:\s+[a-zA-Z0-9:-]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s'">=]+))?)*\s*\/?>/ },
+];
+
+const cssRules = [
+  { type: 'comment', regex: /^\/\*[\s\S]*?\*\// },
+  { type: 'selector', regex: /^[^`~!@$%^&*()+=:;<>?,./\s{][^{}]*(?=\s*\{)/ },
+  { type: 'property', regex: /^[\w-]+(?=\s*:)/ },
+  { type: 'value', regex: /^:\s*[^;{}]+(?=;|\})/ },
+  { type: 'operator', regex: /^{|}/ },
+];
+
+const sqlRules = [
+  { type: 'comment', regex: /^--.*|^\/\*[\s\S]*?\*\// },
+  { type: 'string', regex: /^'(?:''|[^'])*'|^"(?:""|[^"])*"/ },
+  { type: 'keyword', regex: /^(?:select|insert|update|delete|from|where|join|left|right|inner|outer|on|group|by|having|order|limit|offset|create|table|drop|alter|index|view|primary|key|foreign|references|unique|not|null|default|check|constraint|values|into|set|and|or|not|in|like|between|exists|is|null|true|false|as|union|all|any|some|case|when|then|else|end|count|sum|avg|min|max|group_concat|coalesce|distinct)\b/i },
+  { type: 'number', regex: /^\d+(?:\.\d+)?/ },
+  { type: 'operator', regex: /^=|!=|<>|<=|>=|<|>|\+|-|\*|\// },
+];
+
+const bashRules = [
+  { type: 'comment', regex: /^#.*/ },
+  { type: 'string', regex: /^"(?:\\.|[^"\\])*"|^'(?:\\.|[^'\\])*'/ },
+  { type: 'keyword', regex: /^(?:cd|ls|pwd|echo|cat|grep|awk|sed|mkdir|rm|cp|mv|touch|chmod|chown|sudo|apt|yum|dnf|pacman|systemctl|git|npm|node|python|cargo|rustc|make|gcc|clang|docker|docker-compose|kubectl|aws|gcloud|curl|wget|ssh|scp|rsync|tar|zip|unzip|find|xargs|sleep|exit|export|alias|if|else|elif|fi|for|while|in|do|done|case|esac|function)\b/ },
+  { type: 'operator', regex: /^\||^&|^>|^<|^==|^=|^!=/ },
+];
+
+const escapeHtml = (text: string): string => {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+};
+
+const highlightCode = (code: string, language: string): string => {
+  const cleanCode = code.trim();
+  const lang = (language || 'text').toLowerCase();
+  
+  let rules;
+  switch (lang) {
+    case 'javascript':
+    case 'js':
+    case 'jsx':
+    case 'typescript':
+    case 'ts':
+    case 'tsx':
+      rules = jsRules;
+      break;
+    case 'python':
+    case 'py':
+      rules = pyRules;
+      break;
+    case 'csharp':
+    case 'cs':
+      rules = csRules;
+      break;
+    case 'rust':
+    case 'rs':
+      rules = rustRules;
+      break;
+    case 'json':
+      rules = jsonRules;
+      break;
+    case 'html':
+    case 'xml':
+    case 'svg':
+      rules = htmlRules;
+      break;
+    case 'css':
+    case 'scss':
+    case 'sass':
+      rules = cssRules;
+      break;
+    case 'sql':
+      rules = sqlRules;
+      break;
+    case 'bash':
+    case 'sh':
+    case 'shell':
+    case 'powershell':
+    case 'ps1':
+      rules = bashRules;
+      break;
+    default:
+      return escapeHtml(cleanCode);
+  }
+  
+  const tokens = tokenize(cleanCode, rules);
+  return tokens.map(t => {
+    if (t.type === 'text') {
+      return escapeHtml(t.value);
+    }
+    let styleClass = '';
+    switch (t.type) {
+      case 'comment': styleClass = 'text-zinc-500 italic'; break;
+      case 'string': styleClass = 'text-emerald-400'; break;
+      case 'number': styleClass = 'text-amber-400 font-bold'; break;
+      case 'keyword': styleClass = 'text-pink-400 font-bold'; break;
+      case 'constant': styleClass = 'text-purple-400 font-bold'; break;
+      case 'function': styleClass = 'text-sky-400'; break;
+      case 'decorator': styleClass = 'text-teal-400'; break;
+      case 'tag': styleClass = 'text-red-400 font-semibold'; break;
+      case 'doctype': styleClass = 'text-zinc-400 font-bold'; break;
+      case 'selector': styleClass = 'text-indigo-400 font-bold'; break;
+      case 'property': styleClass = 'text-orange-400'; break;
+      case 'value': styleClass = 'text-teal-400'; break;
+      case 'operator': styleClass = 'text-zinc-400 font-semibold opacity-90'; break;
+      case 'class': styleClass = 'text-yellow-400 font-semibold'; break;
+    }
+    return `<span class="${styleClass}">${escapeHtml(t.value)}</span>`;
+  }).join('');
+};
+

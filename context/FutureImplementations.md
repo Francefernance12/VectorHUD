@@ -96,6 +96,10 @@
 * **The Problem**: SVG outlines and glow borders on the main dock container occasionally fail to update when changing themes.
 * **Solution**: Bind the SVG stroke/filter properties directly to the dynamic Tailwind CSS variables (`var(--accent-green)`) and use state-driven CSS classes rather than hardcoded inline values.
 
+### Balanced Font and Widget Scaling Slider
+* **The Problem**: Font size configuration currently scales the entire widget typography (including buttons, headers, inputs) uniformly. Increasing the font size to make the chat responses readable makes the buttons and inputs feel excessively large and ruins widget spacing.
+* **Solution**: Implement a dedicated "Chat Font Size" slider (independent of the global HUD scaling) or a balanced widget layout scaling system in settings. This will allow scaling the readable chat body text while keeping functional elements (like buttons, title bars, and inputs) at a compact, usable size.
+
 ---
 
 ## 3. Audio Mixer Hardening

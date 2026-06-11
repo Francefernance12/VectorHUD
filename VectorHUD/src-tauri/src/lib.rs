@@ -240,11 +240,29 @@ pub fn run() {
                     }
 
                     // Dismiss overlay when window loses focus (e.g. clicking second monitor)
+                    let is_focused = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+                    let is_focused_for_event = is_focused.clone();
                     let app_handle = app.handle().clone();
+                    let window_clone_focus = window.clone();
                     window.on_window_event(move |event| {
                         if let tauri::WindowEvent::Focused(focused) = event {
+                            is_focused_for_event.store(*focused, std::sync::atomic::Ordering::Relaxed);
                             if !*focused {
                                 let _ = app_handle.emit("window-lost-focus", ());
+                            } else {
+                                // Assert topmost ONCE on focus gain to prevent taskbar overlap
+                                if let Ok(hwnd) = window_clone_focus.hwnd() {
+                                    unsafe {
+                                        let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPos(
+                                            windows::Win32::Foundation::HWND(hwnd.0 as isize),
+                                            windows::Win32::UI::WindowsAndMessaging::HWND_TOPMOST,
+                                            0, 0, 0, 0,
+                                            windows::Win32::UI::WindowsAndMessaging::SWP_NOMOVE
+                                                | windows::Win32::UI::WindowsAndMessaging::SWP_NOSIZE
+                                                | windows::Win32::UI::WindowsAndMessaging::SWP_NOACTIVATE,
+                                        );
+                                    }
+                                }
                             }
                         }
                     });
@@ -254,24 +272,29 @@ pub fn run() {
                     // after shell events (like Opera GX gaining focus) without stealing focus.
                     let window_clone = window.clone();
                     let shutdown_flag_clone = shutdown_flag.clone();
+                    let is_focused_clone = is_focused.clone();
                     tauri::async_runtime::spawn(async move {
                         loop {
                             if shutdown_flag_clone.load(Ordering::Relaxed) {
                                 break;
                             }
-                            if let Ok(hwnd) = window_clone.hwnd() {
-                                unsafe {
-                                    let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPos(
-                                        windows::Win32::Foundation::HWND(hwnd.0 as isize),
-                                        windows::Win32::UI::WindowsAndMessaging::HWND_TOPMOST,
-                                        0, 0, 0, 0,
-                                        windows::Win32::UI::WindowsAndMessaging::SWP_NOMOVE
-                                            | windows::Win32::UI::WindowsAndMessaging::SWP_NOSIZE
-                                            | windows::Win32::UI::WindowsAndMessaging::SWP_NOACTIVATE,
-                                    );
+                            // Only re-assert topmost if the window is NOT currently focused.
+                            // Continuous SetWindowPos calls cause WebView2 to dismiss open HTML select dropdowns.
+                            if !is_focused_clone.load(std::sync::atomic::Ordering::Relaxed) {
+                                if let Ok(hwnd) = window_clone.hwnd() {
+                                    unsafe {
+                                        let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPos(
+                                            windows::Win32::Foundation::HWND(hwnd.0 as isize),
+                                            windows::Win32::UI::WindowsAndMessaging::HWND_TOPMOST,
+                                            0, 0, 0, 0,
+                                            windows::Win32::UI::WindowsAndMessaging::SWP_NOMOVE
+                                                | windows::Win32::UI::WindowsAndMessaging::SWP_NOSIZE
+                                                | windows::Win32::UI::WindowsAndMessaging::SWP_NOACTIVATE,
+                                        );
+                                    }
+                                } else {
+                                    tracing::warn!("Failed to get HWND for z-order re-assertion.");
                                 }
-                            } else {
-                                tracing::warn!("Failed to get HWND for z-order re-assertion.");
                             }
                             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                         }
@@ -422,6 +445,7 @@ pub fn run() {
             commands::api::update_notion_page_full,
             commands::api::fetch_notion_blocks,
             commands::api::toggle_notion_task,
+            commands::api::call_ai_api,
             core::capture::capture_screenshot,
             core::capture::capture_screen_base64,
             core::capture::check_file_exists,
