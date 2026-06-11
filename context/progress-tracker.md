@@ -43,11 +43,13 @@ Update this file after every meaningful implementation change.
 
 ## Next Up
 
-| Session | Unit Name | Focus     | Goal                                                             |
-| :------ | :-------- | :-------- | :--------------------------------------------------------------- |
-| Future | Themes & Dock | UI/UX | Implement theme engine (Light/Dark/Black) and Dock hover icon scale animations. |
-| Future | Cursor Capture | Media | Periodically query cursor position and draw cursor onto D3D11 staging textures for recordings. |
-| Future | Social Sharing | API | Add Discord webhook configuration and "Share to Discord" button in gallery. |
+| Session | Unit Name | Focus | Goal |
+| :--- | :--- | :--- | :--- |
+| **Session 20** | AI Chat & Models | AI/UX | Fix Markdown wrapping/selection in chat bubble. Decouple history from model switches. Add Groq/Anthropic/OpenAI, custom OpenRouter IDs, and correct Gemini 2.5 Flash logs. |
+| **Session 21** | App-Driven AI Actions | AI/Tools | Implement Function Calling for LLM to interact with widgets (volume, playback, hardware metrics, timer start, Notion DB search, auto capture) under tight token limits. |
+| **Session 22** | Voice Assistant & Voice PTT | Voice/UX | Add mic speech-to-text to input. Implement `Ctrl+Alt+V` global Push-to-Talk (PTT) voice assistant that records on hold and transcribes/submits on release with HUD toast popups. |
+| **Session 23** | Settings & Mixer Hardening | Hardening | Fix dropdown blinking. Build keybind combo listener. Sync dock glow border themes. Enumerate audio mixer sessions across all endpoints to capture elevated games (Wuthering Waves). Add specific timer start inputs. |
+| **Session 24** | Discord Webhook Integration | API | Implement Discord Webhook configuration and gallery share button to upload screenshots/clips directly to Discord. |
 
 ## Architecture Decisions
 
