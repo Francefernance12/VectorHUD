@@ -467,7 +467,7 @@ pub async fn update_notion_page(
     let client = reqwest::Client::new();
     let body = serde_json::json!({
         "properties": {
-            "Title": {
+            "Name": {
                 "title": [
                     { "text": { "content": title } }
                 ]
