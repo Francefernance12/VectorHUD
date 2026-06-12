@@ -416,18 +416,18 @@ describe('aiActions', () => {
 
   describe('transcribeAudio', () => {
     let mockFetch: any;
-    const originalFetch = global.fetch;
+    const originalFetch = globalThis.fetch;
 
     beforeEach(() => {
       mockFetch = vi.fn().mockResolvedValue({
         ok: true,
         json: () => Promise.resolve({ text: 'Hello world transcription' })
       });
-      global.fetch = mockFetch;
+      globalThis.fetch = mockFetch;
     });
 
     afterEach(() => {
-      global.fetch = originalFetch;
+      globalThis.fetch = originalFetch;
     });
 
     it('should throw error if no audio data provided', async () => {

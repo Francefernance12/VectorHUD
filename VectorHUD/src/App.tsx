@@ -32,6 +32,18 @@ import { transcribeAudio, executeTool, AI_TOOLS, getAnthropicTools } from "./uti
 import { UI_CONSTANTS } from "./config/constants";
 import "./App.css";
 
+interface Message {
+  id?: number;
+  session_id: string;
+  role: 'user' | 'assistant' | 'tool';
+  content: string;
+  image_path?: string;
+  timestamp?: string;
+  tokens?: number;
+  tool_calls?: any;
+  tool_call_id?: string;
+}
+
 function App() {
   const isInteractive = useShellStore((state) => state.isInteractive);
   const toggleInteractive = useShellStore((state) => state.toggleInteractive);
@@ -57,11 +69,6 @@ function App() {
   useEffect(() => {
     pttStateRef.current = pttState;
   }, [pttState]);
-
-  const handleVoiceStopRef = useRef(handleVoiceStop);
-  useEffect(() => {
-    handleVoiceStopRef.current = handleVoiceStop;
-  }, [handleVoiceStop]);
 
   // PTT countdown timer effect
   useEffect(() => {
@@ -116,6 +123,11 @@ function App() {
     }
   };
 
+  const handleVoiceStopRef = useRef(handleVoiceStop);
+  useEffect(() => {
+    handleVoiceStopRef.current = handleVoiceStop;
+  }, [handleVoiceStop]);
+
   const handlePttSubmission = async (transcript: string) => {
     if (!transcript.trim()) {
       setPttState('idle');
@@ -139,7 +151,7 @@ function App() {
         'SELECT * FROM ai_chat_history WHERE session_id = ? ORDER BY id ASC',
         [sessionId]
       );
-      const existingMessages = existingRows.map(row => ({
+      const existingMessages: Message[] = existingRows.map(row => ({
         session_id: row.session_id,
         role: row.role as 'user' | 'assistant' | 'tool',
         content: row.content,
@@ -150,9 +162,9 @@ function App() {
       }));
 
       // 3. Save user message to database
-      const userMsg = {
+      const userMsg: Message = {
         session_id: sessionId,
-        role: 'user' as const,
+        role: 'user',
         content: transcript
       };
       await db.execute(
@@ -214,7 +226,7 @@ function App() {
       }
 
       // 6. Execute AI Call (Looping for tools)
-      let currentMessages = [...updatedMessages];
+      let currentMessages: Message[] = [...updatedMessages];
       let depth = 0;
       let finalContent = '';
 
@@ -264,9 +276,9 @@ function App() {
         });
 
         if (result.tool_calls && result.tool_calls.length > 0) {
-          const assistantMsg = {
+          const assistantMsg: Message = {
             session_id: sessionId,
-            role: 'assistant' as const,
+            role: 'assistant',
             content: result.content || "",
             tokens: result.total_tokens,
             tool_calls: result.tool_calls
@@ -279,7 +291,7 @@ function App() {
           currentMessages.push(assistantMsg);
           window.dispatchEvent(new Event('refresh-chat-messages'));
 
-          const toolResults = [];
+          const toolResults: Message[] = [];
           for (const tc of result.tool_calls) {
             const name = tc.function.name;
             let args = {};
@@ -294,9 +306,9 @@ function App() {
             showToast(`🔧 Tool Executed: ${name}`);
             const output = await executeTool(name, args);
 
-            const toolMsg = {
+            const toolMsg: Message = {
               session_id: sessionId,
-              role: 'tool' as const,
+              role: 'tool',
               content: output,
               tool_call_id: tc.id
             };
@@ -313,9 +325,9 @@ function App() {
           depth++;
         } else {
           finalContent = result.content;
-          const assistantMsg = {
+          const assistantMsg: Message = {
             session_id: sessionId,
-            role: 'assistant' as const,
+            role: 'assistant',
             content: finalContent,
             tokens: result.total_tokens
           };
