@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { check } from '@tauri-apps/plugin-updater';
 import { AnimatePresence, motion } from "framer-motion";
