@@ -361,6 +361,36 @@ function App() {
     }
   }, [isInteractive]);
 
+  // Inactivity timeout for temporary interactive mode (when overlay is closed)
+  useEffect(() => {
+    if (!isInteractive || isOverlayOpen) return;
+
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    const resetTimeout = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        setInteractive(false);
+        showToast("🎙️ Interactivity: Disabled (Inactivity)");
+      }, 5000); // 5 seconds of inactivity
+    };
+
+    // Initialize timeout
+    resetTimeout();
+
+    // Listen to mouse movement, clicks, and keys to reset timeout
+    window.addEventListener('mousemove', resetTimeout);
+    window.addEventListener('mousedown', resetTimeout);
+    window.addEventListener('keydown', resetTimeout);
+
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('mousemove', resetTimeout);
+      window.removeEventListener('mousedown', resetTimeout);
+      window.removeEventListener('keydown', resetTimeout);
+    };
+  }, [isInteractive, isOverlayOpen, setInteractive, showToast]);
+
   useEffect(() => {
     logger.info("VectorHUD UI Booted");
 
@@ -445,33 +475,19 @@ function App() {
     const initListeners = async () => {
       try {
         if (!isMounted) return;
-        let pressTime = 0;
-        const unlistenShortcut = await listen<string>("hotkey-overlay", (event) => {
-          const state = event.payload;
-          const now = Date.now();
-
-          if (state === "pressed") {
-            pressTime = now;
-            const currentOverlayOpen = useShellStore.getState().isOverlayOpen;
-            if (!currentOverlayOpen) {
-              setInteractive(true);
-            }
-          } else if (state === "released") {
-            const duration = now - pressTime;
-            const currentOverlayOpen = useShellStore.getState().isOverlayOpen;
-
-            if (duration < 250) {
-              // Tap: toggle the full overlay
-              toggleInteractive();
-            } else {
-              // Hold: revert interactive mode back to click-through if overlay was closed
-              if (!currentOverlayOpen) {
-                setInteractive(false);
-              }
-            }
-          }
+        const unlistenShortcut = await listen("hotkey-overlay", () => {
+          toggleInteractive();
         });
         safePush(unlistenShortcut);
+
+        if (!isMounted) return;
+        const unlistenInteract = await listen("hotkey-interact", () => {
+          const current = useShellStore.getState().isInteractive;
+          const next = !current;
+          setInteractive(next);
+          showToast(`🎙️ Interactivity: ${next ? "Enabled" : "Disabled"}`);
+        });
+        safePush(unlistenInteract);
 
         if (!isMounted) return;
         const unlistenHardware = await useHardwareStore.getState().initialize();
@@ -851,6 +867,17 @@ function App() {
           />
         )}
       </AnimatePresence>
+
+      {/* Invisible backdrop to capture click-outside when interactive but overlay is closed */}
+      {!isOverlayOpen && isInteractive && (
+        <div 
+          className="fixed inset-0 z-[40] pointer-events-auto bg-transparent"
+          onClick={() => {
+            setInteractive(false);
+            showToast("🎙️ Interactivity: Disabled");
+          }}
+        />
+      )}
 
       {/* Widget Layer (Rendered at z-50 so it is above the backdrop but below the settings modal) */}
       <div className="fixed inset-0 z-50 pointer-events-none overflow-hidden" id="widget-bounds">

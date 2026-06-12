@@ -58,6 +58,8 @@ export function SettingsModal() {
     setTimerResetHotkey,
     voicePttHotkey,
     setVoicePttHotkey,
+    interactHotkey,
+    setInteractHotkey,
     syncHotkeys
   } = useSettingsStore(
     useShallow((state) => ({
@@ -107,6 +109,8 @@ export function SettingsModal() {
       setTimerResetHotkey: state.setTimerResetHotkey,
       voicePttHotkey: state.voicePttHotkey,
       setVoicePttHotkey: state.setVoicePttHotkey,
+      interactHotkey: state.interactHotkey,
+      setInteractHotkey: state.setInteractHotkey,
       syncHotkeys: state.syncHotkeys,
     }))
   );
@@ -145,7 +149,8 @@ export function SettingsModal() {
     timer: timerHotkey,
     stopwatch: stopwatchHotkey,
     timerReset: timerResetHotkey,
-    voicePtt: voicePttHotkey
+    voicePtt: voicePttHotkey,
+    interact: interactHotkey
   });
 
   const [localPreferences, setLocalPreferences] = useState({
@@ -177,7 +182,8 @@ export function SettingsModal() {
       timer: timerHotkey,
       stopwatch: stopwatchHotkey,
       timerReset: timerResetHotkey,
-      voicePtt: voicePttHotkey
+      voicePtt: voicePttHotkey,
+      interact: interactHotkey
     });
 
     setLocalPreferences({
@@ -356,6 +362,7 @@ export function SettingsModal() {
         await setStopwatchHotkey(localHotkeys.stopwatch);
         await setTimerResetHotkey(localHotkeys.timerReset);
         await setVoicePttHotkey(localHotkeys.voicePtt);
+        await setInteractHotkey(localHotkeys.interact);
 
         await syncHotkeys();
         setSaveMessage('Saved successfully!');
@@ -403,6 +410,7 @@ export function SettingsModal() {
       localHotkeys.stopwatch !== stopwatchHotkey ||
       localHotkeys.timerReset !== timerResetHotkey ||
       localHotkeys.voicePtt !== voicePttHotkey ||
+      localHotkeys.interact !== interactHotkey ||
       localPreferences.openRouterModel !== openRouterModel ||
       localPreferences.openaiModel !== openaiModel ||
       localPreferences.anthropicModel !== anthropicModel ||
@@ -446,7 +454,8 @@ export function SettingsModal() {
       timer: timerHotkey,
       stopwatch: stopwatchHotkey,
       timerReset: timerResetHotkey,
-      voicePtt: voicePttHotkey
+      voicePtt: voicePttHotkey,
+      interact: interactHotkey
     });
     setLocalPreferences({
       openRouterModel,
@@ -945,6 +954,16 @@ export function SettingsModal() {
                       value={localHotkeys.voicePtt}
                       onChange={(e) => setLocalHotkeys(s => ({ ...s, voicePtt: e.target.value }))}
                       placeholder="ctrl+alt+v"
+                      className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-primary transition-colors uppercase"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Toggle Interactivity</label>
+                    <input 
+                      type="text"
+                      value={localHotkeys.interact}
+                      onChange={(e) => setLocalHotkeys(s => ({ ...s, interact: e.target.value }))}
+                      placeholder="ctrl+alt+i"
                       className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-primary transition-colors uppercase"
                     />
                   </div>

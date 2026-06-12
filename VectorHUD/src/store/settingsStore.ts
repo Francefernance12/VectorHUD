@@ -25,6 +25,7 @@ interface SettingsState {
   stopwatchHotkey: string;
   timerResetHotkey: string;
   voicePttHotkey: string;
+  interactHotkey: string;
   
   toggleSettings: () => void;
   setOpenRouterModel: (model: string) => Promise<void>;
@@ -49,6 +50,7 @@ interface SettingsState {
   setStopwatchHotkey: (hotkey: string) => Promise<void>;
   setTimerResetHotkey: (hotkey: string) => Promise<void>;
   setVoicePttHotkey: (hotkey: string) => Promise<void>;
+  setInteractHotkey: (hotkey: string) => Promise<void>;
   loadPreferences: () => Promise<void>;
   syncHotkeys: () => Promise<void>;
 }
@@ -110,6 +112,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   stopwatchHotkey: 'ctrl+alt+w',
   timerResetHotkey: 'ctrl+alt+y',
   voicePttHotkey: 'ctrl+alt+v',
+  interactHotkey: 'ctrl+alt+i',
 
   toggleSettings: () => set((state) => ({ isSettingsOpen: !state.isSettingsOpen })),
 
@@ -271,6 +274,13 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     set({ voicePttHotkey: hotkey });
   },
 
+  setInteractHotkey: async (hotkey) => {
+    const store = await getSettingsStore();
+    await store.set('interactHotkey', hotkey);
+    await store.save();
+    set({ interactHotkey: hotkey });
+  },
+
   loadPreferences: async () => {
     const store = await getSettingsStore();
     const model = await store.get<string>('openRouterModel');
@@ -295,6 +305,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const swHot = await store.get<string>('stopwatchHotkey');
     const trHot = await store.get<string>('timerResetHotkey');
     const vpHot = await store.get<string>('voicePttHotkey');
+    const iHot = await store.get<string>('interactHotkey');
 
     const finalTheme = theme || 'default';
     const finalColor = customColor || '#FF0000';
@@ -322,6 +333,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       stopwatchHotkey: swHot || 'ctrl+alt+w',
       timerResetHotkey: trHot || 'ctrl+alt+y',
       voicePttHotkey: vpHot || 'ctrl+alt+v',
+      interactHotkey: iHot || 'ctrl+alt+i',
     });
 
     applyThemeColors(finalTheme, finalColor);
@@ -348,7 +360,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       timerHotkey: state.timerHotkey,
       stopwatchHotkey: state.stopwatchHotkey,
       timerResetHotkey: state.timerResetHotkey,
-      voicePttHotkey: state.voicePttHotkey
+      voicePttHotkey: state.voicePttHotkey,
+      interactHotkey: state.interactHotkey
     });
   }
 }));

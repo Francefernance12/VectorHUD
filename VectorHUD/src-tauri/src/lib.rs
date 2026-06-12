@@ -111,6 +111,7 @@ fn update_hotkeys(
     stopwatch_hotkey: String,
     timer_reset_hotkey: String,
     voice_ptt_hotkey: String,
+    interact_hotkey: String,
 ) -> Result<(), String> {
     let _lock = HOTKEY_MUTEX.lock().unwrap();
     use std::str::FromStr;
@@ -204,6 +205,7 @@ fn update_hotkeys(
     register_hotkey(&timer_hotkey, "hotkey-timer");
     register_hotkey(&stopwatch_hotkey, "hotkey-stopwatch");
     register_hotkey(&timer_reset_hotkey, "hotkey-timer-reset");
+    register_hotkey(&interact_hotkey, "hotkey-interact");
 
     // Register Voice PTT hotkey separately to handle polling key release
     if !voice_ptt_hotkey.is_empty() {
