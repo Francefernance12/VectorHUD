@@ -214,6 +214,30 @@ describe('aiActions', () => {
       expect(state.activeTab).toBe('draft');
     });
 
+    it('should preserve existing fields when filling notion draft with only tasks', async () => {
+      useNotionStore.setState({
+        draft: {
+          title: 'Old Title',
+          description: 'Old Desc',
+          content: 'Old Content',
+          tasks: ['Existing Task 1']
+        },
+        activeTab: 'notes'
+      });
+
+      const res = await executeTool('fill_notion_draft', {
+        tasks: ['New Task 2']
+      });
+
+      expect(res).toBe('Success: populated Notion draft form and selected draft tab.');
+      const state = useNotionStore.getState();
+      expect(state.draft.title).toBe('Old Title');
+      expect(state.draft.description).toBe('Old Desc');
+      expect(state.draft.content).toBe('Old Content');
+      expect(state.draft.tasks).toEqual(['Existing Task 1', 'New Task 2']);
+      expect(state.activeTab).toBe('draft');
+    });
+
     it('should list notion tasks with limit', async () => {
       const notes = [
         { id: '1', title: 'Task 1', description: 'Desc 1', status: 'Not started', date: '2026-06-01' },

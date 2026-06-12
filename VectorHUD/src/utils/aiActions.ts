@@ -337,11 +337,12 @@ export async function executeTool(name: string, args: any): Promise<string> {
         return JSON.stringify(filtered.map(n => ({ id: n.id, title: n.title, description: n.description, status: n.status })));
       }
       case 'fill_notion_draft': {
-        const title = args.title !== undefined ? String(args.title) : "";
-        const description = args.description !== undefined ? String(args.description) : "";
-        const content = args.content !== undefined ? String(args.content) : "";
+        const draftState = useNotionStore.getState().draft;
+        const title = args.title !== undefined ? String(args.title) : draftState.title;
+        const description = args.description !== undefined ? String(args.description) : draftState.description;
+        const content = args.content !== undefined ? String(args.content) : draftState.content;
         
-        let tasks = useNotionStore.getState().draft.tasks;
+        let tasks = draftState.tasks;
         if (args.tasks !== undefined) {
           const newTasks = Array.isArray(args.tasks) ? args.tasks.map((t: any) => String(t).trim()).filter(Boolean) : [String(args.tasks).trim()];
           const existingTasks = tasks.map(t => t.trim()).filter(Boolean);
