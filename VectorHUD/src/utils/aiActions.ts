@@ -343,7 +343,7 @@ export async function executeTool(name: string, args: any): Promise<string> {
         
         let tasks = useNotionStore.getState().draft.tasks;
         if (args.tasks !== undefined) {
-          const newTasks = Array.isArray(args.tasks) ? args.tasks.map(t => String(t).trim()).filter(Boolean) : [String(args.tasks).trim()];
+          const newTasks = Array.isArray(args.tasks) ? args.tasks.map((t: any) => String(t).trim()).filter(Boolean) : [String(args.tasks).trim()];
           const existingTasks = tasks.map(t => t.trim()).filter(Boolean);
           
           // Merge preserving order, ignoring duplicates case-insensitively
