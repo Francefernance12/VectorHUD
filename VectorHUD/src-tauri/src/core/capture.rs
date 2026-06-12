@@ -1,12 +1,15 @@
 use std::fs;
 use tauri::{AppHandle, Manager};
 
-unsafe fn take_native_hdr_screenshot(app: &AppHandle) -> Result<String, String> {
-    let (mut bgra_data, width, height, is_hdr) =
-        windows_record::capture_raw_frame().map_err(|e| format!("Capture failed: {:?}", e))?;
-
+unsafe fn save_capture_pixels(
+    app: &AppHandle,
+    mut bgra_data: Vec<u8>,
+    width: u32,
+    height: u32,
+    is_hdr: bool,
+) -> Result<String, String> {
     tracing::info!(
-        "take_native_hdr_screenshot: captured via windows_record, is_hdr={}",
+        "save_capture_pixels: saving captured frame, is_hdr={}",
         is_hdr
     );
 
@@ -43,19 +46,29 @@ unsafe fn take_native_hdr_screenshot(app: &AppHandle) -> Result<String, String> 
 
 #[tauri::command]
 pub async fn capture_screenshot(window: tauri::Window, app: AppHandle) -> Result<String, String> {
-    // Hide the overlay so it doesn't get captured
-    let _ = window.hide();
+    let was_visible = window.is_visible().unwrap_or(false);
 
-    // Give Windows compositor a split second to remove the window visually
-    tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+    if was_visible {
+        // Hide the overlay so it doesn't get captured
+        let _ = window.hide();
+        // Give Windows compositor a split second to remove the window visually
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+    }
 
-    let result = unsafe { take_native_hdr_screenshot(&app) };
+    // Capture raw frame immediately (extremely fast)
+    let capture_result = unsafe {
+        windows_record::capture_raw_frame().map_err(|e| format!("Capture failed: {:?}", e))
+    };
 
-    // Restore the overlay
-    let _ = window.show();
-    let _ = window.set_focus();
+    if was_visible {
+        // Restore the overlay immediately before the slow PNG save operations
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
 
-    result
+    let (bgra_data, width, height, is_hdr) = capture_result?;
+
+    unsafe { save_capture_pixels(&app, bgra_data, width, height, is_hdr) }
 }
 
 #[tauri::command]
@@ -78,18 +91,29 @@ pub async fn capture_screen_base64(
 ) -> Result<String, String> {
     use base64::{engine::general_purpose::STANDARD, Engine as _};
 
-    // Hide the overlay
-    let _ = window.hide();
-    tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+    let was_visible = window.is_visible().unwrap_or(false);
 
-    // Use the same HDR-compatible screenshot function
-    let result = unsafe { take_native_hdr_screenshot(&app) };
+    if was_visible {
+        // Hide the overlay
+        let _ = window.hide();
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+    }
 
-    // Restore the overlay IMMEDIATELY so we don't get stuck if it fails
-    let _ = window.show();
-    let _ = window.set_focus();
+    // Capture raw frame immediately
+    let capture_result = unsafe {
+        windows_record::capture_raw_frame().map_err(|e| format!("Capture failed: {:?}", e))
+    };
 
-    let file_path = result?;
+    if was_visible {
+        // Restore the overlay immediately before encoding/saving
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+
+    let (bgra_data, width, height, is_hdr) = capture_result?;
+
+    // Save temporary capture file
+    let file_path = unsafe { save_capture_pixels(&app, bgra_data, width, height, is_hdr)? };
 
     // Read the file and encode to base64
     let file_data =

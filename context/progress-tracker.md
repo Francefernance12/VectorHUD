@@ -4,7 +4,7 @@ Update this file after every meaningful implementation change.
 
 ## Current Goal
 
-- Develop Session 11: Polish (Stability & Final UI Polish)
+- Session 17: AI Chat & Models (Fix Markdown wrapping/selection in chat bubble. Decouple history from model switches. Add Groq/Anthropic/OpenAI, custom OpenRouter IDs, and correct Gemini 2.5 Flash logs).
 
 ## Completed
 
@@ -23,7 +23,7 @@ Update this file after every meaningful implementation change.
 - Session 7A: UI Polish (Expandable dock, pin toggles (interactable), custom scrollbars).
 - Session 7B: Capture+ (Media - Hybrid Capture Engine. 30s rolling video buffer uses FFmpeg HLS to keep RAM footprint minimal, while screenshots and standard recordings use native DXGI/Media Foundation Windows APIs with CPU HDR tone mapping to prevent washed-out colors).
 - Session 8A: Audio Hub (Mixer - Hook Core Audio API for app-specific volume, mic/output switcher, music player).
-- Session 8B: Metrics+ (Hardware - GPU, VRAM, and FPS polling; Timer utility).
+- Session 8B: Metrics+ (Hardware - GPU, VRAM, and FPS polling; Timer utility) .
 - Session 9A: Integrations (AI+Notion - Vision buffer parsing, Notion block-level parsing for floating checklists).
 - Session 10A: Architecture & Scaling (Notion interactive status patches, AI context drafts via Zustand persist layer).
 - Session 10B: Optimization (Performance & UI/UX, Native GPU PDH, PresentMon FPS, Taskbar z-index fixes, HDR capture tone-mapping tweaks).
@@ -32,20 +32,22 @@ Update this file after every meaningful implementation change.
 - Session 14: Documentation Pass (Journey Retrospective, Codebase Guide).
 - Session 15: Bug Fixes (Resolved compilation errors in capture.rs, expanded assetProtocol scope for OneDrive support, unified replay buffer folder output, and tweaked HDR screenshot tone-mapping values).
 - Session 16: HDR Tone Mapping & Replay Buffer Fixes (Quality, Stability & Duration - Replaced xcap screenshots with `windows_record::capture_raw_frame` and utilized `IDXGIOutput5::DuplicateOutput1` to capture linear float16 scRGB data. Implemented a CPU Reinhard tone-mapping and sRGB gamma correction pass for both screenshots and recordings to prevent washed-out HDR colors, and reverted the Media Foundation transfer function hack/FFmpeg `eq` filter. Aligned GDI monitor enumeration with DXGI output indices in the replay buffer to prevent wrong monitor capture, and constrained the video encoder keyframe interval (GOP size) to 2 seconds to fix the 2-minute rolling duration bloat).
-- Session 16.1: Clippy Warnings & CI Fixes (Cleaned up all 6 clippy warnings across audio_capture.rs, capture.rs, ffmpeg_manager.rs, and record.rs. Fixed local target directory locking issues by terminating PresentMon64 background processes before checking. Unblocked CI workflow compilation).
 - Session 16.2: v1.1.1 Bug Fixes (Resolved countdown timer finished toast repeating on app launch, normalized Windows backslash file paths in database insertions to forward slashes to enable video loading/range requests in WebView2, and removed unused Replay Buffer Resolution/FPS settings from the settings panel).
-- Session 16.3: v1.1.2 Video Playback CSP Fix (Resolved video playback loading issue in production builds by adding the `media-src` directive to the CSP configuration in `tauri.conf.json`, allowing the WebView to play files served via Tauri's custom asset protocol).
+- Session 17: AI Chat & Models (Added Groq/Anthropic/OpenAI providers and custom OpenRouter models. Implemented layout wrap rules preventing horizontal widget stretching, themed custom Markdown preview components to match HUD style, and built high-performance tokenizer-based multi-language code syntax highlighting).
+- Session 17.5: UI, Capture Speed & Windowing Fixes (Disabled OS edge resize cursors, optimized screenshot window hide/show latency, separated silent hotkey from UI screenshot flows, restored interactive state on vision buffer completion, re-asserted topmost z-order once on focus gain, and logged balanced font scaling configurations).
 
 ## In Progress
 
 - None
 
-
 ## Next Up
 
-| Session | Unit Name | Focus     | Goal                                                             |
-| :------ | :-------- | :-------- | :--------------------------------------------------------------- |
-| 15 | Deployment | Setup | Finalize Tauri `.msi` and `.exe` build flags and create installer. |
+| Session | Unit Name | Focus | Goal |
+| :--- | :--- | :--- | :--- |
+| **Session 18** | App-Driven AI Actions | AI/Tools | Implement Function Calling for LLM to interact with widgets (volume, playback, hardware metrics, timer start, Notion DB search, auto capture) under tight token limits. |
+| **Session 19** | Voice Assistant & Voice PTT | Voice/UX | Add mic speech-to-text to input. Implement `Ctrl+Alt+V` global Push-to-Talk (PTT) voice assistant that records on hold and transcribes/submits on release with HUD toast popups. |
+| **Session 20** | Settings & Mixer Hardening | Hardening | Fix dropdown blinking. Build keybind combo listener. Sync dock glow border themes. Enumerate audio mixer sessions across all endpoints to capture elevated games (Wuthering Waves). Resolve PresentMon64 warning / execution locking issue. Add specific timer start inputs. |
+| **Session 21** | Discord Webhook Integration | API | Implement Discord Webhook configuration and gallery share button to upload screenshots/clips directly to Discord. |
 
 ## Architecture Decisions
 

@@ -15,9 +15,13 @@
 ## ⌨️ Default Hotkeys
 
 - **`Ctrl + Alt + O`**: Toggle Master Dock Overlay
-- **`Ctrl + Alt + Shift + C`**: Toggle Click-Through (Ghost Mode) for all active widgets
-- **`Ctrl + Alt + P`**: Snap Screenshot (Saves to `Videos/Captures`)
-- **`Ctrl + Alt + R`**: Save Replay Buffer (Last 30 seconds of gameplay)
+- **`Ctrl + Alt + S`**: Snap Screenshot (Saves to `Pictures/VectorHUD`)
+- **`Ctrl + Alt + R`**: Start/Stop Video Recording (Saves to `Pictures/VectorHUD`)
+- **`Ctrl + Alt + B`**: Save Replay Buffer (Last 30 seconds of gameplay, saves to `Pictures/VectorHUD`)
+- **`Ctrl + Alt + T`**: Toggle Timer Status
+- **`Ctrl + Alt + W`**: Toggle Stopwatch Status
+- **`Ctrl + Alt + Y`**: Reset Active Timer/Stopwatch
+
 
 ## 🛠️ Development Setup
 

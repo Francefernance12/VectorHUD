@@ -50,4 +50,15 @@ Stores messages from the OpenRouter widget so chats persist between sessions.
 | `role` | TEXT NOT NULL | 'user' or 'assistant' |
 | `content` | TEXT NOT NULL | The text content of the message |
 | `image_path` | TEXT | Optional: Base64 or file path to an attached image |
+| `session_id` | TEXT | Optional: Unique chat session ID for thread separation |
+| `tokens` | INTEGER | Optional: Token count of the generated message |
 | `timestamp` | DATETIME DEFAULT CURRENT_TIMESTAMP | When the message was sent |
+
+## Table: `session_titles`
+Stores user-friendly titles for saved OpenRouter chat threads.
+
+| Column | Type | Description |
+| :--- | :--- | :--- |
+| `session_id` | TEXT PRIMARY KEY | Unique chat session ID |
+| `title` | TEXT NOT NULL | The title of the chat session |
+

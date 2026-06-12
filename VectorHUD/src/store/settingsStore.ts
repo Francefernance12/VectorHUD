@@ -4,6 +4,12 @@ import { getSettingsStore } from '../utils/store';
 interface SettingsState {
   isSettingsOpen: boolean;
   openRouterModel: string;
+  openaiModel: string;
+  anthropicModel: string;
+  groqModel: string;
+  customOpenRouterModel: string;
+  useCustomOpenRouterModel: boolean;
+  aiProvider: string;
   globalFontSize: number;
   theme: string;
   customColor: string;
@@ -21,6 +27,12 @@ interface SettingsState {
   
   toggleSettings: () => void;
   setOpenRouterModel: (model: string) => Promise<void>;
+  setOpenaiModel: (model: string) => Promise<void>;
+  setAnthropicModel: (model: string) => Promise<void>;
+  setGroqModel: (model: string) => Promise<void>;
+  setCustomOpenRouterModel: (model: string) => Promise<void>;
+  setUseCustomOpenRouterModel: (use: boolean) => Promise<void>;
+  setAiProvider: (provider: string) => Promise<void>;
   setGlobalFontSize: (size: number) => Promise<void>;
   setTheme: (theme: string) => Promise<void>;
   setCustomColor: (color: string) => Promise<void>;
@@ -74,7 +86,13 @@ const applyThemeColors = (theme: string, customColor: string) => {
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   isSettingsOpen: false,
-  openRouterModel: 'openai/gpt-5.5', // Default model
+  openRouterModel: 'google/gemini-2.5-flash',
+  openaiModel: 'gpt-4o-mini',
+  anthropicModel: 'claude-3-5-sonnet-20241022',
+  groqModel: 'llama-3.3-70b-versatile',
+  customOpenRouterModel: '',
+  useCustomOpenRouterModel: false,
+  aiProvider: 'openrouter',
   globalFontSize: 14,
   theme: 'default',
   customColor: '#FF0000',
@@ -97,6 +115,48 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     await store.set('openRouterModel', model);
     await store.save();
     set({ openRouterModel: model });
+  },
+
+  setOpenaiModel: async (model) => {
+    const store = await getSettingsStore();
+    await store.set('openaiModel', model);
+    await store.save();
+    set({ openaiModel: model });
+  },
+
+  setAnthropicModel: async (model) => {
+    const store = await getSettingsStore();
+    await store.set('anthropicModel', model);
+    await store.save();
+    set({ anthropicModel: model });
+  },
+
+  setGroqModel: async (model) => {
+    const store = await getSettingsStore();
+    await store.set('groqModel', model);
+    await store.save();
+    set({ groqModel: model });
+  },
+
+  setCustomOpenRouterModel: async (model) => {
+    const store = await getSettingsStore();
+    await store.set('customOpenRouterModel', model);
+    await store.save();
+    set({ customOpenRouterModel: model });
+  },
+
+  setUseCustomOpenRouterModel: async (use) => {
+    const store = await getSettingsStore();
+    await store.set('useCustomOpenRouterModel', use);
+    await store.save();
+    set({ useCustomOpenRouterModel: use });
+  },
+
+  setAiProvider: async (provider) => {
+    const store = await getSettingsStore();
+    await store.set('aiProvider', provider);
+    await store.save();
+    set({ aiProvider: provider });
   },
 
   setGlobalFontSize: async (size) => {
@@ -204,6 +264,12 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   loadPreferences: async () => {
     const store = await getSettingsStore();
     const model = await store.get<string>('openRouterModel');
+    const oaiModel = await store.get<string>('openaiModel');
+    const antModel = await store.get<string>('anthropicModel');
+    const grqModel = await store.get<string>('groqModel');
+    const customOrModel = await store.get<string>('customOpenRouterModel');
+    const useCustomOr = await store.get<boolean>('useCustomOpenRouterModel');
+    const provider = await store.get<string>('aiProvider');
     const fontSize = await store.get<number>('globalFontSize');
     const theme = await store.get<string>('theme');
     const customColor = await store.get<string>('customColor');
@@ -223,7 +289,13 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const finalColor = customColor || '#FF0000';
 
     set({
-      openRouterModel: model || 'openai/gpt-5.5',
+      openRouterModel: model || 'google/gemini-2.5-flash',
+      openaiModel: oaiModel || 'gpt-4o-mini',
+      anthropicModel: antModel || 'claude-3-5-sonnet-20241022',
+      groqModel: grqModel || 'llama-3.3-70b-versatile',
+      customOpenRouterModel: customOrModel || '',
+      useCustomOpenRouterModel: useCustomOr !== undefined ? useCustomOr : false,
+      aiProvider: provider || 'openrouter',
       globalFontSize: fontSize || 14,
       theme: finalTheme,
       customColor: finalColor,

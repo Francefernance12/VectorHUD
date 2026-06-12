@@ -115,3 +115,9 @@ This document tracks all important decisions made throughout the lifecycle of th
 - **Decision:** Shifted HDR capture to use `IDXGIOutput5::DuplicateOutput1` with `DXGI_FORMAT_R16G16B16A16_FLOAT` and apply CPU Reinhard tone-mapping + sRGB gamma correction, reverting previous transfer function hacks.
 - **Reasoning:** DXGI Desktop Duplication v1 (`DuplicateOutput1` with `DXGI_FORMAT_B8G8R8A8_UNORM`) forces DWM to perform its own SDR tone-mapping before passing pixels to our application, which corrupts color spaces based on the user's display whites. By requesting linear float16 scRGB data, we receive the raw HDR signal and can perform a mathematically correct CPU-based Reinhard tone-mapping to compress HDR -> SDR and apply sRGB gamma. This ensures screenshots and recordings look perfectly color-accurate without washout.
 
+## Session 17: AI Chat Layout, Markdown HUD Theming & Enhanced Syntax Highlighting
+
+- **Decision:** Prevent horizontal stretching of the AI Chat widget by adding flex layout boundaries (`min-w-0 w-fit max-w-[90%]`) on the chat bubble wrapper and `overflow-x-hidden` on the message scroll container.
+- **Decision:** Implemented a custom lexical tokenizer for syntax highlighting instead of sequential regex string replacements.
+- **Reasoning:** Sequential regex replacements on already-escaped HTML text are prone to collisions (e.g. matching operators inside HTML entities like `&lt;` or `&gt;`). A structured lexical tokenizer scans the code from left to right using anchored regexes first, producing a token stream. This allows for safe, collision-free syntax highlighting of operators and keywords across multiple languages (JS, TS, Python, C#, Rust, JSON, HTML, CSS, SQL, Bash).
+- **Decision:** Custom-styled Markdown components (strong, em, blockquote, lists, tables) to act as visual elements of a tactical HUD, adding pulsing status dots, terminal brackets, and dashed borders.

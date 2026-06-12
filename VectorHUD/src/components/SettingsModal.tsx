@@ -16,6 +16,18 @@ export function SettingsModal() {
     toggleSettings, 
     openRouterModel, 
     setOpenRouterModel, 
+    openaiModel,
+    setOpenaiModel,
+    anthropicModel,
+    setAnthropicModel,
+    groqModel,
+    setGroqModel,
+    customOpenRouterModel,
+    setCustomOpenRouterModel,
+    useCustomOpenRouterModel,
+    setUseCustomOpenRouterModel,
+    aiProvider,
+    setAiProvider,
     globalFontSize, 
     setGlobalFontSize, 
     theme,
@@ -51,6 +63,18 @@ export function SettingsModal() {
       toggleSettings: state.toggleSettings,
       openRouterModel: state.openRouterModel,
       setOpenRouterModel: state.setOpenRouterModel,
+      openaiModel: state.openaiModel,
+      setOpenaiModel: state.setOpenaiModel,
+      anthropicModel: state.anthropicModel,
+      setAnthropicModel: state.setAnthropicModel,
+      groqModel: state.groqModel,
+      setGroqModel: state.setGroqModel,
+      customOpenRouterModel: state.customOpenRouterModel,
+      setCustomOpenRouterModel: state.setCustomOpenRouterModel,
+      useCustomOpenRouterModel: state.useCustomOpenRouterModel,
+      setUseCustomOpenRouterModel: state.setUseCustomOpenRouterModel,
+      aiProvider: state.aiProvider,
+      setAiProvider: state.setAiProvider,
       globalFontSize: state.globalFontSize,
       setGlobalFontSize: state.setGlobalFontSize,
       theme: state.theme,
@@ -85,6 +109,9 @@ export function SettingsModal() {
 
   const [activeTab, setActiveTab] = useState<'integrations' | 'preferences' | 'hotkeys' | 'updates'>('integrations');
   const [openRouterKey, setOpenRouterKey] = useState('');
+  const [openaiKey, setOpenaiKey] = useState('');
+  const [anthropicKey, setAnthropicKey] = useState('');
+  const [groqKey, setGroqKey] = useState('');
   const [notionKey, setNotionKey] = useState('');
   const [notionDbId, setNotionDbId] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -100,6 +127,9 @@ export function SettingsModal() {
 
   // Initial states for dirty checking
   const [initialOpenRouterKey, setInitialOpenRouterKey] = useState('');
+  const [initialOpenaiKey, setInitialOpenaiKey] = useState('');
+  const [initialAnthropicKey, setInitialAnthropicKey] = useState('');
+  const [initialGroqKey, setInitialGroqKey] = useState('');
   const [initialNotionKey, setInitialNotionKey] = useState('');
   const [initialNotionDbId, setInitialNotionDbId] = useState('');
 
@@ -115,6 +145,12 @@ export function SettingsModal() {
 
   const [localPreferences, setLocalPreferences] = useState({
     openRouterModel,
+    openaiModel,
+    anthropicModel,
+    groqModel,
+    customOpenRouterModel,
+    useCustomOpenRouterModel,
+    aiProvider,
     globalFontSize,
     theme,
     customColor,
@@ -140,6 +176,12 @@ export function SettingsModal() {
 
     setLocalPreferences({
       openRouterModel,
+      openaiModel,
+      anthropicModel,
+      groqModel,
+      customOpenRouterModel,
+      useCustomOpenRouterModel,
+      aiProvider,
       globalFontSize,
       theme,
       customColor,
@@ -161,6 +203,36 @@ export function SettingsModal() {
           const decrypted = await invoke<string>('decrypt_data', { encoded: orResult[0].encrypted_value });
           setOpenRouterKey(decrypted);
           setInitialOpenRouterKey(decrypted);
+        }
+
+        // Load OpenAI
+        const oaiResult = await db.select<{ encrypted_value: string }[]>(
+          "SELECT encrypted_value FROM user_credentials WHERE id = 'openai_key'"
+        );
+        if (oaiResult.length > 0) {
+          const decrypted = await invoke<string>('decrypt_data', { encoded: oaiResult[0].encrypted_value });
+          setOpenaiKey(decrypted);
+          setInitialOpenaiKey(decrypted);
+        }
+
+        // Load Anthropic
+        const antResult = await db.select<{ encrypted_value: string }[]>(
+          "SELECT encrypted_value FROM user_credentials WHERE id = 'anthropic_key'"
+        );
+        if (antResult.length > 0) {
+          const decrypted = await invoke<string>('decrypt_data', { encoded: antResult[0].encrypted_value });
+          setAnthropicKey(decrypted);
+          setInitialAnthropicKey(decrypted);
+        }
+
+        // Load Groq
+        const grqResult = await db.select<{ encrypted_value: string }[]>(
+          "SELECT encrypted_value FROM user_credentials WHERE id = 'groq_key'"
+        );
+        if (grqResult.length > 0) {
+          const decrypted = await invoke<string>('decrypt_data', { encoded: grqResult[0].encrypted_value });
+          setGroqKey(decrypted);
+          setInitialGroqKey(decrypted);
         }
 
         // Load Notion Secret
@@ -207,13 +279,32 @@ export function SettingsModal() {
     setSaveMessage('');
     try {
       // Encrypt and save OpenRouter key
-      if (openRouterKey) {
-        const encryptedOr = await invoke<string>('encrypt_data', { plaintext: openRouterKey });
-        await executeQuery(
-          "INSERT OR REPLACE INTO user_credentials (id, encrypted_value) VALUES ('openrouter_key', ?)",
-          [encryptedOr]
-        );
-      }
+      const encryptedOr = await invoke<string>('encrypt_data', { plaintext: openRouterKey });
+      await executeQuery(
+        "INSERT OR REPLACE INTO user_credentials (id, encrypted_value) VALUES ('openrouter_key', ?)",
+        [encryptedOr]
+      );
+
+      // Encrypt and save OpenAI key
+      const encryptedOai = await invoke<string>('encrypt_data', { plaintext: openaiKey });
+      await executeQuery(
+        "INSERT OR REPLACE INTO user_credentials (id, encrypted_value) VALUES ('openai_key', ?)",
+        [encryptedOai]
+      );
+
+      // Encrypt and save Anthropic key
+      const encryptedAnt = await invoke<string>('encrypt_data', { plaintext: anthropicKey });
+      await executeQuery(
+        "INSERT OR REPLACE INTO user_credentials (id, encrypted_value) VALUES ('anthropic_key', ?)",
+        [encryptedAnt]
+      );
+
+      // Encrypt and save Groq key
+      const encryptedGrq = await invoke<string>('encrypt_data', { plaintext: groqKey });
+      await executeQuery(
+        "INSERT OR REPLACE INTO user_credentials (id, encrypted_value) VALUES ('groq_key', ?)",
+        [encryptedGrq]
+      );
 
       // Encrypt and save Notion secret
       if (notionKey) {
@@ -235,6 +326,12 @@ export function SettingsModal() {
 
       // Save Preferences
       await setOpenRouterModel(localPreferences.openRouterModel);
+      await setOpenaiModel(localPreferences.openaiModel);
+      await setAnthropicModel(localPreferences.anthropicModel);
+      await setGroqModel(localPreferences.groqModel);
+      await setCustomOpenRouterModel(localPreferences.customOpenRouterModel);
+      await setUseCustomOpenRouterModel(localPreferences.useCustomOpenRouterModel);
+      await setAiProvider(localPreferences.aiProvider);
       await setGlobalFontSize(localPreferences.globalFontSize);
       await setTheme(localPreferences.theme);
       await setCustomColor(localPreferences.customColor);
@@ -259,6 +356,9 @@ export function SettingsModal() {
         
         // Update initial states to clear dirty flag
         setInitialOpenRouterKey(openRouterKey);
+        setInitialOpenaiKey(openaiKey);
+        setInitialAnthropicKey(anthropicKey);
+        setInitialGroqKey(groqKey);
         setInitialNotionKey(notionKey);
         setInitialNotionDbId(notionDbId);
         
@@ -283,6 +383,9 @@ export function SettingsModal() {
   const checkIsDirty = () => {
     return (
       openRouterKey !== initialOpenRouterKey ||
+      openaiKey !== initialOpenaiKey ||
+      anthropicKey !== initialAnthropicKey ||
+      groqKey !== initialGroqKey ||
       notionKey !== initialNotionKey ||
       notionDbId !== initialNotionDbId ||
       localHotkeys.overlay !== overlayHotkey ||
@@ -293,6 +396,12 @@ export function SettingsModal() {
       localHotkeys.stopwatch !== stopwatchHotkey ||
       localHotkeys.timerReset !== timerResetHotkey ||
       localPreferences.openRouterModel !== openRouterModel ||
+      localPreferences.openaiModel !== openaiModel ||
+      localPreferences.anthropicModel !== anthropicModel ||
+      localPreferences.groqModel !== groqModel ||
+      localPreferences.customOpenRouterModel !== customOpenRouterModel ||
+      localPreferences.useCustomOpenRouterModel !== useCustomOpenRouterModel ||
+      localPreferences.aiProvider !== aiProvider ||
       String(localPreferences.globalFontSize) !== String(globalFontSize) ||
       localPreferences.theme !== theme ||
       localPreferences.customColor !== customColor ||
@@ -316,6 +425,9 @@ export function SettingsModal() {
   const handleConfirmDiscard = () => {
     // Reset to initial states to discard changes
     setOpenRouterKey(initialOpenRouterKey);
+    setOpenaiKey(initialOpenaiKey);
+    setAnthropicKey(initialAnthropicKey);
+    setGroqKey(initialGroqKey);
     setNotionKey(initialNotionKey);
     setNotionDbId(initialNotionDbId);
     setLocalHotkeys({
@@ -329,6 +441,12 @@ export function SettingsModal() {
     });
     setLocalPreferences({
       openRouterModel,
+      openaiModel,
+      anthropicModel,
+      groqModel,
+      customOpenRouterModel,
+      useCustomOpenRouterModel,
+      aiProvider,
       globalFontSize,
       theme,
       customColor,
@@ -417,43 +535,169 @@ export function SettingsModal() {
               <div className="space-y-6">
                 <div className="space-y-4">
                   <h3 className="text-md font-semibold text-white flex items-center gap-2 border-b border-white/10 pb-2">
-                    <Zap size={16} className="text-amber-400" /> OpenRouter AI
+                    <Zap size={16} className="text-amber-400" /> AI Provider Configuration
                   </h3>
-                  
-                  <div className="space-y-1">
-                    <label className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">API Key</label>
-                    <input 
-                      type="password"
-                      value={openRouterKey}
-                      onChange={(e) => setOpenRouterKey(e.target.value)}
-                      placeholder="sk-or-v1-..."
-                      className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-base text-zinc-200 focus:outline-none focus:border-primary transition-colors"
-                    />
-                    <div className="bg-zinc-800/40 p-3 rounded-md mt-2 border border-white/5">
-                      <p className="text-xs text-zinc-400">
-                        VectorHUD uses OpenRouter to provide access to top AI models (like GPT-4o and Claude).
-                        <br/><br/>
-                        1. Create an account at <a href="https://openrouter.ai" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline">openrouter.ai</a>.
-                        <br/>
-                        2. Generate a new API key and paste it above.
-                      </p>
-                    </div>
-                  </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Vision Model</label>
+                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Active Provider</label>
                     <select
-                      value={localPreferences.openRouterModel}
-                      onChange={(e) => setLocalPreferences(s => ({ ...s, openRouterModel: e.target.value }))}
-                      className="w-full bg-zinc-800 border border-zinc-600 rounded-lg px-4 py-2 text-sm text-zinc-100 focus:outline-none focus:border-primary transition-colors appearance-none"
+                      value={localPreferences.aiProvider}
+                      onChange={(e) => setLocalPreferences(s => ({ ...s, aiProvider: e.target.value }))}
+                      className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2 text-sm text-zinc-100 focus:outline-none focus:border-primary transition-colors appearance-none"
                     >
-                      <option value="openai/gpt-5.5">GPT-5.5 [Vision] (Recommended)</option>
-                      <option value="anthropic/claude-sonnet-4.6">Claude 4.6 Sonnet [Vision]</option>
-                      <option value="google/gemini-2.5-pro">Gemini 2.5 Pro [Vision]</option>
-                      <option value="google/gemini-2.5-flash">Gemini 2.5 Flash [Vision] (Free)</option>
-                      <option value="deepseek/deepseek-chat">DeepSeek V3 (Text Only)</option>
+                      <option value="openrouter">OpenRouter AI (Default)</option>
+                      <option value="openai">OpenAI (Direct API)</option>
+                      <option value="anthropic">Anthropic (Direct API)</option>
+                      <option value="groq">Groq (Direct API)</option>
                     </select>
                   </div>
+
+                  {/* OpenRouter Configuration */}
+                  {localPreferences.aiProvider === 'openrouter' && (
+                    <div className="space-y-4 pt-2 animate-fadeIn">
+                      <div className="space-y-1">
+                        <label className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">OpenRouter API Key</label>
+                        <input 
+                          type="password"
+                          value={openRouterKey}
+                          onChange={(e) => setOpenRouterKey(e.target.value)}
+                          placeholder="sk-or-v1-..."
+                          className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-base text-zinc-200 focus:outline-none focus:border-primary transition-colors"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-2 bg-black/20 p-2 rounded border border-white/5">
+                        <input
+                          type="checkbox"
+                          id="useCustomOpenRouterModel"
+                          checked={localPreferences.useCustomOpenRouterModel}
+                          onChange={(e) => setLocalPreferences(s => ({ ...s, useCustomOpenRouterModel: e.target.checked }))}
+                          className="rounded border-zinc-700 bg-zinc-900 text-primary focus:ring-primary"
+                        />
+                        <label htmlFor="useCustomOpenRouterModel" className="text-xs text-zinc-300 cursor-pointer select-none">
+                          Use Custom Model ID (override dropdown)
+                        </label>
+                      </div>
+
+                      {localPreferences.useCustomOpenRouterModel ? (
+                        <div className="space-y-1">
+                          <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Custom Model ID</label>
+                          <input 
+                            type="text"
+                            value={localPreferences.customOpenRouterModel}
+                            onChange={(e) => setLocalPreferences(s => ({ ...s, customOpenRouterModel: e.target.value }))}
+                            placeholder="e.g. google/gemini-2.5-flash"
+                            className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 focus:outline-none focus:border-primary transition-colors font-mono"
+                          />
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">OpenRouter Model</label>
+                          <select
+                            value={localPreferences.openRouterModel}
+                            onChange={(e) => setLocalPreferences(s => ({ ...s, openRouterModel: e.target.value }))}
+                            className="w-full bg-zinc-800 border border-zinc-600 rounded-lg px-4 py-2 text-sm text-zinc-100 focus:outline-none focus:border-primary transition-colors appearance-none"
+                          >
+                            <option value="google/gemini-2.5-flash">Gemini 2.5 Flash [Vision] (Recommended)</option>
+                            <option value="google/gemini-2.5-pro">Gemini 2.5 Pro [Vision]</option>
+                            <option value="openai/gpt-4o-mini">GPT-4o Mini [Vision]</option>
+                            <option value="openai/gpt-4o">GPT-4o [Vision]</option>
+                            <option value="anthropic/claude-sonnet-4.6">Claude 3.5 Sonnet v2 [Vision]</option>
+                            <option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B Instruct [Text-Only] (Free)</option>
+                            <option value="meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B Instruct [Text-Only]</option>
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* OpenAI Configuration */}
+                  {localPreferences.aiProvider === 'openai' && (
+                    <div className="space-y-4 pt-2 animate-fadeIn">
+                      <div className="space-y-1">
+                        <label className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">OpenAI API Key</label>
+                        <input 
+                          type="password"
+                          value={openaiKey}
+                          onChange={(e) => setOpenaiKey(e.target.value)}
+                          placeholder="sk-..."
+                          className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-base text-zinc-200 focus:outline-none focus:border-primary transition-colors"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">OpenAI Model</label>
+                        <select
+                          value={localPreferences.openaiModel}
+                          onChange={(e) => setLocalPreferences(s => ({ ...s, openaiModel: e.target.value }))}
+                          className="w-full bg-zinc-800 border border-zinc-600 rounded-lg px-4 py-2 text-sm text-zinc-100 focus:outline-none focus:border-primary transition-colors appearance-none font-mono"
+                        >
+                          <option value="gpt-4o-mini">gpt-4o-mini [Vision] (Recommended)</option>
+                          <option value="gpt-4o">gpt-4o [Vision]</option>
+                          <option value="gpt-4-turbo">gpt-4-turbo [Vision]</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Anthropic Configuration */}
+                  {localPreferences.aiProvider === 'anthropic' && (
+                    <div className="space-y-4 pt-2 animate-fadeIn">
+                      <div className="space-y-1">
+                        <label className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Anthropic API Key</label>
+                        <input 
+                          type="password"
+                          value={anthropicKey}
+                          onChange={(e) => setAnthropicKey(e.target.value)}
+                          placeholder="sk-ant-..."
+                          className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-base text-zinc-200 focus:outline-none focus:border-primary transition-colors"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Anthropic Model</label>
+                        <select
+                          value={localPreferences.anthropicModel}
+                          onChange={(e) => setLocalPreferences(s => ({ ...s, anthropicModel: e.target.value }))}
+                          className="w-full bg-zinc-800 border border-zinc-600 rounded-lg px-4 py-2 text-sm text-zinc-100 focus:outline-none focus:border-primary transition-colors appearance-none font-mono"
+                        >
+                          <option value="claude-3-5-sonnet-20241022">claude-3-5-sonnet-20241022 [Vision] (Recommended)</option>
+                          <option value="claude-3-5-haiku-20241022">claude-3-5-haiku-20241022 [Text-Only]</option>
+                          <option value="claude-3-opus-20240229">claude-3-opus-20240229 [Vision]</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Groq Configuration */}
+                  {localPreferences.aiProvider === 'groq' && (
+                    <div className="space-y-4 pt-2 animate-fadeIn">
+                      <div className="space-y-1">
+                        <label className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Groq API Key</label>
+                        <input 
+                          type="password"
+                          value={groqKey}
+                          onChange={(e) => setGroqKey(e.target.value)}
+                          placeholder="gsk_..."
+                          className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-base text-zinc-200 focus:outline-none focus:border-primary transition-colors"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Groq Model</label>
+                        <select
+                          value={localPreferences.groqModel}
+                          onChange={(e) => setLocalPreferences(s => ({ ...s, groqModel: e.target.value }))}
+                          className="w-full bg-zinc-800 border border-zinc-600 rounded-lg px-4 py-2 text-sm text-zinc-100 focus:outline-none focus:border-primary transition-colors appearance-none font-mono"
+                        >
+                          <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile [Text-Only] (Recommended)</option>
+                          <option value="llama-3.1-8b-instant">llama-3.1-8b-instant [Text-Only]</option>
+                          <option value="mixtral-8x7b-32768">mixtral-8x7b-32768 [Text-Only]</option>
+                          <option value="gemma2-9b-it">gemma2-9b-it [Text-Only]</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-4">
