@@ -47,9 +47,6 @@ interface Message {
 function App() {
   const isInteractive = useShellStore((state) => state.isInteractive);
   const isOverlayOpen = useShellStore((state) => state.isOverlayOpen);
-  const toggleInteractive = useShellStore((state) => state.toggleInteractive);
-  const setInteractive = useShellStore((state) => state.setInteractive);
-  const setOverlayOpen = useShellStore((state) => state.setOverlayOpen);
   
   const activeWidgetIds = useWidgetStore(useShallow((state) => Object.keys(state.activeWidgets)));
   
@@ -370,7 +367,7 @@ function App() {
     const resetTimeout = () => {
       clearTimeout(timeoutId);
       timeoutId = setTimeout(() => {
-        setInteractive(false);
+        useShellStore.getState().setInteractive(false);
         showToast("🎙️ Interactivity: Disabled (Inactivity)");
       }, 5000); // 5 seconds of inactivity
     };
@@ -389,7 +386,7 @@ function App() {
       window.removeEventListener('mousedown', resetTimeout);
       window.removeEventListener('keydown', resetTimeout);
     };
-  }, [isInteractive, isOverlayOpen, setInteractive, showToast]);
+  }, [isInteractive, isOverlayOpen, showToast]);
 
   useEffect(() => {
     logger.info("VectorHUD UI Booted");
@@ -458,7 +455,7 @@ function App() {
     });
 
     // Start in Ghost Mode by explicitly telling Rust to ignore cursor events
-    setInteractive(false);
+    useShellStore.getState().setInteractive(false);
 
 
     let isMounted = true;
@@ -478,7 +475,7 @@ function App() {
         const unlistenShortcut = await listen<string>("hotkey-overlay", (event) => {
           logger.info(`Frontend: hotkey-overlay event received, payload: ${event.payload}`).catch(console.error);
           if (event.payload === "pressed") {
-            toggleInteractive();
+            useShellStore.getState().toggleInteractive();
           }
         });
         safePush(unlistenShortcut);
@@ -491,7 +488,7 @@ function App() {
           }
           const current = useShellStore.getState().isInteractive;
           const next = !current;
-          setInteractive(next);
+          useShellStore.getState().setInteractive(next);
           showToast(`🎙️ Interactivity: ${next ? "Enabled" : "Disabled"}`);
         });
         safePush(unlistenInteract);
@@ -513,14 +510,14 @@ function App() {
             logger.info("Ignoring window-lost-focus event during active capture window hide.");
             return;
           }
-          setOverlayOpen(false);
-          setInteractive(false);
+          useShellStore.getState().setOverlayOpen(false);
+          useShellStore.getState().setInteractive(false);
         });
         safePush(unlistenFocusLoss);
 
         if (!isMounted) return;
         const unlistenForceInteractive = await listen("force-interactive", () => {
-          setInteractive(true);
+          useShellStore.getState().setInteractive(true);
         });
         safePush(unlistenForceInteractive);
 
@@ -669,8 +666,8 @@ function App() {
         return;
       }
       if (useShellStore.getState().isInteractive) {
-        setOverlayOpen(false);
-        setInteractive(false);
+        useShellStore.getState().setOverlayOpen(false);
+        useShellStore.getState().setInteractive(false);
       }
     };
     window.addEventListener('blur', handleBlur);
@@ -699,7 +696,7 @@ function App() {
       unsubscribeStore();
       clearTimeout(saveTimeout);
     };
-  }, [setInteractive, toggleInteractive, showToast]);
+  }, [showToast]);
 
   return (
     <>
@@ -875,8 +872,8 @@ function App() {
             onClick={(e) => {
               // Only dismiss if they clicked directly on the backdrop, not on the widgets inside
               if (e.target === e.currentTarget) {
-                setOverlayOpen(false);
-                setInteractive(false);
+                useShellStore.getState().setOverlayOpen(false);
+                useShellStore.getState().setInteractive(false);
               }
             }}
           />
@@ -888,7 +885,7 @@ function App() {
         <div 
           className="fixed inset-0 z-[40] pointer-events-auto bg-transparent"
           onClick={() => {
-            setInteractive(false);
+            useShellStore.getState().setInteractive(false);
             showToast("🎙️ Interactivity: Disabled");
           }}
         />
