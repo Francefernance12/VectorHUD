@@ -10,6 +10,7 @@ import { useWidgetStore } from "./store/widgetStore";
 import { useSettingsStore } from "./store/settingsStore";
 import { useToastStore } from "./store/toastStore";
 import { useTimerStore } from "./store/timerStore";
+import { useHardwareStore } from "./store/hardwareStore";
 import { useShallow } from 'zustand/react/shallow';
 import { Dock } from "./components/Dock";
 import { WidgetContainer } from "./components/WidgetContainer";
@@ -138,6 +139,10 @@ function App() {
         safePush(unlistenShortcut);
 
         if (!isMounted) return;
+        const unlistenHardware = await useHardwareStore.getState().initialize();
+        safePush(unlistenHardware);
+
+        if (!isMounted) return;
         const unlistenToast = await listen<string>("hud-toast", (event) => {
           showToast(event.payload);
         });
@@ -145,6 +150,10 @@ function App() {
 
         if (!isMounted) return;
         const unlistenFocusLoss = await listen("window-lost-focus", () => {
+          if (useShellStore.getState().ignoreFocusLoss) {
+            logger.info("Ignoring window-lost-focus event during active capture window hide.");
+            return;
+          }
           setInteractive(false);
         });
         safePush(unlistenFocusLoss);
@@ -158,6 +167,7 @@ function App() {
         if (!isMounted) return;
         const unlistenScreenshot = await listen("hotkey-screenshot", async () => {
           try {
+            useShellStore.getState().setIgnoreFocusLoss(true);
             const path = await invoke<string>('capture_screenshot');
             const normalizedPath = path.replace(/\\/g, '/');
             await getDb().then(db => db.execute('INSERT INTO capture_history (file_path, media_type, game_process) VALUES (?1, ?2, ?3)', [normalizedPath, 'screenshot', 'Desktop']));
@@ -165,6 +175,10 @@ function App() {
             showToast("📸 Screenshot Saved");
           } catch (err) {
             logger.error(`Screenshot hotkey failed: ${err}`).catch(console.error);
+          } finally {
+            setTimeout(() => {
+              useShellStore.getState().setIgnoreFocusLoss(false);
+            }, 300);
           }
         });
         safePush(unlistenScreenshot);

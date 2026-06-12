@@ -416,7 +416,7 @@ pub fn spawn_metrics_thread(app: AppHandle, shutdown: Arc<AtomicBool>) {
 
             let (current_app, current_fs) = get_foreground_info();
 
-            // If the active app is our overlay, ignore it and keep the previous app state
+            // If the active app is our overlay or invalid (None), ignore it and keep the previous app state
             let (active_app, is_fullscreen) = if let Some(ref app_name) = current_app {
                 if app_name.contains("VectorHUD") || app_name.to_lowercase().contains("vectorhud") {
                     (last_valid_app.clone(), last_valid_fs)
@@ -426,9 +426,8 @@ pub fn spawn_metrics_thread(app: AppHandle, shutdown: Arc<AtomicBool>) {
                     (current_app, current_fs)
                 }
             } else {
-                last_valid_app = None;
-                last_valid_fs = None;
-                (None, None)
+                // Keep the last known valid application name rather than clearing it to None
+                (last_valid_app.clone(), last_valid_fs)
             };
 
             let mut hud_cpu_usage = 0.0;

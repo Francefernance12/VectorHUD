@@ -11,15 +11,18 @@ import { useShallow } from 'zustand/react/shallow';
 import { useShellStore } from '../../store/shellStore';
 import { Plus, MessageSquare, Trash2, Camera, Edit3, Copy, Check } from 'lucide-react';
 import { UI_CONSTANTS } from '../../config/constants';
+import { AI_TOOLS, getAnthropicTools, executeTool } from '../../utils/aiActions';
 
 interface Message {
   id?: number;
   session_id: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'tool';
   content: string;
   image_path?: string;
   timestamp?: string;
   tokens?: number;
+  tool_calls?: any;
+  tool_call_id?: string;
 }
 
 interface ChatSession {
@@ -159,8 +162,12 @@ export function OpenRouterWidget() {
   const loadSessionMessages = async (sessionId: string) => {
     try {
       const db = await getDb();
-      const res = await db.select<Message[]>('SELECT * FROM ai_chat_history WHERE session_id = ? ORDER BY id ASC', [sessionId]);
-      setMessages(res);
+      const res = await db.select<any[]>('SELECT * FROM ai_chat_history WHERE session_id = ? ORDER BY id ASC', [sessionId]);
+      const mapped = res.map(row => ({
+        ...row,
+        tool_calls: row.tool_calls ? JSON.parse(row.tool_calls) : undefined
+      }));
+      setMessages(mapped);
     } catch (err) {
       logger.error(`Failed to load messages: ${getErrorMessage(err)}`);
     }
@@ -178,8 +185,16 @@ export function OpenRouterWidget() {
   const saveMessage = async (msg: Message) => {
     try {
       await executeQuery(
-        'INSERT INTO ai_chat_history (session_id, role, content, image_path, tokens) VALUES (?, ?, ?, ?, ?)',
-        [msg.session_id, msg.role, msg.content, msg.image_path || null, msg.tokens || null]
+        'INSERT INTO ai_chat_history (session_id, role, content, image_path, tokens, tool_calls, tool_call_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [
+          msg.session_id,
+          msg.role,
+          msg.content,
+          msg.image_path || null,
+          msg.tokens || null,
+          msg.tool_calls ? JSON.stringify(msg.tool_calls) : null,
+          msg.tool_call_id || null
+        ]
       );
       // Refresh sessions if it's the first message
       if (messages.length === 0) {
@@ -228,15 +243,17 @@ export function OpenRouterWidget() {
     setIsTyping(true);
     try {
       logger.info("Triggering in-memory screen buffer capture...");
+      useShellStore.getState().setIgnoreFocusLoss(true);
       const base64Image = await invoke<string>('capture_screen_base64');
       setDraftImagePath(base64Image);
       showToast("📸 Vision Buffer Captured");
-      useShellStore.getState().setInteractive(true);
     } catch (err) {
       logger.error(`Failed to analyze screen buffer: ${getErrorMessage(err)}`);
-      useShellStore.getState().setInteractive(true);
     } finally {
       setIsTyping(false);
+      setTimeout(() => {
+        useShellStore.getState().setIgnoreFocusLoss(false);
+      }, 300);
     }
   };
 
@@ -261,7 +278,93 @@ export function OpenRouterWidget() {
     await fetchAIResponse(updatedMessages, activeSessionId);
   };
 
-  const fetchAIResponse = async (currentMessages: Message[], sessionId: string) => {
+  const showToolToast = (name: string, args: any) => {
+    switch (name) {
+      case 'set_master_volume': {
+        const volInput = args.volume_percent !== undefined ? args.volume_percent : args.volume;
+        let vol = Number(volInput);
+        if (!isNaN(vol)) {
+          if (vol > 0 && vol <= 1.0 && !Number.isInteger(vol)) {
+            vol = Math.round(vol * 100);
+          } else {
+            vol = Math.round(vol);
+          }
+        } else {
+          vol = 0;
+        }
+        showToast(`🔊 System Volume set to ${vol}%`);
+        break;
+      }
+      case 'toggle_master_mute':
+        showToast(`🔇 Toggled System Mute`);
+        break;
+      case 'media_control': {
+        const cmd = args.command;
+        if (cmd === 'play_pause') showToast(`⏯️ Media Play/Pause`);
+        else if (cmd === 'next') showToast(`⏭️ Next Track`);
+        else if (cmd === 'prev') showToast(`⏮️ Previous Track`);
+        break;
+      }
+      case 'start_timer':
+        showToast(`⏱️ Timer Started: ${args.duration_seconds}s`);
+        break;
+      case 'reset_timer':
+        showToast(`⏱️ Timer Reset`);
+        break;
+      case 'control_stopwatch': {
+        const cmd = args.command;
+        if (cmd === 'start') showToast(`⏱️ Stopwatch Started`);
+        else if (cmd === 'pause') showToast(`⏱️ Stopwatch Paused`);
+        else if (cmd === 'reset') showToast(`⏱️ Stopwatch Reset`);
+        break;
+      }
+      case 'get_hardware_metrics':
+        showToast(`📊 Telemetry Metrics Sent to AI`);
+        break;
+      case 'capture_screenshot':
+        showToast(`📸 Silent Screenshot saved to gallery`);
+        break;
+      case 'start_video_recording':
+        showToast(`🎥 Video Recording Started`);
+        break;
+      case 'stop_video_recording':
+        showToast(`🎥 Video Recording Stopped`);
+        break;
+      case 'save_replay_clip':
+        showToast(`⚡ Replay Clip Saved`);
+        break;
+      case 'search_notion_tasks':
+        showToast(`📋 Synced Notion Tasks Queried`);
+        break;
+      case 'fill_notion_draft':
+        showToast(`📋 Notion Draft Filled by AI`);
+        break;
+      case 'list_notion_tasks': {
+        const limit = args.limit || 10;
+        showToast(`📋 Listed ${limit} Notion tasks`);
+        break;
+      }
+      case 'query_notion_db':
+        showToast(`📋 Synced Notion Tasks Queried`);
+        break;
+      case 'get_active_media_and_app':
+        showToast(`🎵 Querying active application and media`);
+        break;
+      default:
+        showToast(`🔧 Tool Executed: ${name}`);
+        break;
+    }
+  };
+
+  const fetchAIResponse = async (currentMessages: Message[], sessionId: string, depth = 0) => {
+    if (depth > 5) {
+      logger.error("Max tool calling depth reached. Preventing infinite loop.");
+      const errorMsg: Message = { session_id: sessionId, role: 'assistant', content: "Error: Max tool execution loop depth reached." };
+      setMessages(prev => [...prev, errorMsg]);
+      setIsTyping(false);
+      return;
+    }
+
     try {
       const db = await getDb();
       let keyId = 'openrouter_key';
@@ -306,6 +409,20 @@ export function OpenRouterWidget() {
       }
 
       const apiMessages = currentMessages.map(msg => {
+        if (msg.role === 'tool') {
+          return {
+            role: 'tool',
+            tool_call_id: msg.tool_call_id,
+            content: msg.content
+          };
+        }
+        if (msg.role === 'assistant' && msg.tool_calls) {
+          return {
+            role: 'assistant',
+            content: msg.content || "",
+            tool_calls: msg.tool_calls
+          };
+        }
         if (msg.image_path) {
           return {
             role: msg.role,
@@ -321,9 +438,27 @@ export function OpenRouterWidget() {
         };
       });
 
+      // Determine if we should pass tools
+      const supportsTools = 
+        aiProvider === 'openai' ||
+        aiProvider === 'anthropic' ||
+        aiProvider === 'groq' ||
+        (aiProvider === 'openrouter' && (!useCustomOpenRouterModel || (customOpenRouterModel && (
+          customOpenRouterModel.includes('gpt') ||
+          customOpenRouterModel.includes('claude') ||
+          customOpenRouterModel.includes('gemini') ||
+          customOpenRouterModel.includes('llama-3.3') ||
+          customOpenRouterModel.includes('llama3')
+        ))));
+
+      const toolsPayload = supportsTools 
+        ? (aiProvider === 'anthropic' ? getAnthropicTools() : AI_TOOLS)
+        : undefined;
+
       interface UnifiedLlmResponse {
         content: string;
         total_tokens: number;
+        tool_calls?: any;
       }
 
       const result = await invoke<UnifiedLlmResponse>('call_ai_api', {
@@ -331,24 +466,75 @@ export function OpenRouterWidget() {
         model: selectedModel,
         messages: apiMessages,
         systemPrompt: UI_CONSTANTS.CHAT_SYSTEM_PROMPT,
-        apiKey: apiKey
+        apiKey: apiKey,
+        tools: toolsPayload
       });
 
-      const assistantMsg: Message = {
-        session_id: sessionId,
-        role: 'assistant',
-        content: result.content,
-        tokens: result.total_tokens
-      };
-      
-      setMessages(prev => [...prev, assistantMsg]);
-      await saveMessage(assistantMsg);
+      if (result.tool_calls && result.tool_calls.length > 0) {
+        // Append assistant tool-call message
+        const assistantMsg: Message = {
+          session_id: sessionId,
+          role: 'assistant',
+          content: result.content || "",
+          tokens: result.total_tokens,
+          tool_calls: result.tool_calls
+        };
+        
+        await saveMessage(assistantMsg);
+        
+        const nextMessages = [...currentMessages, assistantMsg];
+        setMessages(nextMessages);
+
+        // Execute tool calls
+        const toolResults: Message[] = [];
+        for (const tc of result.tool_calls) {
+          const name = tc.function.name;
+          let args = {};
+          try {
+            args = typeof tc.function.arguments === 'string' 
+              ? JSON.parse(tc.function.arguments) 
+              : tc.function.arguments;
+          } catch (e) {
+            logger.error(`Failed to parse arguments for tool ${name}: ${tc.function.arguments}`);
+          }
+
+          showToolToast(name, args);
+          const output = await executeTool(name, args);
+
+          const toolMsg: Message = {
+            session_id: sessionId,
+            role: 'tool',
+            content: output,
+            tool_call_id: tc.id
+          };
+          
+          await saveMessage(toolMsg);
+          toolResults.push(toolMsg);
+        }
+
+        const nextMessagesWithTools = [...nextMessages, ...toolResults];
+        setMessages(nextMessagesWithTools);
+        
+        // Recurse to let the AI output its final response
+        await fetchAIResponse(nextMessagesWithTools, sessionId, depth + 1);
+
+      } else {
+        const assistantMsg: Message = {
+          session_id: sessionId,
+          role: 'assistant',
+          content: result.content,
+          tokens: result.total_tokens
+        };
+        
+        setMessages(prev => [...prev, assistantMsg]);
+        await saveMessage(assistantMsg);
+        setIsTyping(false);
+      }
 
     } catch (err: unknown) {
       logger.error(`AI Chat Failed (${aiProvider}): ${getErrorMessage(err)}`);
       const errorMsg: Message = { session_id: sessionId, role: 'assistant', content: `Error: ${getErrorMessage(err)}` };
       setMessages(prev => [...prev, errorMsg]);
-    } finally {
       setIsTyping(false);
     }
   };
@@ -441,7 +627,11 @@ export function OpenRouterWidget() {
             </div>
           )}
           
-          {messages.map((msg, idx) => (
+          {messages.filter(msg => {
+            if (msg.role === 'tool') return false;
+            if (msg.role === 'assistant' && (!msg.content || msg.content.trim() === '') && msg.tool_calls) return false;
+            return true;
+          }).map((msg, idx) => (
             <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} group animate-in fade-in slide-in-from-bottom-2 duration-300 w-full`}>
               <span className="text-[9px] text-zinc-600 mb-1.5 uppercase tracking-widest px-1 font-bold">
                 {msg.role === 'user' ? 'OPERATOR' : 'VECTOR_AI'}

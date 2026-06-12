@@ -598,13 +598,13 @@ export function SettingsModal() {
                             onChange={(e) => setLocalPreferences(s => ({ ...s, openRouterModel: e.target.value }))}
                             className="w-full bg-zinc-800 border border-zinc-600 rounded-lg px-4 py-2 text-sm text-zinc-100 focus:outline-none focus:border-primary transition-colors appearance-none"
                           >
-                            <option value="google/gemini-2.5-flash">Gemini 2.5 Flash [Vision] (Recommended)</option>
-                            <option value="google/gemini-2.5-pro">Gemini 2.5 Pro [Vision]</option>
-                            <option value="openai/gpt-4o-mini">GPT-4o Mini [Vision]</option>
-                            <option value="openai/gpt-4o">GPT-4o [Vision]</option>
-                            <option value="anthropic/claude-sonnet-4.6">Claude 3.5 Sonnet v2 [Vision]</option>
-                            <option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B Instruct [Text-Only] (Free)</option>
-                            <option value="meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B Instruct [Text-Only]</option>
+                            <option value="google/gemini-2.5-flash">Gemini 2.5 Flash [Vision/Actions] (Recommended)</option>
+                            <option value="google/gemini-2.5-pro">Gemini 2.5 Pro [Vision/Actions]</option>
+                            <option value="openai/gpt-4o-mini">GPT-4o Mini [Vision/Actions]</option>
+                            <option value="openai/gpt-4o">GPT-4o [Vision/Actions]</option>
+                            <option value="anthropic/claude-sonnet-4.6">Claude 3.5 Sonnet v2 [Vision/Actions]</option>
+                            <option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B Instruct [Text-Only/Actions] (Free)</option>
+                            <option value="meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B Instruct [Text-Only/Actions]</option>
                           </select>
                         </div>
                       )}
@@ -632,9 +632,9 @@ export function SettingsModal() {
                           onChange={(e) => setLocalPreferences(s => ({ ...s, openaiModel: e.target.value }))}
                           className="w-full bg-zinc-800 border border-zinc-600 rounded-lg px-4 py-2 text-sm text-zinc-100 focus:outline-none focus:border-primary transition-colors appearance-none font-mono"
                         >
-                          <option value="gpt-4o-mini">gpt-4o-mini [Vision] (Recommended)</option>
-                          <option value="gpt-4o">gpt-4o [Vision]</option>
-                          <option value="gpt-4-turbo">gpt-4-turbo [Vision]</option>
+                          <option value="gpt-4o-mini">gpt-4o-mini [Vision/Actions] (Recommended)</option>
+                          <option value="gpt-4o">gpt-4o [Vision/Actions]</option>
+                          <option value="gpt-4-turbo">gpt-4-turbo [Vision/Actions]</option>
                         </select>
                       </div>
                     </div>
@@ -661,9 +661,9 @@ export function SettingsModal() {
                           onChange={(e) => setLocalPreferences(s => ({ ...s, anthropicModel: e.target.value }))}
                           className="w-full bg-zinc-800 border border-zinc-600 rounded-lg px-4 py-2 text-sm text-zinc-100 focus:outline-none focus:border-primary transition-colors appearance-none font-mono"
                         >
-                          <option value="claude-3-5-sonnet-20241022">claude-3-5-sonnet-20241022 [Vision] (Recommended)</option>
-                          <option value="claude-3-5-haiku-20241022">claude-3-5-haiku-20241022 [Text-Only]</option>
-                          <option value="claude-3-opus-20240229">claude-3-opus-20240229 [Vision]</option>
+                          <option value="claude-3-5-sonnet-20241022">claude-3-5-sonnet-20241022 [Vision/Actions] (Recommended)</option>
+                          <option value="claude-3-5-haiku-20241022">claude-3-5-haiku-20241022 [Text-Only/Actions]</option>
+                          <option value="claude-3-opus-20240229">claude-3-opus-20240229 [Vision/Actions]</option>
                         </select>
                       </div>
                     </div>
@@ -690,10 +690,10 @@ export function SettingsModal() {
                           onChange={(e) => setLocalPreferences(s => ({ ...s, groqModel: e.target.value }))}
                           className="w-full bg-zinc-800 border border-zinc-600 rounded-lg px-4 py-2 text-sm text-zinc-100 focus:outline-none focus:border-primary transition-colors appearance-none font-mono"
                         >
-                          <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile [Text-Only] (Recommended)</option>
-                          <option value="llama-3.1-8b-instant">llama-3.1-8b-instant [Text-Only]</option>
-                          <option value="mixtral-8x7b-32768">mixtral-8x7b-32768 [Text-Only]</option>
-                          <option value="gemma2-9b-it">gemma2-9b-it [Text-Only]</option>
+                          <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile [Text-Only/Actions] (Recommended)</option>
+                          <option value="llama-3.1-8b-instant">llama-3.1-8b-instant [Text-Only/Actions]</option>
+                          <option value="mixtral-8x7b-32768">mixtral-8x7b-32768 [Text-Only/Actions]</option>
+                          <option value="gemma2-9b-it">gemma2-9b-it [Text-Only/Actions]</option>
                         </select>
                       </div>
                     </div>
