@@ -44,6 +44,7 @@ export function NotionCaptureWidget() {
   const [editTasks, setEditTasks] = useState<string[]>([]);
   const [isEditingLoading, setIsEditingLoading] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [togglingTasks, setTogglingTasks] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (activeTab === 'notes') {
@@ -236,6 +237,8 @@ export function NotionCaptureWidget() {
 
   const toggleTaskBlock = async (pageId: string, blockId: string, currentChecked: boolean, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (togglingTasks[blockId]) return;
+    setTogglingTasks(prev => ({ ...prev, [blockId]: true }));
     try {
         const creds = await getNotionCreds();
         await invoke('toggle_notion_task', { token: creds.token, blockId, checked: !currentChecked });
@@ -243,6 +246,8 @@ export function NotionCaptureWidget() {
         setNoteBlocks({ ...noteBlocks, [pageId]: updated });
     } catch (err) {
         logger.error(`Failed to toggle task: ${getErrorMessage(err)}`);
+    } finally {
+        setTogglingTasks(prev => ({ ...prev, [blockId]: false }));
     }
   };
 
