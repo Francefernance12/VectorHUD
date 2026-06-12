@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { executeTool, AI_TOOLS, getAnthropicTools } from './aiActions';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { executeTool, AI_TOOLS, getAnthropicTools, transcribeAudio } from './aiActions';
 import { useHardwareStore } from '../store/hardwareStore';
 import { useTimerStore } from '../store/timerStore';
 import { useNotionStore } from '../store/notionStore';
@@ -29,6 +29,9 @@ vi.mock('@tauri-apps/api/core', () => ({
     }
     if (cmd === 'save_replay_buffer') {
       return Promise.resolve("C:\\Users\\Desktop\\replay_2026.mp4");
+    }
+    if (cmd === 'decrypt_data') {
+      return Promise.resolve(args.encoded === 'enc_groq' ? 'dec_groq_key' : 'dec_openai_key');
     }
     return Promise.resolve();
   }
@@ -408,6 +411,91 @@ describe('aiActions', () => {
     it('should fail to save replay clip if replay buffer not active', async () => {
       const res = await executeTool('save_replay_clip', {});
       expect(res).toContain('Error: Replay buffer is not active');
+    });
+  });
+
+  describe('transcribeAudio', () => {
+    let mockFetch: any;
+    const originalFetch = global.fetch;
+
+    beforeEach(() => {
+      mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ text: 'Hello world transcription' })
+      });
+      global.fetch = mockFetch;
+    });
+
+    afterEach(() => {
+      global.fetch = originalFetch;
+    });
+
+    it('should throw error if no audio data provided', async () => {
+      await expect(transcribeAudio('')).rejects.toThrow('No audio data provided');
+    });
+
+    it('should throw error if no keys are configured', async () => {
+      mockDbSelect.mockResolvedValue([]);
+      await expect(transcribeAudio('data:audio/wav;base64,AAAA')).rejects.toThrow('Neither Groq nor OpenAI API key is configured');
+    });
+
+    it('should transcribe with Groq if Groq key is configured', async () => {
+      mockDbSelect.mockImplementation((query) => {
+        if (query.includes("id = 'groq_key'")) {
+          return Promise.resolve([{ encrypted_value: 'enc_groq' }]);
+        }
+        return Promise.resolve([]);
+      });
+
+      mockInvoke.mockImplementation((cmd, args) => {
+        if (cmd === 'decrypt_data' && args.encoded === 'enc_groq') {
+          return Promise.resolve('dec_groq_key');
+        }
+        return Promise.resolve('');
+      });
+
+      const result = await transcribeAudio('data:audio/wav;base64,AAAA');
+      expect(result).toBe('Hello world transcription');
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.groq.com/openai/v1/audio/transcriptions',
+        expect.objectContaining({
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer dec_groq_key'
+          }
+        })
+      );
+    });
+
+    it('should fallback to OpenAI if Groq key is not configured but OpenAI is', async () => {
+      mockDbSelect.mockImplementation((query) => {
+        if (query.includes("id = 'groq_key'")) {
+          return Promise.resolve([]);
+        }
+        if (query.includes("id = 'openai_key'")) {
+          return Promise.resolve([{ encrypted_value: 'enc_openai' }]);
+        }
+        return Promise.resolve([]);
+      });
+
+      mockInvoke.mockImplementation((cmd, args) => {
+        if (cmd === 'decrypt_data' && args.encoded === 'enc_openai') {
+          return Promise.resolve('dec_openai_key');
+        }
+        return Promise.resolve('');
+      });
+
+      const result = await transcribeAudio('data:audio/wav;base64,AAAA');
+      expect(result).toBe('Hello world transcription');
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.openai.com/v1/audio/transcriptions',
+        expect.objectContaining({
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer dec_openai_key'
+          }
+        })
+      );
     });
   });
 });

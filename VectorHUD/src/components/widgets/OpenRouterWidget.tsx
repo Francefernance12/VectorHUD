@@ -9,9 +9,9 @@ import { useToastStore } from '../../store/toastStore';
 import { useOpenRouterStore } from '../../store/openRouterStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useShellStore } from '../../store/shellStore';
-import { Plus, MessageSquare, Trash2, Camera, Edit3, Copy, Check } from 'lucide-react';
+import { Plus, MessageSquare, Trash2, Camera, Edit3, Copy, Check, Mic, MicOff } from 'lucide-react';
 import { UI_CONSTANTS } from '../../config/constants';
-import { AI_TOOLS, getAnthropicTools, executeTool } from '../../utils/aiActions';
+import { AI_TOOLS, getAnthropicTools, executeTool, transcribeAudio } from '../../utils/aiActions';
 
 interface Message {
   id?: number;
@@ -75,6 +75,62 @@ export function OpenRouterWidget() {
   
   const [copiedId, setCopiedId] = useState<number | string | null>(null);
 
+  const [isRecordingMic, setIsRecordingMic] = useState(false);
+  const [micSeconds, setMicSeconds] = useState(30);
+
+  const stopAndTranscribe = async () => {
+    setIsRecordingMic(false);
+    showToast("🎙️ Transcribing voice...");
+    try {
+      const base64Wav = await invoke<string>('stop_voice_recording');
+      const text = await transcribeAudio(base64Wav);
+      if (text.trim()) {
+        setInput(text.trim());
+      }
+    } catch (err: any) {
+      showToast(`🎙️ Transcription failed: ${err?.message || String(err)}`);
+    }
+  };
+
+  const handleMicClick = async () => {
+    if (!isRecordingMic) {
+      try {
+        await invoke('start_voice_recording');
+        setIsRecordingMic(true);
+        setMicSeconds(30);
+      } catch (err: any) {
+        showToast(`🎙️ Failed to start mic: ${err?.message || String(err)}`);
+      }
+    } else {
+      await stopAndTranscribe();
+    }
+  };
+
+  useEffect(() => {
+    if (!isRecordingMic) return;
+    
+    const interval = setInterval(() => {
+      setMicSeconds(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          stopAndTranscribe();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isRecordingMic]);
+
+  useEffect(() => {
+    return () => {
+      if (isRecordingMic) {
+        invoke('stop_voice_recording').catch(() => {});
+      }
+    };
+  }, [isRecordingMic]);
+
   const getCodeText = (node: any): string => {
     if (!node) return '';
     if (typeof node === 'string') return node;
@@ -115,6 +171,16 @@ export function OpenRouterWidget() {
     } else {
       setMessages([]);
     }
+  }, [currentSessionId]);
+
+  useEffect(() => {
+    const handleRefresh = () => {
+      if (currentSessionId) {
+        loadSessionMessages(currentSessionId);
+      }
+    };
+    window.addEventListener('refresh-chat-messages', handleRefresh);
+    return () => window.removeEventListener('refresh-chat-messages', handleRefresh);
   }, [currentSessionId]);
 
   useEffect(() => {
@@ -867,14 +933,28 @@ export function OpenRouterWidget() {
           <div className="flex gap-2 mb-2 relative">
             <input
               type="text"
-              value={input}
+              value={isRecordingMic ? `🎙️ Listening... (${micSeconds}s)` : input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Enter command..."
-              className="flex-1 bg-zinc-900 border border-zinc-700/50 rounded-sm px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-accent-amber/50 focus:bg-zinc-800 transition-all placeholder:text-zinc-600"
+              disabled={isRecordingMic}
+              placeholder={isRecordingMic ? `Listening...` : "Enter command..."}
+              className="flex-1 bg-zinc-900 border border-zinc-700/50 rounded-sm px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-accent-amber/50 focus:bg-zinc-800 transition-all placeholder:text-zinc-600 disabled:opacity-75 disabled:text-accent-amber"
             />
             <button
+              type="button"
+              onClick={handleMicClick}
+              disabled={isTyping}
+              className={`px-3 rounded-sm border transition-all flex items-center justify-center ${
+                isRecordingMic
+                  ? 'bg-red-500/20 border-red-500/50 text-red-500 animate-pulse'
+                  : 'bg-zinc-900 border-zinc-700/50 text-zinc-400 hover:text-zinc-100 hover:border-zinc-600'
+              }`}
+              title={isRecordingMic ? "Stop recording" : "Record voice"}
+            >
+              {isRecordingMic ? <MicOff size={16} /> : <Mic size={16} />}
+            </button>
+            <button
               type="submit"
-              disabled={(!input.trim() && !draftImagePath) || isTyping}
+              disabled={(!input.trim() && !draftImagePath) || isTyping || isRecordingMic}
               className="px-6 bg-accent-amber/10 border border-accent-amber/30 text-accent-amber rounded-sm py-2 text-xs font-bold uppercase tracking-widest hover:bg-accent-amber hover:text-black transition-all disabled:opacity-30 disabled:cursor-not-allowed"
             >
               Send

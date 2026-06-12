@@ -22,6 +22,83 @@ fn set_interactive_mode(window: tauri::Window, interactive: bool, interactable_p
 
 static HOTKEY_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+fn parse_hotkey_to_vk(hotkey_str: &str) -> (bool, bool, bool, i32) {
+    let mut ctrl = false;
+    let mut alt = false;
+    let mut shift = false;
+    let mut vk = 0;
+    for part in hotkey_str.to_lowercase().split('+') {
+        match part.trim() {
+            "ctrl" | "control" | "commandorcontrol" => ctrl = true,
+            "alt" | "menu" => alt = true,
+            "shift" => shift = true,
+            other => {
+                if other.len() == 1 {
+                    let c = other.chars().next().unwrap();
+                    if c.is_alphabetic() {
+                        vk = 0x41 + (c as i32 - 'a' as i32);
+                    } else if c.is_numeric() {
+                        vk = 0x30 + (c as i32 - '0' as i32);
+                    }
+                } else {
+                    match other {
+                        "space" => vk = 0x20,
+                        "enter" | "return" => vk = 0x0D,
+                        "tab" => vk = 0x09,
+                        "escape" | "esc" => vk = 0x1B,
+                        "up" => vk = 0x26,
+                        "down" => vk = 0x28,
+                        "left" => vk = 0x25,
+                        "right" => vk = 0x27,
+                        "f1" => vk = 0x70,
+                        "f2" => vk = 0x71,
+                        "f3" => vk = 0x72,
+                        "f4" => vk = 0x73,
+                        "f5" => vk = 0x74,
+                        "f6" => vk = 0x75,
+                        "f7" => vk = 0x76,
+                        "f8" => vk = 0x77,
+                        "f9" => vk = 0x78,
+                        "f10" => vk = 0x79,
+                        "f11" => vk = 0x7A,
+                        "f12" => vk = 0x7B,
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+    (ctrl, alt, shift, vk)
+}
+
+#[tauri::command]
+fn start_voice_recording(
+    state: tauri::State<'_, core::voice_recorder::VoiceRecorderState>,
+) -> Result<(), String> {
+    let mut lock = state.0.lock().unwrap();
+    if lock.is_some() {
+        return Err("Voice recording is already in progress".to_string());
+    }
+    let recorder = core::voice_recorder::VoiceRecorder::start()?;
+    *lock = Some(recorder);
+    Ok(())
+}
+
+#[tauri::command]
+fn stop_voice_recording(
+    state: tauri::State<'_, core::voice_recorder::VoiceRecorderState>,
+) -> Result<String, String> {
+    let mut lock = state.0.lock().unwrap();
+    let recorder = lock
+        .take()
+        .ok_or_else(|| "No active voice recording to stop".to_string())?;
+    let wav_bytes = recorder.get_wav_bytes()?;
+
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+    let base64_str = STANDARD.encode(wav_bytes);
+    Ok(format!("data:audio/wav;base64,{}", base64_str))
+}
+
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 fn update_hotkeys(
@@ -33,6 +110,7 @@ fn update_hotkeys(
     timer_hotkey: String,
     stopwatch_hotkey: String,
     timer_reset_hotkey: String,
+    voice_ptt_hotkey: String,
 ) -> Result<(), String> {
     let _lock = HOTKEY_MUTEX.lock().unwrap();
     use std::str::FromStr;
@@ -120,6 +198,94 @@ fn update_hotkeys(
     register_hotkey(&timer_hotkey, "hotkey-timer");
     register_hotkey(&stopwatch_hotkey, "hotkey-stopwatch");
     register_hotkey(&timer_reset_hotkey, "hotkey-timer-reset");
+
+    // Register Voice PTT hotkey separately to handle polling key release
+    if !voice_ptt_hotkey.is_empty() {
+        if let Ok(shortcut) = Shortcut::from_str(&voice_ptt_hotkey) {
+            if shortcut_manager.is_registered(shortcut) {
+                let _ = shortcut_manager.unregister(shortcut);
+            }
+            let voice_ptt_hotkey_clone = voice_ptt_hotkey.clone();
+            let res = shortcut_manager.on_shortcut(shortcut, move |app, _shortcut, event| {
+                tracing::info!("Shortcut triggered: hotkey-voice-ptt with state {:?}", event.state);
+                if event.state == ShortcutState::Pressed {
+                    let state = app.state::<core::voice_recorder::VoiceRecorderState>();
+                    let mut lock = state.0.lock().unwrap();
+                    if lock.is_none() {
+                        match core::voice_recorder::VoiceRecorder::start() {
+                            Ok(recorder) => {
+                                *lock = Some(recorder);
+                                let _ = app.emit("voice-recording-started", ());
+
+                                let hotkey_str = voice_ptt_hotkey_clone.clone();
+                                let app_handle = app.clone();
+                                tokio::spawn(async move {
+                                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                                    let (ctrl, alt, shift, vk) = parse_hotkey_to_vk(&hotkey_str);
+                                    loop {
+                                        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                                        let mut pressed = true;
+                                        unsafe {
+                                            use windows::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState;
+                                            if ctrl && GetAsyncKeyState(0x11) >= 0 { // VK_CONTROL
+                                                pressed = false;
+                                            }
+                                            if alt && GetAsyncKeyState(0x12) >= 0 { // VK_MENU
+                                                pressed = false;
+                                            }
+                                            if shift && GetAsyncKeyState(0x10) >= 0 { // VK_SHIFT
+                                                pressed = false;
+                                            }
+                                            if vk != 0 && GetAsyncKeyState(vk) >= 0 {
+                                                pressed = false;
+                                            }
+                                        }
+                                        if !pressed {
+                                            break;
+                                        }
+                                    }
+
+                                    let state = app_handle.state::<core::voice_recorder::VoiceRecorderState>();
+                                    let mut lock = state.0.lock().unwrap();
+                                    if let Some(recorder) = lock.take() {
+                                        match recorder.get_wav_bytes() {
+                                            Ok(wav_bytes) => {
+                                                use base64::{engine::general_purpose::STANDARD, Engine as _};
+                                                let base64_str = STANDARD.encode(wav_bytes);
+                                                let data_uri = format!("data:audio/wav;base64,{}", base64_str);
+                                                let _ = app_handle.emit("voice-recording-stopped", data_uri);
+                                            }
+                                            Err(e) => {
+                                                tracing::error!("Failed to encode voice WAV: {}", e);
+                                                let _ = app_handle.emit("voice-recording-stopped-error", e);
+                                            }
+                                        }
+                                    }
+                                });
+                            }
+                            Err(e) => {
+                                tracing::error!("Failed to start voice PTT: {}", e);
+                            }
+                        }
+                    }
+                }
+            });
+            if let Err(e) = res {
+                tracing::error!(
+                    "Failed to set PTT shortcut handler: {} - {:?}",
+                    voice_ptt_hotkey,
+                    e
+                );
+                errors.push(format!(
+                    "Internal handler error for PTT {}: {:?}",
+                    voice_ptt_hotkey, e
+                ));
+            }
+        } else {
+            tracing::error!("Failed to parse PTT hotkey string: {}", voice_ptt_hotkey);
+            errors.push(format!("Invalid PTT hotkey format: '{}'", voice_ptt_hotkey));
+        }
+    }
 
     if errors.is_empty() {
         tracing::info!("Successfully registered all hotkeys");
@@ -312,6 +478,7 @@ pub fn run() {
             app.manage(core::record::RecorderState(std::sync::Mutex::new(
                 core::record::RecorderManager::new(),
             )));
+            app.manage(core::voice_recorder::VoiceRecorderState(std::sync::Mutex::new(None)));
 
             Ok(())
         })
@@ -441,6 +608,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             set_interactive_mode,
             update_hotkeys,
+            start_voice_recording,
+            stop_voice_recording,
             commands::telemetry::frontend_log,
             commands::api::sync_to_notion,
             commands::api::save_local_note,

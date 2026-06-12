@@ -6,3 +6,4 @@ pub mod ffmpeg_manager;
 pub mod media_control;
 pub mod metrics;
 pub mod record;
+pub mod voice_recorder;
