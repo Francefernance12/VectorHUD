@@ -26,8 +26,7 @@ interface MediaMetadata {
 
 export function AudioHubWidget() {
   const [audioState, setAudioState] = useState<SystemAudio | null>(null);
-  const [mediaState, setMediaState] = useState<MediaMetadata | null>(null);
-  const { favoriteApps, toggleFavoriteApp } = useAudioStore();
+  const { favoriteApps, toggleFavoriteApp, currentMedia, setCurrentMedia } = useAudioStore();
 
   const fetchAudioState = async () => {
     try {
@@ -41,7 +40,7 @@ export function AudioHubWidget() {
   const fetchMediaState = async () => {
     try {
       const state = await invoke<MediaMetadata | null>('get_current_media');
-      setMediaState(state);
+      setCurrentMedia(state);
     } catch (err) {
       // logger.error(`Failed to fetch media state: ${err}`);
     }
@@ -146,15 +145,15 @@ export function AudioHubWidget() {
     <div className="flex flex-col h-full text-text-primary font-mono text-sm p-4 space-y-6 overflow-y-auto custom-scrollbar">
       
       {/* Media Player Section */}
-      {mediaState && (
+      {currentMedia && (
         <div className="flex flex-col space-y-3 bg-black/40 border border-white/5 p-3 rounded-lg">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-accent-blue/20 rounded-md flex items-center justify-center text-accent-blue flex-shrink-0">
               <Music size={20} />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-white font-bold truncate text-sm">{mediaState.title}</div>
-              <div className="text-zinc-400 truncate text-xs">{mediaState.artist || mediaState.album_artist}</div>
+              <div className="text-white font-bold truncate text-sm">{currentMedia.title}</div>
+              <div className="text-zinc-400 truncate text-xs">{currentMedia.artist || currentMedia.album_artist}</div>
             </div>
           </div>
           
@@ -163,7 +162,7 @@ export function AudioHubWidget() {
               <SkipBack size={18} />
             </button>
             <button onClick={handlePlayPause} className="w-8 h-8 flex items-center justify-center bg-white text-black rounded-full hover:bg-zinc-200 transition-colors">
-              {mediaState.is_playing ? <Pause size={16} className="fill-current" /> : <Play size={16} className="fill-current ml-1" />}
+              {currentMedia.is_playing ? <Pause size={16} className="fill-current" /> : <Play size={16} className="fill-current ml-1" />}
             </button>
             <button onClick={handleNext} className="text-zinc-400 hover:text-white transition-colors">
               <SkipForward size={18} />

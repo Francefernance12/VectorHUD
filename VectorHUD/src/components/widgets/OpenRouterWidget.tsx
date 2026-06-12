@@ -324,6 +324,15 @@ export function OpenRouterWidget() {
       case 'capture_screenshot':
         showToast(`📸 Silent Screenshot saved to gallery`);
         break;
+      case 'start_video_recording':
+        showToast(`🎥 Video Recording Started`);
+        break;
+      case 'stop_video_recording':
+        showToast(`🎥 Video Recording Stopped`);
+        break;
+      case 'save_replay_clip':
+        showToast(`⚡ Replay Clip Saved`);
+        break;
       case 'search_notion_tasks':
         showToast(`📋 Synced Notion Tasks Queried`);
         break;
@@ -337,6 +346,9 @@ export function OpenRouterWidget() {
       }
       case 'query_notion_db':
         showToast(`📋 Synced Notion Tasks Queried`);
+        break;
+      case 'get_active_media_and_app':
+        showToast(`🎵 Querying active application and media`);
         break;
       default:
         showToast(`🔧 Tool Executed: ${name}`);

@@ -12,6 +12,8 @@ export interface HardwareMetrics {
   fps: number;
   hud_cpu_usage?: number;
   hud_ram_usage_mb?: number;
+  active_app?: string;
+  is_fullscreen?: boolean;
 }
 
 interface HardwareState {

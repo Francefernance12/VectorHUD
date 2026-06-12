@@ -3,8 +3,14 @@ import { useTimerStore } from '../store/timerStore';
 import { useHardwareStore } from '../store/hardwareStore';
 import { useNotionStore } from '../store/notionStore';
 import { useShellStore } from '../store/shellStore';
+import { useAudioStore } from '../store/audioStore';
+import { useSettingsStore } from '../store/settingsStore';
+import { useToastStore } from '../store/toastStore';
+import { useRecordingStore } from '../store/recordingStore';
 import { getDb } from './db';
 import { logger } from './logger';
+
+let activeRecordingTimeout: ReturnType<typeof setTimeout> | null = null;
 
 export const AI_TOOLS = [
   {
@@ -221,6 +227,56 @@ export const AI_TOOLS = [
         }
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_active_media_and_app",
+      description: "Retrieve information about the currently active foreground application/game and the currently playing media/music metadata.",
+      parameters: {
+        type: "object",
+        properties: {}
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "start_video_recording",
+      description: "Start recording a standard video of the primary monitor. Optionally, set a duration in seconds after which the recording will automatically stop.",
+      parameters: {
+        type: "object",
+        properties: {
+          duration_seconds: {
+            type: "integer",
+            description: "Optional duration in seconds to automatically stop the recording (e.g. 120 for 2 minutes).",
+            minimum: 1
+          }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "stop_video_recording",
+      description: "Stop the current standard video recording and save it to the capture history/gallery.",
+      parameters: {
+        type: "object",
+        properties: {}
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "save_replay_clip",
+      description: "Save a 30-second rolling replay buffer clip to the capture history/gallery (the replay buffer widget must be active).",
+      parameters: {
+        type: "object",
+        properties: {}
+      }
+    }
   }
 ];
 
@@ -415,6 +471,105 @@ export async function executeTool(name: string, args: any): Promise<string> {
 
         const limited = filtered.slice(0, limit);
         return JSON.stringify(limited.map(n => ({ id: n.id, title: n.title, description: n.description, status: n.status, date: n.date })));
+      }
+      case 'get_active_media_and_app': {
+        const activeApp = useHardwareStore.getState().latestMetrics?.active_app || 'Unknown';
+        const isFullscreen = useHardwareStore.getState().latestMetrics?.is_fullscreen || false;
+        
+        let media = useAudioStore.getState().currentMedia;
+        if (!media) {
+          try {
+            media = await invoke<any>('get_current_media');
+          } catch (err) {
+            logger.error(`Failed to get media in tool: ${err}`);
+          }
+        }
+
+        const favoriteApps = useAudioStore.getState().favoriteApps || [];
+        const isActiveAppFavorited = favoriteApps.includes(activeApp);
+
+        return JSON.stringify({
+          active_app: activeApp,
+          is_fullscreen: isFullscreen,
+          is_active_app_favorited: isActiveAppFavorited,
+          favorite_apps: favoriteApps,
+          media: media
+        });
+      }
+      case 'start_video_recording': {
+        const isRecording = useRecordingStore.getState().isRecording;
+        if (isRecording) {
+          return "Error: a video recording is already in progress.";
+        }
+
+        const micEnabled = useSettingsStore.getState().recordMicrophone;
+        const audioEnabled = useSettingsStore.getState().recordSystemAudio;
+
+        const path = await invoke<string>('start_video_recording', { micEnabled, audioEnabled });
+        useRecordingStore.getState().setRecording(true);
+
+        const duration = args.duration_seconds ? Number(args.duration_seconds) : undefined;
+        if (duration && !isNaN(duration) && duration > 0) {
+          if (activeRecordingTimeout) {
+            clearTimeout(activeRecordingTimeout);
+          }
+          activeRecordingTimeout = setTimeout(async () => {
+            try {
+              const stopRes = await executeTool('stop_video_recording', {});
+              useToastStore.getState().showToast(`🎥 Recording stopped (auto-timer completed)`);
+              logger.info(`Auto-stopped recording after ${duration}s: ${stopRes}`);
+            } catch (err) {
+              logger.error(`Failed to auto-stop recording: ${err}`);
+            }
+          }, duration * 1000);
+          return `Success: started standard video recording (saving to: ${path}). The recording will automatically stop in ${duration} seconds.`;
+        }
+
+        return `Success: started standard video recording (saving to: ${path}).`;
+      }
+      case 'stop_video_recording': {
+        const isRecording = useRecordingStore.getState().isRecording;
+        if (!isRecording) {
+          return "Error: no video recording is currently in progress.";
+        }
+
+        if (activeRecordingTimeout) {
+          clearTimeout(activeRecordingTimeout);
+          activeRecordingTimeout = null;
+        }
+
+        const path = await invoke<string>('stop_video_recording');
+        const normalizedPath = path.replace(/\\/g, '/');
+        
+        const db = await getDb();
+        await db.execute(
+          'INSERT INTO capture_history (file_path, media_type, game_process) VALUES (?1, ?2, ?3)',
+          [normalizedPath, 'video', 'Desktop']
+        );
+
+        useRecordingStore.getState().setRecording(false);
+        window.dispatchEvent(new Event('refresh-capture-history'));
+
+        return `Success: stopped standard video recording. Clip saved to gallery: ${normalizedPath}`;
+      }
+      case 'save_replay_clip': {
+        const isReplayActive = useRecordingStore.getState().isReplayActive;
+        if (!isReplayActive) {
+          return "Error: Replay buffer is not active. The user must first turn on the replay buffer widget or mark a game process.";
+        }
+
+        const path = await invoke<string>('save_replay_buffer');
+        const normalizedPath = path.replace(/\\/g, '/');
+
+        const db = await getDb();
+        await db.execute(
+          'INSERT INTO capture_history (file_path, media_type, game_process) VALUES (?1, ?2, ?3)',
+          [normalizedPath, 'video', 'Desktop']
+        );
+
+        window.dispatchEvent(new Event('refresh-capture-history'));
+
+        return `Success: saved 30-second replay buffer clip to gallery: ${normalizedPath}`;
       }
       default:
         return `Error: unknown tool function '${name}'.`;

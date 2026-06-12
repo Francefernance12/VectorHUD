@@ -2,6 +2,12 @@
 
 This document serves as an onboarding guide for developers contributing to VectorHUD. It outlines how the React frontend and Rust backend communicate, how state is structured, and how to create a new widget.
 
+### Documentation References
+- `docs/codebase_guide.md`: A complete onboarding guide to building new widgets and understanding state.
+- `docs/ai_actions.md`: A guide detailing the AI assistant's system capabilities, tool parameters, and prompt examples.
+- `docs/journey_and_lessons.md`: A deep dive into the architectural battles and bug-fixes we faced during development.
+- `context/Decisions.md`: A historical log of every architectural pivot.
+
 ---
 
 ## 1. Frontend Architecture (React + Zustand)

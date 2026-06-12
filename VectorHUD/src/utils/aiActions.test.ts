@@ -4,6 +4,9 @@ import { executeTool, AI_TOOLS, getAnthropicTools } from './aiActions';
 import { useHardwareStore } from '../store/hardwareStore';
 import { useTimerStore } from '../store/timerStore';
 import { useNotionStore } from '../store/notionStore';
+import { useAudioStore } from '../store/audioStore';
+import { useRecordingStore } from '../store/recordingStore';
+import { useSettingsStore } from '../store/settingsStore';
 
 // Mock Tauri invoke
 const mockInvoke = vi.fn();
@@ -12,6 +15,20 @@ vi.mock('@tauri-apps/api/core', () => ({
     mockInvoke(cmd, args);
     if (cmd === 'capture_screenshot') {
       return Promise.resolve("C:\\Users\\Desktop\\screenshot.png");
+    }
+    if (cmd === 'get_current_media') {
+      return Promise.resolve({
+        title: 'Song Title',
+        artist: 'Artist Name',
+        album_artist: 'Album Artist',
+        is_playing: true
+      });
+    }
+    if (cmd === 'start_video_recording' || cmd === 'stop_video_recording') {
+      return Promise.resolve("C:\\Users\\Desktop\\video_2026.mp4");
+    }
+    if (cmd === 'save_replay_buffer') {
+      return Promise.resolve("C:\\Users\\Desktop\\replay_2026.mp4");
     }
     return Promise.resolve();
   }
@@ -35,6 +52,9 @@ describe('aiActions', () => {
     useHardwareStore.setState({ latestMetrics: null });
     useTimerStore.setState({ cdInput: 60, cdTime: 60, cdIsRunning: false, cdFinished: false });
     useNotionStore.setState({ notes: [] });
+    useAudioStore.setState({ favoriteApps: [] });
+    useRecordingStore.setState({ isRecording: false, isReplayActive: false, elapsedSeconds: 0 });
+    useSettingsStore.setState({ recordMicrophone: true, recordSystemAudio: true });
   });
 
   describe('getAnthropicTools', () => {
@@ -296,6 +316,98 @@ describe('aiActions', () => {
       // Test invalid volume type
       res = await executeTool('set_master_volume', { volume: 'invalid' });
       expect(res).toContain('Error');
+    });
+
+    it('should retrieve active media and app information correctly', async () => {
+      // Mock metrics and favorites
+      useHardwareStore.setState({
+        latestMetrics: {
+          cpu_usage: 10,
+          ram_usage_percent: 40,
+          ram_total_gb: 16,
+          ram_used_gb: 6.4,
+          gpu_usage: 20,
+          vram_usage_percent: 15,
+          vram_used_gb: 1.2,
+          fps: 60,
+          active_app: 'Wuthering Waves',
+          is_fullscreen: true
+        }
+      });
+      useAudioStore.setState({ favoriteApps: ['Wuthering Waves', 'Spotify'] });
+
+      const res = await executeTool('get_active_media_and_app', {});
+      const parsed = JSON.parse(res);
+
+      expect(parsed.active_app).toBe('Wuthering Waves');
+      expect(parsed.is_fullscreen).toBe(true);
+      expect(parsed.is_active_app_favorited).toBe(true);
+      expect(parsed.favorite_apps).toEqual(['Wuthering Waves', 'Spotify']);
+      expect(parsed.media).toEqual({
+        title: 'Song Title',
+        artist: 'Artist Name',
+        album_artist: 'Album Artist',
+        is_playing: true
+      });
+      expect(mockInvoke).toHaveBeenCalledWith('get_current_media', undefined);
+    });
+
+    it('should start video recording successfully', async () => {
+      const res = await executeTool('start_video_recording', {});
+      expect(res).toContain('Success: started standard video recording');
+      expect(mockInvoke).toHaveBeenCalledWith('start_video_recording', { micEnabled: true, audioEnabled: true });
+      expect(useRecordingStore.getState().isRecording).toBe(true);
+    });
+
+    it('should fail to start video recording if already recording', async () => {
+      useRecordingStore.setState({ isRecording: true });
+      const res = await executeTool('start_video_recording', {});
+      expect(res).toContain('Error: a video recording is already in progress');
+    });
+
+    it('should stop video recording successfully', async () => {
+      useRecordingStore.setState({ isRecording: true });
+      const res = await executeTool('stop_video_recording', {});
+      expect(res).toContain('Success: stopped standard video recording');
+      expect(mockInvoke).toHaveBeenCalledWith('stop_video_recording', undefined);
+      expect(mockDbExecute).toHaveBeenCalledWith(
+        'INSERT INTO capture_history (file_path, media_type, game_process) VALUES (?1, ?2, ?3)',
+        ['C:/Users/Desktop/video_2026.mp4', 'video', 'Desktop']
+      );
+      expect(useRecordingStore.getState().isRecording).toBe(false);
+    });
+
+    it('should fail to stop video recording if not recording', async () => {
+      const res = await executeTool('stop_video_recording', {});
+      expect(res).toContain('Error: no video recording is currently in progress');
+    });
+
+    it('should start video recording with auto-stop duration', async () => {
+      vi.useFakeTimers();
+      const res = await executeTool('start_video_recording', { duration_seconds: 5 });
+      expect(res).toContain('automatically stop in 5 seconds');
+      expect(useRecordingStore.getState().isRecording).toBe(true);
+
+      // Fast-forward timers to fire auto-stop
+      await vi.runAllTimersAsync();
+      expect(useRecordingStore.getState().isRecording).toBe(false);
+      vi.useRealTimers();
+    });
+
+    it('should save replay clip successfully', async () => {
+      useRecordingStore.setState({ isReplayActive: true });
+      const res = await executeTool('save_replay_clip', {});
+      expect(res).toContain('Success: saved 30-second replay buffer clip');
+      expect(mockInvoke).toHaveBeenCalledWith('save_replay_buffer', undefined);
+      expect(mockDbExecute).toHaveBeenCalledWith(
+        'INSERT INTO capture_history (file_path, media_type, game_process) VALUES (?1, ?2, ?3)',
+        ['C:/Users/Desktop/replay_2026.mp4', 'video', 'Desktop']
+      );
+    });
+
+    it('should fail to save replay clip if replay buffer not active', async () => {
+      const res = await executeTool('save_replay_clip', {});
+      expect(res).toContain('Error: Replay buffer is not active');
     });
   });
 });
