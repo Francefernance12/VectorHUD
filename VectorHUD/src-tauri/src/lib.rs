@@ -219,7 +219,7 @@ fn update_hotkeys(
 
                                 let hotkey_str = voice_ptt_hotkey_clone.clone();
                                 let app_handle = app.clone();
-                                tokio::spawn(async move {
+                                tauri::async_runtime::spawn(async move {
                                     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
                                     let (ctrl, alt, shift, vk) = parse_hotkey_to_vk(&hotkey_str);
                                     loop {
