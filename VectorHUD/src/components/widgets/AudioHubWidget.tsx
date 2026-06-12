@@ -66,14 +66,22 @@ export function AudioHubWidget() {
 
     poll();
 
-    // Reset polling speed when user interacts
+    // Reset polling speed when user interacts or state is refreshed
     const resetPoll = () => { pollInterval = 1000; };
+    const handleRefresh = () => {
+      fetchAudioState();
+      fetchMediaState();
+      pollInterval = 1000;
+    };
+
     window.addEventListener('mousemove', resetPoll);
+    window.addEventListener('refresh-audio-state', handleRefresh);
 
     return () => {
       isActive = false;
       clearTimeout(timeoutId);
       window.removeEventListener('mousemove', resetPoll);
+      window.removeEventListener('refresh-audio-state', handleRefresh);
     };
   }, []);
 

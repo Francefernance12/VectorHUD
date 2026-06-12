@@ -35,6 +35,7 @@ Update this file after every meaningful implementation change.
 - Session 16.2: v1.1.1 Bug Fixes (Resolved countdown timer finished toast repeating on app launch, normalized Windows backslash file paths in database insertions to forward slashes to enable video loading/range requests in WebView2, and removed unused Replay Buffer Resolution/FPS settings from the settings panel).
 - Session 17: AI Chat & Models (Added Groq/Anthropic/OpenAI providers and custom OpenRouter models. Implemented layout wrap rules preventing horizontal widget stretching, themed custom Markdown preview components to match HUD style, and built high-performance tokenizer-based multi-language code syntax highlighting).
 - Session 17.5: UI, Capture Speed & Windowing Fixes (Disabled OS edge resize cursors, optimized screenshot window hide/show latency, separated silent hotkey from UI screenshot flows, restored interactive state on vision buffer completion, re-asserted topmost z-order once on focus gain, and logged balanced font scaling configurations).
+- Session 18: App-Driven AI Actions (Implemented recursive function calling loop on the frontend enabling the chat widget to trigger master volume/mute controls, media commands, countdown timers, silent screenshot captures, Notion note queries, and CPU/GPU telemetry metrics retrieval with HUD toast notifications and database thread serialization. Hardened volume control with parameter fallbacks, decimal scaling, and direct HUD widget audio syncing; added smart Notion draft task merging to prevent checklist overwrites; expanded test suite to 29 tests with database select mocks).
 
 ## In Progress
 
@@ -44,7 +45,6 @@ Update this file after every meaningful implementation change.
 
 | Session | Unit Name | Focus | Goal |
 | :--- | :--- | :--- | :--- |
-| **Session 18** | App-Driven AI Actions | AI/Tools | Implement Function Calling for LLM to interact with widgets (volume, playback, hardware metrics, timer start, Notion DB search, auto capture) under tight token limits. |
 | **Session 19** | Voice Assistant & Voice PTT | Voice/UX | Add mic speech-to-text to input. Implement `Ctrl+Alt+V` global Push-to-Talk (PTT) voice assistant that records on hold and transcribes/submits on release with HUD toast popups. |
 | **Session 20** | Settings & Mixer Hardening | Hardening | Fix dropdown blinking. Build keybind combo listener. Sync dock glow border themes. Enumerate audio mixer sessions across all endpoints to capture elevated games (Wuthering Waves). Resolve PresentMon64 warning / execution locking issue. Add specific timer start inputs. |
 | **Session 21** | Discord Webhook Integration | API | Implement Discord Webhook configuration and gallery share button to upload screenshots/clips directly to Discord. |

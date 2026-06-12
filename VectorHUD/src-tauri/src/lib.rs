@@ -425,6 +425,15 @@ pub fn run() {
                         ",
                             kind: tauri_plugin_sql::MigrationKind::Up,
                         },
+                        tauri_plugin_sql::Migration {
+                            version: 9,
+                            description: "add_tool_support_to_chat",
+                            sql: "
+                        ALTER TABLE ai_chat_history ADD COLUMN tool_calls TEXT;
+                        ALTER TABLE ai_chat_history ADD COLUMN tool_call_id TEXT;
+                        ",
+                            kind: tauri_plugin_sql::MigrationKind::Up,
+                        },
                     ],
                 )
                 .build(),

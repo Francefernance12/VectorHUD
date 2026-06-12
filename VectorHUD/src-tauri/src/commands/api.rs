@@ -699,6 +699,7 @@ pub async fn toggle_notion_task(
 pub struct UnifiedLlmResponse {
     pub content: String,
     pub total_tokens: u32,
+    pub tool_calls: Option<serde_json::Value>,
 }
 
 fn map_messages_to_anthropic(messages: &Vec<serde_json::Value>) -> Vec<serde_json::Value> {
@@ -707,6 +708,70 @@ fn map_messages_to_anthropic(messages: &Vec<serde_json::Value>) -> Vec<serde_jso
         let role = msg.get("role").and_then(|r| r.as_str()).unwrap_or("user");
         let content_val = msg.get("content");
 
+        // Handle tool role (maps to user role with tool_result block in Anthropic)
+        if role == "tool" {
+            let tool_use_id = msg
+                .get("tool_call_id")
+                .and_then(|id| id.as_str())
+                .unwrap_or("");
+            let content_str = content_val.and_then(|c| c.as_str()).unwrap_or("");
+            let block = serde_json::json!({
+                "type": "tool_result",
+                "tool_use_id": tool_use_id,
+                "content": content_str
+            });
+            anthropic_messages.push(serde_json::json!({
+                "role": "user",
+                "content": vec![block]
+            }));
+            continue;
+        }
+
+        // Handle assistant role with potential tool calls
+        if role == "assistant" {
+            let mut mapped_content = Vec::new();
+            if let Some(content_str) = content_val.and_then(|c| c.as_str()) {
+                if !content_str.is_empty() {
+                    mapped_content.push(serde_json::json!({
+                        "type": "text",
+                        "text": content_str
+                    }));
+                }
+            }
+            if let Some(tool_calls_arr) = msg.get("tool_calls").and_then(|tc| tc.as_array()) {
+                for tc in tool_calls_arr {
+                    let tc_id = tc.get("id").and_then(|i| i.as_str()).unwrap_or("");
+                    let tc_name = tc
+                        .get("function")
+                        .and_then(|f| f.get("name"))
+                        .and_then(|n| n.as_str())
+                        .unwrap_or("");
+                    let tc_args_str = tc
+                        .get("function")
+                        .and_then(|f| f.get("arguments"))
+                        .and_then(|a| a.as_str())
+                        .unwrap_or("{}");
+                    let tc_args: serde_json::Value =
+                        serde_json::from_str(tc_args_str).unwrap_or(serde_json::json!({}));
+
+                    mapped_content.push(serde_json::json!({
+                        "type": "tool_use",
+                        "id": tc_id,
+                        "name": tc_name,
+                        "input": tc_args
+                    }));
+                }
+            }
+            if !mapped_content.is_empty() {
+                anthropic_messages.push(serde_json::json!({
+                    "role": "assistant",
+                    "content": mapped_content
+                }));
+            }
+            continue;
+        }
+
+        // Standard user/system message translation
         if let Some(content) = content_val {
             if let Some(text_str) = content.as_str() {
                 anthropic_messages.push(serde_json::json!({
@@ -765,6 +830,7 @@ pub async fn call_ai_api(
     messages: Vec<serde_json::Value>,
     system_prompt: String,
     api_key: String,
+    tools: Option<serde_json::Value>,
 ) -> Result<UnifiedLlmResponse, String> {
     tracing::info!("call_ai_api: provider='{}', model='{}'", provider, model);
 
@@ -793,10 +859,17 @@ pub async fn call_ai_api(
                 body_messages.push(msg);
             }
 
-            let body = serde_json::json!({
+            let mut body = serde_json::json!({
                 "model": model,
                 "messages": body_messages
             });
+
+            if let Some(t) = &tools {
+                if let Some(body_obj) = body.as_object_mut() {
+                    body_obj.insert("tools".to_string(), t.clone());
+                    body_obj.insert("tool_choice".to_string(), serde_json::json!("auto"));
+                }
+            }
 
             let mut req = client
                 .post(url)
@@ -849,22 +922,30 @@ pub async fn call_ai_api(
                 .as_str()
                 .unwrap_or("")
                 .to_string();
+            let tool_calls = data["choices"][0]["message"].get("tool_calls").cloned();
             let total_tokens = data["usage"]["total_tokens"].as_u64().unwrap_or(0) as u32;
 
             tracing::info!("call_ai_api success: tokens={}", total_tokens);
             Ok(UnifiedLlmResponse {
                 content,
                 total_tokens,
+                tool_calls,
             })
         }
         "anthropic" => {
             let mapped_messages = map_messages_to_anthropic(&messages);
-            let body = serde_json::json!({
+            let mut body = serde_json::json!({
                 "model": model,
                 "system": system_prompt,
                 "messages": mapped_messages,
                 "max_tokens": 4096
             });
+
+            if let Some(t) = &tools {
+                if let Some(body_obj) = body.as_object_mut() {
+                    body_obj.insert("tools".to_string(), t.clone());
+                }
+            }
 
             let res = client
                 .post("https://api.anthropic.com/v1/messages")
@@ -908,15 +989,37 @@ pub async fn call_ai_api(
                 err
             })?;
 
-            let content_arr = data["content"].as_array();
-            let content = if let Some(arr) = content_arr {
-                if !arr.is_empty() {
-                    arr[0]["text"].as_str().unwrap_or("").to_string()
-                } else {
-                    "".to_string()
+            let mut text_parts = Vec::new();
+            let mut unified_tool_calls = Vec::new();
+
+            if let Some(arr) = data["content"].as_array() {
+                for block in arr {
+                    let b_type = block.get("type").and_then(|t| t.as_str()).unwrap_or("");
+                    if b_type == "text" {
+                        if let Some(txt) = block.get("text").and_then(|t| t.as_str()) {
+                            text_parts.push(txt.to_string());
+                        }
+                    } else if b_type == "tool_use" {
+                        let id = block.get("id").and_then(|i| i.as_str()).unwrap_or("");
+                        let name = block.get("name").and_then(|n| n.as_str()).unwrap_or("");
+                        let input = block.get("input").cloned().unwrap_or(serde_json::json!({}));
+                        unified_tool_calls.push(serde_json::json!({
+                            "id": id,
+                            "type": "function",
+                            "function": {
+                                "name": name,
+                                "arguments": input.to_string()
+                            }
+                        }));
+                    }
                 }
+            }
+
+            let content = text_parts.join("\n");
+            let tool_calls = if !unified_tool_calls.is_empty() {
+                Some(serde_json::Value::Array(unified_tool_calls))
             } else {
-                "".to_string()
+                None
             };
 
             let input_tokens = data["usage"]["input_tokens"].as_u64().unwrap_or(0);
@@ -927,6 +1030,7 @@ pub async fn call_ai_api(
             Ok(UnifiedLlmResponse {
                 content,
                 total_tokens,
+                tool_calls,
             })
         }
         _ => {
