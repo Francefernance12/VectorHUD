@@ -475,8 +475,10 @@ function App() {
     const initListeners = async () => {
       try {
         if (!isMounted) return;
-        const unlistenShortcut = await listen("hotkey-overlay", () => {
-          toggleInteractive();
+        const unlistenShortcut = await listen<string>("hotkey-overlay", (event) => {
+          if (event.payload === "pressed") {
+            toggleInteractive();
+          }
         });
         safePush(unlistenShortcut);
 
