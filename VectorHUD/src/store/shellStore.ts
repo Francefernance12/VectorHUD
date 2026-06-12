@@ -4,18 +4,22 @@ import { logger } from '../utils/logger';
 
 interface ShellState {
   isInteractive: boolean;
+  isOverlayOpen: boolean;
   ignoreFocusLoss: boolean;
   toggleInteractive: () => Promise<void>;
   setInteractive: (interactive: boolean) => Promise<void>;
+  setOverlayOpen: (open: boolean) => void;
   setIgnoreFocusLoss: (val: boolean) => void;
 }
 
 export const useShellStore = create<ShellState>((set, get) => ({
   isInteractive: false, // Default to ghost mode (non-interactive)
+  isOverlayOpen: false,
   ignoreFocusLoss: false,
 
   toggleInteractive: async () => {
-    const newState = !get().isInteractive;
+    const newState = !get().isOverlayOpen;
+    set({ isOverlayOpen: newState });
     await get().setInteractive(newState);
   },
 
@@ -27,6 +31,10 @@ export const useShellStore = create<ShellState>((set, get) => ({
     } catch (err) {
       logger.error(`Failed to set interactive mode: ${err}`);
     }
+  },
+
+  setOverlayOpen: (open: boolean) => {
+    set({ isOverlayOpen: open });
   },
 
   setIgnoreFocusLoss: (val: boolean) => {

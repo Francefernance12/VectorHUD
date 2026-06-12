@@ -46,8 +46,10 @@ interface Message {
 
 function App() {
   const isInteractive = useShellStore((state) => state.isInteractive);
+  const isOverlayOpen = useShellStore((state) => state.isOverlayOpen);
   const toggleInteractive = useShellStore((state) => state.toggleInteractive);
   const setInteractive = useShellStore((state) => state.setInteractive);
+  const setOverlayOpen = useShellStore((state) => state.setOverlayOpen);
   
   const activeWidgetIds = useWidgetStore(useShallow((state) => Object.keys(state.activeWidgets)));
   
@@ -443,8 +445,31 @@ function App() {
     const initListeners = async () => {
       try {
         if (!isMounted) return;
-        const unlistenShortcut = await listen("hotkey-overlay", () => {
-          toggleInteractive();
+        let pressTime = 0;
+        const unlistenShortcut = await listen<string>("hotkey-overlay", (event) => {
+          const state = event.payload;
+          const now = Date.now();
+
+          if (state === "pressed") {
+            pressTime = now;
+            const currentOverlayOpen = useShellStore.getState().isOverlayOpen;
+            if (!currentOverlayOpen) {
+              setInteractive(true);
+            }
+          } else if (state === "released") {
+            const duration = now - pressTime;
+            const currentOverlayOpen = useShellStore.getState().isOverlayOpen;
+
+            if (duration < 250) {
+              // Tap: toggle the full overlay
+              toggleInteractive();
+            } else {
+              // Hold: revert interactive mode back to click-through if overlay was closed
+              if (!currentOverlayOpen) {
+                setInteractive(false);
+              }
+            }
+          }
         });
         safePush(unlistenShortcut);
 
@@ -778,6 +803,7 @@ function App() {
                   if (!active) {
                     useWidgetStore.getState().toggleWidget('ai-chat');
                   }
+                  useShellStore.getState().setOverlayOpen(true);
                   useShellStore.getState().setInteractive(true);
                 }}
                 className="px-3 py-1 bg-accent-amber/10 border border-accent-amber/30 text-accent-amber rounded-sm font-bold uppercase tracking-widest hover:bg-accent-amber hover:text-black transition-all"
@@ -809,7 +835,7 @@ function App() {
 
       {/* Interactive Overlay UI Backdrop */}
       <AnimatePresence>
-        {isInteractive && (
+        {isOverlayOpen && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -818,6 +844,7 @@ function App() {
             onClick={(e) => {
               // Only dismiss if they clicked directly on the backdrop, not on the widgets inside
               if (e.target === e.currentTarget) {
+                setOverlayOpen(false);
                 setInteractive(false);
               }
             }}
@@ -848,7 +875,7 @@ function App() {
 
       {/* Dock and Settings Modal Layer (Rendered at z-[60] so they are above everything) */}
       <AnimatePresence>
-        {isInteractive && (
+        {isOverlayOpen && (
           <div className="fixed inset-0 pointer-events-none z-[60]">
             <Dock />
             <SettingsModal />

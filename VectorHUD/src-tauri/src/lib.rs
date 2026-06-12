@@ -136,8 +136,8 @@ fn update_hotkeys(
                     event_name_clone,
                     event.state
                 );
-                if event.state == ShortcutState::Pressed {
-                    if event_name_clone == "hotkey-overlay" {
+                if event_name_clone == "hotkey-overlay" {
+                    if event.state == ShortcutState::Pressed {
                         use tauri::Manager;
                         if let Some(window) = app.get_webview_window("main") {
                             if let Ok(cursor_pos) = app.cursor_position() {
@@ -175,6 +175,12 @@ fn update_hotkeys(
                             }
                         }
                     }
+                    let state_str = match event.state {
+                        ShortcutState::Pressed => "pressed",
+                        ShortcutState::Released => "released",
+                    };
+                    let _ = app.emit(&event_name_clone, state_str);
+                } else if event.state == ShortcutState::Pressed {
                     let _ = app.emit(&event_name_clone, ());
                 }
             });
