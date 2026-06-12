@@ -476,6 +476,7 @@ function App() {
       try {
         if (!isMounted) return;
         const unlistenShortcut = await listen<string>("hotkey-overlay", (event) => {
+          logger.info(`Frontend: hotkey-overlay event received, payload: ${event.payload}`).catch(console.error);
           if (event.payload === "pressed") {
             toggleInteractive();
           }
@@ -484,6 +485,10 @@ function App() {
 
         if (!isMounted) return;
         const unlistenInteract = await listen("hotkey-interact", () => {
+          if (useShellStore.getState().isOverlayOpen) {
+            logger.info("Frontend: ignoring hotkey-interact because overlay is open").catch(console.error);
+            return;
+          }
           const current = useShellStore.getState().isInteractive;
           const next = !current;
           setInteractive(next);
@@ -503,10 +508,12 @@ function App() {
 
         if (!isMounted) return;
         const unlistenFocusLoss = await listen("window-lost-focus", () => {
+          logger.info(`Frontend: window-lost-focus event received. ignoreFocusLoss: ${useShellStore.getState().ignoreFocusLoss}`).catch(console.error);
           if (useShellStore.getState().ignoreFocusLoss) {
             logger.info("Ignoring window-lost-focus event during active capture window hide.");
             return;
           }
+          setOverlayOpen(false);
           setInteractive(false);
         });
         safePush(unlistenFocusLoss);
@@ -656,7 +663,13 @@ function App() {
     initListeners();
 
     const handleBlur = () => {
+      logger.info(`Frontend: window blur event received. isInteractive: ${useShellStore.getState().isInteractive}`).catch(console.error);
+      if (useShellStore.getState().ignoreFocusLoss) {
+        logger.info("Ignoring window blur event because ignoreFocusLoss is true.").catch(console.error);
+        return;
+      }
       if (useShellStore.getState().isInteractive) {
+        setOverlayOpen(false);
         setInteractive(false);
       }
     };
