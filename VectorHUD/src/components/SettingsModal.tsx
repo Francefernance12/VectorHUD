@@ -1,6 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Key, Zap, Palette, Save, Settings, Edit3, Download, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { 
+  X, Key, Zap, Palette, Save, Settings, Edit3, Download, RefreshCw, 
+  CheckCircle2, Search, Terminal, Sliders, Volume2, Cpu, Monitor, 
+  Trash2, RotateCcw, HelpCircle, Shield, AlertTriangle
+} from 'lucide-react';
 import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { getVersion } from '@tauri-apps/api/app';
@@ -8,7 +12,7 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 import { useSettingsStore } from '../store/settingsStore';
 import { useShallow } from 'zustand/react/shallow';
 import { invoke } from '@tauri-apps/api/core';
-import { executeQuery, getDb } from '../utils/db';
+import { getDb } from '../utils/db';
 
 export function SettingsModal() {
   const { 
@@ -60,6 +64,30 @@ export function SettingsModal() {
     setVoicePttHotkey,
     interactHotkey,
     setInteractHotkey,
+    metricsPollInterval,
+    setMetricsPollInterval,
+    gpuTempAlertThreshold,
+    setGpuTempAlertThreshold,
+    cpuTempAlertThreshold,
+    setCpuTempAlertThreshold,
+    replayDuration,
+    setReplayDuration,
+    excludeHudFromCapture,
+    setExcludeHudFromCapture,
+    favoriteMixerApps,
+    setFavoriteMixerApps,
+    volumeStep,
+    setVolumeStep,
+    pttBrevityLimit,
+    setPttBrevityLimit,
+    systemPromptOverride,
+    setSystemPromptOverride,
+    backgroundBlur,
+    setBackgroundBlur,
+    backdropOpacity,
+    setBackdropOpacity,
+    launchOnStartup,
+    setLaunchOnStartup,
     syncHotkeys
   } = useSettingsStore(
     useShallow((state) => ({
@@ -111,11 +139,38 @@ export function SettingsModal() {
       setVoicePttHotkey: state.setVoicePttHotkey,
       interactHotkey: state.interactHotkey,
       setInteractHotkey: state.setInteractHotkey,
+      metricsPollInterval: state.metricsPollInterval,
+      setMetricsPollInterval: state.setMetricsPollInterval,
+      gpuTempAlertThreshold: state.gpuTempAlertThreshold,
+      setGpuTempAlertThreshold: state.setGpuTempAlertThreshold,
+      cpuTempAlertThreshold: state.cpuTempAlertThreshold,
+      setCpuTempAlertThreshold: state.setCpuTempAlertThreshold,
+      replayDuration: state.replayDuration,
+      setReplayDuration: state.setReplayDuration,
+      excludeHudFromCapture: state.excludeHudFromCapture,
+      setExcludeHudFromCapture: state.setExcludeHudFromCapture,
+      favoriteMixerApps: state.favoriteMixerApps,
+      setFavoriteMixerApps: state.setFavoriteMixerApps,
+      volumeStep: state.volumeStep,
+      setVolumeStep: state.setVolumeStep,
+      pttBrevityLimit: state.pttBrevityLimit,
+      setPttBrevityLimit: state.setPttBrevityLimit,
+      systemPromptOverride: state.systemPromptOverride,
+      setSystemPromptOverride: state.setSystemPromptOverride,
+      backgroundBlur: state.backgroundBlur,
+      setBackgroundBlur: state.setBackgroundBlur,
+      backdropOpacity: state.backdropOpacity,
+      setBackdropOpacity: state.setBackdropOpacity,
+      launchOnStartup: state.launchOnStartup,
+      setLaunchOnStartup: state.setLaunchOnStartup,
       syncHotkeys: state.syncHotkeys,
     }))
   );
 
-  const [activeTab, setActiveTab] = useState<'integrations' | 'preferences' | 'hotkeys' | 'updates'>('integrations');
+  const [activeTab, setActiveTab] = useState<'integrations' | 'widgets' | 'hotkeys' | 'general' | 'logs' | 'updates'>('integrations');
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Credentials loaded from SQLite
   const [openRouterKey, setOpenRouterKey] = useState('');
   const [openaiKey, setOpenaiKey] = useState('');
   const [anthropicKey, setAnthropicKey] = useState('');
@@ -141,6 +196,7 @@ export function SettingsModal() {
   const [initialNotionKey, setInitialNotionKey] = useState('');
   const [initialNotionDbId, setInitialNotionDbId] = useState('');
 
+  // Local state copy for UI bindings
   const [localHotkeys, setLocalHotkeys] = useState({
     overlay: overlayHotkey,
     screenshot: screenshotHotkey,
@@ -167,10 +223,36 @@ export function SettingsModal() {
     recordMicrophone,
     recordSystemAudio,
     replayResolution,
-    replayFps
+    replayFps,
+    metricsPollInterval,
+    gpuTempAlertThreshold,
+    cpuTempAlertThreshold,
+    replayDuration,
+    excludeHudFromCapture,
+    favoriteMixerApps,
+    volumeStep,
+    pttBrevityLimit,
+    systemPromptOverride,
+    backgroundBlur,
+    backdropOpacity,
+    launchOnStartup
   });
 
-  // Load credentials on mount
+  // Diagnostics logs state
+  const [logsContent, setLogsContent] = useState('Loading logs...');
+  const [isRefreshingLogs, setIsRefreshingLogs] = useState(false);
+  const logsContainerRef = useRef<HTMLPreElement>(null);
+
+  // Confirmation dialogs toggle
+  const [showConfirmClose, setShowConfirmClose] = useState(false);
+  const [showConfirmReset, setShowConfirmReset] = useState(false);
+  const [showConfirmClearChat, setShowConfirmClearChat] = useState(false);
+  const [isClearingChat, setIsClearingChat] = useState(false);
+
+  // Keybind Recording state
+  const [recordingField, setRecordingField] = useState<keyof typeof localHotkeys | null>(null);
+
+  // Hydrate credentials and basic parameters on mount / open
   useEffect(() => {
     if (!isSettingsOpen) return;
     
@@ -200,14 +282,26 @@ export function SettingsModal() {
       recordMicrophone,
       recordSystemAudio,
       replayResolution,
-      replayFps
+      replayFps,
+      metricsPollInterval,
+      gpuTempAlertThreshold,
+      cpuTempAlertThreshold,
+      replayDuration,
+      excludeHudFromCapture,
+      favoriteMixerApps,
+      volumeStep,
+      pttBrevityLimit,
+      systemPromptOverride,
+      backgroundBlur,
+      backdropOpacity,
+      launchOnStartup
     });
     
     async function loadCredentials() {
       try {
         const db = await getDb();
         
-        // Load OpenRouter
+        // OpenRouter key load
         const orResult = await db.select<{ encrypted_value: string }[]>(
           "SELECT encrypted_value FROM user_credentials WHERE id = 'openrouter_key'"
         );
@@ -217,7 +311,7 @@ export function SettingsModal() {
           setInitialOpenRouterKey(decrypted);
         }
 
-        // Load OpenAI
+        // OpenAI key load
         const oaiResult = await db.select<{ encrypted_value: string }[]>(
           "SELECT encrypted_value FROM user_credentials WHERE id = 'openai_key'"
         );
@@ -227,7 +321,7 @@ export function SettingsModal() {
           setInitialOpenaiKey(decrypted);
         }
 
-        // Load Anthropic
+        // Anthropic key load
         const antResult = await db.select<{ encrypted_value: string }[]>(
           "SELECT encrypted_value FROM user_credentials WHERE id = 'anthropic_key'"
         );
@@ -237,7 +331,7 @@ export function SettingsModal() {
           setInitialAnthropicKey(decrypted);
         }
 
-        // Load Groq
+        // Groq key load
         const grqResult = await db.select<{ encrypted_value: string }[]>(
           "SELECT encrypted_value FROM user_credentials WHERE id = 'groq_key'"
         );
@@ -247,7 +341,7 @@ export function SettingsModal() {
           setInitialGroqKey(decrypted);
         }
 
-        // Load Notion Secret
+        // Notion Secret load
         const notionResult = await db.select<{ encrypted_value: string }[]>(
           "SELECT encrypted_value FROM user_credentials WHERE id = 'notion_secret'"
         );
@@ -257,7 +351,7 @@ export function SettingsModal() {
           setInitialNotionKey(decrypted);
         }
 
-        // Load Notion DB ID
+        // Notion DB ID load
         const dbIdResult = await db.select<{ encrypted_value: string }[]>(
           "SELECT encrypted_value FROM user_credentials WHERE id = 'notion_db_id'"
         );
@@ -280,63 +374,142 @@ export function SettingsModal() {
       }
     }
 
-    if (isSettingsOpen) {
-      loadCredentials();
-      loadVersion();
-    }
+    loadCredentials();
+    loadVersion();
   }, [isSettingsOpen]);
 
+  // Load diagnostics logs from file
+  const loadLogs = async () => {
+    setIsRefreshingLogs(true);
+    try {
+      const trace = await invoke<string>('read_latest_logs');
+      setLogsContent(trace);
+      // Auto scroll to bottom
+      setTimeout(() => {
+        if (logsContainerRef.current) {
+          logsContainerRef.current.scrollTop = logsContainerRef.current.scrollHeight;
+        }
+      }, 50);
+    } catch (err) {
+      console.error("Failed to read latest logs:", err);
+      setLogsContent(`Failed to retrieve trace files: ${err}`);
+    } finally {
+      setIsRefreshingLogs(false);
+    }
+  };
+
+  // Load logs on tab switch
+  useEffect(() => {
+    if (activeTab === 'logs' && isSettingsOpen) {
+      loadLogs();
+    }
+  }, [activeTab, isSettingsOpen]);
+
+  // Keybind Recorder keydown listener
+  useEffect(() => {
+    if (!recordingField) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const isModifier = ['Control', 'Alt', 'Shift', 'Meta'].includes(e.key);
+
+      const parts: string[] = [];
+      if (e.ctrlKey) parts.push('ctrl');
+      if (e.altKey) parts.push('alt');
+      if (e.shiftKey) parts.push('shift');
+      if (e.metaKey) parts.push('super');
+
+      if (!isModifier && e.key) {
+        let primaryKey = e.key.toLowerCase();
+        
+        // Map key names for Tauri v2 global shortcuts compatibility
+        if (primaryKey === ' ') primaryKey = 'space';
+        else if (primaryKey === 'arrowup') primaryKey = 'up';
+        else if (primaryKey === 'arrowdown') primaryKey = 'down';
+        else if (primaryKey === 'arrowleft') primaryKey = 'left';
+        else if (primaryKey === 'arrowright') primaryKey = 'right';
+        else if (primaryKey === 'escape') primaryKey = 'escape';
+        else if (primaryKey === 'enter') primaryKey = 'enter';
+        else if (primaryKey === 'backspace') primaryKey = 'backspace';
+        else if (primaryKey === 'delete') primaryKey = 'delete';
+        else if (primaryKey === 'tab') primaryKey = 'tab';
+        
+        parts.push(primaryKey);
+        const combo = parts.join('+');
+
+        const isFKey = /^f\d+$/.test(primaryKey);
+        const hasModifier = e.ctrlKey || e.altKey || e.shiftKey || e.metaKey;
+
+        if (hasModifier || isFKey) {
+          setLocalHotkeys(prev => ({
+            ...prev,
+            [recordingField]: combo
+          }));
+          setRecordingField(null);
+          setHotkeyError('');
+        } else {
+          setHotkeyError('Keybind requires at least one modifier key (Ctrl, Alt, Shift, Win) or be an F-key.');
+          setTimeout(() => setHotkeyError(''), 4500);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [recordingField]);
+
+  // Save modified configurations to store and credentials DB
   const handleSave = async () => {
     setIsSaving(true);
     setSaveMessage('');
     try {
+      const db = await getDb();
+
       // Encrypt and save OpenRouter key
       const encryptedOr = await invoke<string>('encrypt_data', { plaintext: openRouterKey });
-      await executeQuery(
+      await db.execute(
         "INSERT OR REPLACE INTO user_credentials (id, encrypted_value) VALUES ('openrouter_key', ?)",
         [encryptedOr]
       );
 
       // Encrypt and save OpenAI key
       const encryptedOai = await invoke<string>('encrypt_data', { plaintext: openaiKey });
-      await executeQuery(
+      await db.execute(
         "INSERT OR REPLACE INTO user_credentials (id, encrypted_value) VALUES ('openai_key', ?)",
         [encryptedOai]
       );
 
       // Encrypt and save Anthropic key
       const encryptedAnt = await invoke<string>('encrypt_data', { plaintext: anthropicKey });
-      await executeQuery(
+      await db.execute(
         "INSERT OR REPLACE INTO user_credentials (id, encrypted_value) VALUES ('anthropic_key', ?)",
         [encryptedAnt]
       );
 
       // Encrypt and save Groq key
       const encryptedGrq = await invoke<string>('encrypt_data', { plaintext: groqKey });
-      await executeQuery(
+      await db.execute(
         "INSERT OR REPLACE INTO user_credentials (id, encrypted_value) VALUES ('groq_key', ?)",
         [encryptedGrq]
       );
 
       // Encrypt and save Notion secret
-      if (notionKey) {
-        const encryptedNotion = await invoke<string>('encrypt_data', { plaintext: notionKey });
-        await executeQuery(
-          "INSERT OR REPLACE INTO user_credentials (id, encrypted_value) VALUES ('notion_secret', ?)",
-          [encryptedNotion]
-        );
-      }
+      const encryptedNotion = await invoke<string>('encrypt_data', { plaintext: notionKey });
+      await db.execute(
+        "INSERT OR REPLACE INTO user_credentials (id, encrypted_value) VALUES ('notion_secret', ?)",
+        [encryptedNotion]
+      );
 
       // Encrypt and save Notion DB ID
-      if (notionDbId) {
-        const encryptedDbId = await invoke<string>('encrypt_data', { plaintext: notionDbId });
-        await executeQuery(
-          "INSERT OR REPLACE INTO user_credentials (id, encrypted_value) VALUES ('notion_db_id', ?)",
-          [encryptedDbId]
-        );
-      }
+      const encryptedDbId = await invoke<string>('encrypt_data', { plaintext: notionDbId });
+      await db.execute(
+        "INSERT OR REPLACE INTO user_credentials (id, encrypted_value) VALUES ('notion_db_id', ?)",
+        [encryptedDbId]
+      );
 
-      // Save Preferences
+      // Save store settings
       await setOpenRouterModel(localPreferences.openRouterModel);
       await setOpenaiModel(localPreferences.openaiModel);
       await setAnthropicModel(localPreferences.anthropicModel);
@@ -351,8 +524,22 @@ export function SettingsModal() {
       await setRecordSystemAudio(localPreferences.recordSystemAudio);
       await setReplayResolution(localPreferences.replayResolution);
       await setReplayFps(localPreferences.replayFps);
+      
+      // Save new configurations
+      await setMetricsPollInterval(localPreferences.metricsPollInterval);
+      await setGpuTempAlertThreshold(localPreferences.gpuTempAlertThreshold);
+      await setCpuTempAlertThreshold(localPreferences.cpuTempAlertThreshold);
+      await setReplayDuration(localPreferences.replayDuration);
+      await setExcludeHudFromCapture(localPreferences.excludeHudFromCapture);
+      await setFavoriteMixerApps(localPreferences.favoriteMixerApps);
+      await setVolumeStep(localPreferences.volumeStep);
+      await setPttBrevityLimit(localPreferences.pttBrevityLimit);
+      await setSystemPromptOverride(localPreferences.systemPromptOverride);
+      await setBackgroundBlur(localPreferences.backgroundBlur);
+      await setBackdropOpacity(localPreferences.backdropOpacity);
+      await setLaunchOnStartup(localPreferences.launchOnStartup);
 
-      // Sync Hotkeys
+      // Sync and bind hotkeys
       try {
         await setOverlayHotkey(localHotkeys.overlay);
         await setScreenshotHotkey(localHotkeys.screenshot);
@@ -365,10 +552,10 @@ export function SettingsModal() {
         await setInteractHotkey(localHotkeys.interact);
 
         await syncHotkeys();
-        setSaveMessage('Saved successfully!');
+        setSaveMessage('Saved & loaded configuration successfully!');
         setHotkeyError('');
         
-        // Update initial states to clear dirty flag
+        // Lock in initial keybind configurations to clear dirty warning flag
         setInitialOpenRouterKey(openRouterKey);
         setInitialOpenaiKey(openaiKey);
         setInitialAnthropicKey(anthropicKey);
@@ -376,24 +563,23 @@ export function SettingsModal() {
         setInitialNotionKey(notionKey);
         setInitialNotionDbId(notionDbId);
         
-        setTimeout(() => setSaveMessage(''), 2000);
+        setTimeout(() => setSaveMessage(''), 2500);
       } catch (hotkeyErr) {
         console.error("Hotkey sync failed:", hotkeyErr);
-        setSaveMessage('Partial save.');
+        setSaveMessage('Partial Save. Hotkey error.');
         setHotkeyError(String(hotkeyErr));
         setTimeout(() => setSaveMessage(''), 5000);
       }
 
     } catch (e) {
-      console.error("Failed to save credentials:", e);
-      setSaveMessage('Failed to save.');
+      console.error("Failed to save credentials database:", e);
+      setSaveMessage('Failed to save configuration settings.');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const [showConfirmClose, setShowConfirmClose] = useState(false);
-
+  // Check if any state is modified but not applied
   const checkIsDirty = () => {
     return (
       openRouterKey !== initialOpenRouterKey ||
@@ -424,7 +610,19 @@ export function SettingsModal() {
       localPreferences.recordMicrophone !== recordMicrophone ||
       localPreferences.recordSystemAudio !== recordSystemAudio ||
       localPreferences.replayResolution !== replayResolution ||
-      localPreferences.replayFps !== replayFps
+      localPreferences.replayFps !== replayFps ||
+      localPreferences.metricsPollInterval !== metricsPollInterval ||
+      localPreferences.gpuTempAlertThreshold !== gpuTempAlertThreshold ||
+      localPreferences.cpuTempAlertThreshold !== cpuTempAlertThreshold ||
+      localPreferences.replayDuration !== replayDuration ||
+      localPreferences.excludeHudFromCapture !== excludeHudFromCapture ||
+      localPreferences.favoriteMixerApps !== favoriteMixerApps ||
+      localPreferences.volumeStep !== volumeStep ||
+      localPreferences.pttBrevityLimit !== pttBrevityLimit ||
+      localPreferences.systemPromptOverride !== systemPromptOverride ||
+      localPreferences.backgroundBlur !== backgroundBlur ||
+      localPreferences.backdropOpacity !== backdropOpacity ||
+      localPreferences.launchOnStartup !== launchOnStartup
     );
   };
 
@@ -433,19 +631,18 @@ export function SettingsModal() {
       setShowConfirmClose(true);
       return;
     }
-    
-    // No changes, just close
     toggleSettings();
   };
 
   const handleConfirmDiscard = () => {
-    // Reset to initial states to discard changes
+    // Revert local values
     setOpenRouterKey(initialOpenRouterKey);
     setOpenaiKey(initialOpenaiKey);
     setAnthropicKey(initialAnthropicKey);
     setGroqKey(initialGroqKey);
     setNotionKey(initialNotionKey);
     setNotionDbId(initialNotionDbId);
+    
     setLocalHotkeys({
       overlay: overlayHotkey,
       screenshot: screenshotHotkey,
@@ -457,6 +654,7 @@ export function SettingsModal() {
       voicePtt: voicePttHotkey,
       interact: interactHotkey
     });
+    
     setLocalPreferences({
       openRouterModel,
       openaiModel,
@@ -471,20 +669,570 @@ export function SettingsModal() {
       recordMicrophone,
       recordSystemAudio,
       replayResolution,
-      replayFps
+      replayFps,
+      metricsPollInterval,
+      gpuTempAlertThreshold,
+      cpuTempAlertThreshold,
+      replayDuration,
+      excludeHudFromCapture,
+      favoriteMixerApps,
+      volumeStep,
+      pttBrevityLimit,
+      systemPromptOverride,
+      backgroundBlur,
+      backdropOpacity,
+      launchOnStartup
     });
     
     setShowConfirmClose(false);
     toggleSettings();
   };
 
-  // Allow clicking background to close modal
+  const handleResetDefaults = () => {
+    setLocalHotkeys({
+      overlay: 'ctrl+alt+o',
+      screenshot: 'ctrl+alt+s',
+      record: 'ctrl+alt+r',
+      replay: 'ctrl+alt+b',
+      timer: 'ctrl+alt+t',
+      stopwatch: 'ctrl+alt+w',
+      timerReset: 'ctrl+alt+y',
+      voicePtt: 'ctrl+alt+v',
+      interact: 'ctrl+alt+i'
+    });
+
+    setLocalPreferences({
+      openRouterModel: 'google/gemini-2.5-flash',
+      openaiModel: 'gpt-4o-mini',
+      anthropicModel: 'claude-3-5-sonnet-20241022',
+      groqModel: 'llama-3.3-70b-versatile',
+      customOpenRouterModel: '',
+      useCustomOpenRouterModel: false,
+      aiProvider: 'openrouter',
+      globalFontSize: 14,
+      theme: 'default',
+      customColor: '#FF0000',
+      recordMicrophone: false,
+      recordSystemAudio: true,
+      replayResolution: '720p',
+      replayFps: 30,
+      metricsPollInterval: 1000,
+      gpuTempAlertThreshold: 80,
+      cpuTempAlertThreshold: 80,
+      replayDuration: 30,
+      excludeHudFromCapture: true,
+      favoriteMixerApps: 'chrome.exe, discord.exe, spotify.exe',
+      volumeStep: 5,
+      pttBrevityLimit: 320,
+      systemPromptOverride: '',
+      backgroundBlur: 8,
+      backdropOpacity: 60,
+      launchOnStartup: false
+    });
+
+    setShowConfirmReset(false);
+    setSaveMessage('Restored local presets. Click Apply to save.');
+    setTimeout(() => setSaveMessage(''), 4000);
+  };
+
+  const handleClearChatHistory = async () => {
+    setIsClearingChat(true);
+    try {
+      const db = await getDb();
+      await db.execute("DELETE FROM ai_chat_history");
+      await db.execute("DELETE FROM session_titles");
+      setSaveMessage("Database chat history wiped successfully.");
+      setTimeout(() => setSaveMessage(""), 3000);
+    } catch(e) {
+      console.error("Wipe history error:", e);
+      setHotkeyError("Failed to purge database chat history.");
+      setTimeout(() => setHotkeyError(""), 3000);
+    } finally {
+      setIsClearingChat(false);
+      setShowConfirmClearChat(false);
+    }
+  };
+
   const handleBackgroundClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
     if (e.target === e.currentTarget) {
       handleClose();
     }
   };
+
+  // Hotkey Recorder card renderer
+  const renderHotkeyField = (label: string, fieldKey: keyof typeof localHotkeys) => {
+    const isRecording = recordingField === fieldKey;
+    const value = localHotkeys[fieldKey];
+    
+    // Format combination string visually
+    const displayVal = value
+      ? value.split('+').map(part => part.toUpperCase()).join(' + ')
+      : 'NONE';
+
+    return (
+      <div className="space-y-1 bg-black/20 p-3 rounded-lg border border-white/5 flex flex-col justify-between hover:border-white/10 transition-colors">
+        <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">{label}</label>
+        <div className="flex items-center gap-2 mt-1">
+          <div className={`flex-1 font-mono text-sm px-3 py-1.5 bg-black/40 rounded-lg border flex items-center justify-between min-h-[38px] ${
+            isRecording 
+              ? 'border-amber-500/50 text-amber-400 animate-pulse' 
+              : value 
+                ? 'border-white/10 text-zinc-200' 
+                : 'border-dashed border-zinc-700 text-zinc-500'
+          }`}>
+            <span>{isRecording ? 'Listening for keys...' : displayVal}</span>
+            {!isRecording && value && (
+              <button
+                onClick={() => setLocalHotkeys(s => ({ ...s, [fieldKey]: '' }))}
+                className="text-xs text-zinc-500 hover:text-red-400 transition-colors cursor-pointer"
+                title="Clear keybind"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <button
+            onClick={() => {
+              if (isRecording) {
+                setRecordingField(null);
+              } else {
+                setRecordingField(fieldKey);
+              }
+            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border transition-all ${
+              isRecording 
+                ? 'bg-amber-500 text-black border-amber-500 hover:bg-amber-400' 
+                : 'bg-white/5 border-white/10 hover:bg-white/10 text-zinc-200 hover:text-white'
+            }`}
+          >
+            {isRecording ? 'Cancel' : 'Record'}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // Search Results filtering engine
+  const getSearchMatches = () => {
+    const query = searchQuery.toLowerCase().trim();
+    if (!query) return [];
+
+    const matches: { title: string; category: string; content: React.ReactNode }[] = [];
+
+    // 1. Integrations Matchers
+    if (['ai', 'provider', 'openrouter', 'openai', 'anthropic', 'groq', 'api', 'key', 'model', 'credentials'].some(k => query.includes(k) || k.includes(query))) {
+      matches.push({
+        title: 'Active AI Provider & Models',
+        category: 'Integrations',
+        content: (
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Active Provider</label>
+              <select
+                value={localPreferences.aiProvider}
+                onChange={(e) => setLocalPreferences(s => ({ ...s, aiProvider: e.target.value }))}
+                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2 text-sm text-zinc-100 focus:outline-none focus:border-primary"
+              >
+                <option value="openrouter">OpenRouter AI (Default)</option>
+                <option value="openai">OpenAI (Direct API)</option>
+                <option value="anthropic">Anthropic (Direct API)</option>
+                <option value="groq">Groq (Direct API)</option>
+              </select>
+            </div>
+            
+            {localPreferences.aiProvider === 'openrouter' && (
+              <div className="space-y-3 pl-3 border-l-2 border-primary/20">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">OpenRouter API Key</label>
+                  <input 
+                    type="password"
+                    value={openRouterKey}
+                    onChange={(e) => setOpenRouterKey(e.target.value)}
+                    placeholder="sk-or-v1-..."
+                    className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 focus:outline-none focus:border-primary"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="useCustomOpenRouterModelSearch"
+                    checked={localPreferences.useCustomOpenRouterModel}
+                    onChange={(e) => setLocalPreferences(s => ({ ...s, useCustomOpenRouterModel: e.target.checked }))}
+                    className="rounded border-zinc-700 bg-zinc-900 text-primary"
+                  />
+                  <label htmlFor="useCustomOpenRouterModelSearch" className="text-xs text-zinc-300">Use Custom Model ID</label>
+                </div>
+                {localPreferences.useCustomOpenRouterModel ? (
+                  <input 
+                    type="text"
+                    value={localPreferences.customOpenRouterModel}
+                    onChange={(e) => setLocalPreferences(s => ({ ...s, customOpenRouterModel: e.target.value }))}
+                    placeholder="google/gemini-2.5-flash"
+                    className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-primary"
+                  />
+                ) : (
+                  <select
+                    value={localPreferences.openRouterModel}
+                    onChange={(e) => setLocalPreferences(s => ({ ...s, openRouterModel: e.target.value }))}
+                    className="w-full bg-zinc-800 border border-zinc-600 rounded-lg px-4 py-2 text-sm text-zinc-100"
+                  >
+                    <option value="google/gemini-2.5-flash">Gemini 2.5 Flash [Vision]</option>
+                    <option value="google/gemini-2.5-pro">Gemini 2.5 Pro [Vision]</option>
+                    <option value="openai/gpt-4o-mini">GPT-4o Mini [Vision]</option>
+                    <option value="openai/gpt-4o">GPT-4o [Vision]</option>
+                    <option value="anthropic/claude-sonnet-4.6">Claude 3.5 Sonnet [Vision]</option>
+                    <option value="meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B</option>
+                  </select>
+                )}
+              </div>
+            )}
+
+            {localPreferences.aiProvider === 'openai' && (
+              <div className="space-y-3 pl-3 border-l-2 border-primary/20">
+                <input 
+                  type="password"
+                  value={openaiKey}
+                  onChange={(e) => setOpenaiKey(e.target.value)}
+                  placeholder="sk-proj-..."
+                  className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200"
+                />
+                <select
+                  value={localPreferences.openaiModel}
+                  onChange={(e) => setLocalPreferences(s => ({ ...s, openaiModel: e.target.value }))}
+                  className="w-full bg-zinc-800 border border-zinc-650 rounded-lg px-4 py-2 text-sm text-zinc-100"
+                >
+                  <option value="gpt-4o-mini">gpt-4o-mini [Vision]</option>
+                  <option value="gpt-4o">gpt-4o [Vision]</option>
+                </select>
+              </div>
+            )}
+
+            {localPreferences.aiProvider === 'anthropic' && (
+              <div className="space-y-3 pl-3 border-l-2 border-primary/20">
+                <input 
+                  type="password"
+                  value={anthropicKey}
+                  onChange={(e) => setAnthropicKey(e.target.value)}
+                  placeholder="sk-ant-..."
+                  className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200"
+                />
+                <select
+                  value={localPreferences.anthropicModel}
+                  onChange={(e) => setLocalPreferences(s => ({ ...s, anthropicModel: e.target.value }))}
+                  className="w-full bg-zinc-800 border border-zinc-650 rounded-lg px-4 py-2 text-sm text-zinc-100"
+                >
+                  <option value="claude-3-5-sonnet-20241022">claude-3-5-sonnet [Vision]</option>
+                  <option value="claude-3-5-haiku-20241022">claude-3-5-haiku [Text]</option>
+                </select>
+              </div>
+            )}
+
+            {localPreferences.aiProvider === 'groq' && (
+              <div className="space-y-3 pl-3 border-l-2 border-primary/20">
+                <input 
+                  type="password"
+                  value={groqKey}
+                  onChange={(e) => setGroqKey(e.target.value)}
+                  placeholder="gsk_..."
+                  className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200"
+                />
+                <select
+                  value={localPreferences.groqModel}
+                  onChange={(e) => setLocalPreferences(s => ({ ...s, groqModel: e.target.value }))}
+                  className="w-full bg-zinc-800 border border-zinc-650 rounded-lg px-4 py-2 text-sm text-zinc-100"
+                >
+                  <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile</option>
+                  <option value="llama-3.1-8b-instant">llama-3.1-8b-instant</option>
+                </select>
+              </div>
+            )}
+          </div>
+        )
+      });
+    }
+
+    if (['notion', 'secret', 'db', 'database', 'checklists', 'notes', 'sync'].some(k => query.includes(k) || k.includes(query))) {
+      matches.push({
+        title: 'Notion Quick-Capture Sync',
+        category: 'Integrations',
+        content: (
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Integration Key / Token</label>
+              <input 
+                type="password"
+                value={notionKey}
+                onChange={(e) => setNotionKey(e.target.value)}
+                placeholder="secret_..."
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 focus:outline-none focus:border-primary"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Database Link / ID</label>
+              <input 
+                type="text"
+                value={notionDbId}
+                onChange={(e) => {
+                  let val = e.target.value;
+                  const match = val.match(/([a-f0-9]{32})/i);
+                  if (match) val = match[1];
+                  setNotionDbId(val);
+                }}
+                placeholder="database_id"
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 focus:outline-none focus:border-primary"
+              />
+            </div>
+          </div>
+        )
+      });
+    }
+
+    // 2. Hotkeys Matchers
+    if (['hotkey', 'bind', 'shortcut', 'overlay', 'screenshot', 'capture', 'record', 'video', 'replay', 'buffer', 'timer', 'reset', 'stopwatch', 'ptt', 'voice', 'assistant', 'interact', 'interactivity'].some(k => query.includes(k) || k.includes(query))) {
+      const hotkeysMatched: { label: string; key: keyof typeof localHotkeys }[] = [];
+      if ('overlay main toggle summon'.includes(query) || 'hotkey bind'.includes(query)) hotkeysMatched.push({ label: 'Main Overlay Toggle', key: 'overlay' });
+      if ('screenshot capture screen'.includes(query) || 'hotkey bind'.includes(query)) hotkeysMatched.push({ label: 'Capture Screenshot', key: 'screenshot' });
+      if ('record video toggle record'.includes(query) || 'hotkey bind'.includes(query)) hotkeysMatched.push({ label: 'Toggle Video Recording', key: 'record' });
+      if ('replay buffer clip duration'.includes(query) || 'hotkey bind'.includes(query)) hotkeysMatched.push({ label: 'Save Replay Clip', key: 'replay' });
+      if ('timer toggle stopwatch start'.includes(query) || 'hotkey bind'.includes(query)) hotkeysMatched.push({ label: 'Toggle Timer', key: 'timer' });
+      if ('timer reset clean wipe clear'.includes(query) || 'hotkey bind'.includes(query)) hotkeysMatched.push({ label: 'Reset Active Timers', key: 'timerReset' });
+      if ('stopwatch toggle start split'.includes(query) || 'hotkey bind'.includes(query)) hotkeysMatched.push({ label: 'Toggle Stopwatch', key: 'stopwatch' });
+      if ('ptt voice push-to-talk speech assistant'.includes(query) || 'hotkey bind'.includes(query)) hotkeysMatched.push({ label: 'Voice Assistant PTT', key: 'voicePtt' });
+      if ('interact click toggle focus interactive mode'.includes(query) || 'hotkey bind'.includes(query)) hotkeysMatched.push({ label: 'Toggle Interactivity', key: 'interact' });
+
+      if (hotkeysMatched.length > 0) {
+        matches.push({
+          title: 'System Hotkeys Matches',
+          category: 'Hotkeys',
+          content: (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {hotkeysMatched.map(hm => (
+                <div key={hm.key}>
+                  {renderHotkeyField(hm.label, hm.key)}
+                </div>
+              ))}
+            </div>
+          )
+        });
+      }
+    }
+
+    // 3. Widgets Preferences Matchers
+    if (['widget', 'preferences', 'cpu', 'gpu', 'temp', 'polling', 'alert', 'interval', 'replay', 'hud', 'exclude', 'mixer', 'audio', 'favorite', 'volume', 'step', 'ptt', 'brevity', 'prompt', 'system'].some(k => query.includes(k) || k.includes(query))) {
+      // Hardware Metrics
+      if (['cpu', 'gpu', 'temp', 'alert', 'polling', 'interval', 'hardware', 'metrics', 'widget'].some(k => query.includes(k) || k.includes(query))) {
+        matches.push({
+          title: 'Hardware Metrics Widget',
+          category: 'Widget Preferences',
+          content: (
+            <div className="space-y-4 bg-black/20 p-3 rounded-lg border border-white/5">
+              <div className="space-y-1">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-zinc-400 font-medium">Metrics Polling Interval</span>
+                  <span className="text-primary font-mono">{localPreferences.metricsPollInterval}ms</span>
+                </div>
+                <input 
+                  type="range" min="200" max="5000" step="100"
+                  value={localPreferences.metricsPollInterval}
+                  onChange={(e) => setLocalPreferences(s => ({ ...s, metricsPollInterval: parseInt(e.target.value) }))}
+                  className="w-full accent-primary"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-zinc-400 font-medium">CPU Temp Warning</span>
+                    <span className="text-primary font-mono">{localPreferences.cpuTempAlertThreshold}°C</span>
+                  </div>
+                  <input 
+                    type="range" min="40" max="100" step="1"
+                    value={localPreferences.cpuTempAlertThreshold}
+                    onChange={(e) => setLocalPreferences(s => ({ ...s, cpuTempAlertThreshold: parseInt(e.target.value) }))}
+                    className="w-full accent-primary"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-zinc-400 font-medium">GPU Temp Warning</span>
+                    <span className="text-primary font-mono">{localPreferences.gpuTempAlertThreshold}°C</span>
+                  </div>
+                  <input 
+                    type="range" min="40" max="100" step="1"
+                    value={localPreferences.gpuTempAlertThreshold}
+                    onChange={(e) => setLocalPreferences(s => ({ ...s, gpuTempAlertThreshold: parseInt(e.target.value) }))}
+                    className="w-full accent-primary"
+                  />
+                </div>
+              </div>
+            </div>
+          )
+        });
+      }
+
+      // Media Capture
+      if (['capture', 'media', 'duration', 'exclude', 'hud', 'replay', 'buffer', 'recording'].some(k => query.includes(k) || k.includes(query))) {
+        matches.push({
+          title: 'Media Capture & Replay Settings',
+          category: 'Widget Preferences',
+          content: (
+            <div className="space-y-4 bg-black/20 p-3 rounded-lg border border-white/5">
+              <div className="space-y-1">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-zinc-400 font-medium">Replay Clip Duration</span>
+                  <span className="text-primary font-mono">{localPreferences.replayDuration}s</span>
+                </div>
+                <input 
+                  type="range" min="5" max="120" step="5"
+                  value={localPreferences.replayDuration}
+                  onChange={(e) => setLocalPreferences(s => ({ ...s, replayDuration: parseInt(e.target.value) }))}
+                  className="w-full accent-primary"
+                />
+              </div>
+              <div className="flex justify-between items-center bg-black/30 p-2.5 rounded border border-white/5 text-xs">
+                <div>
+                  <span className="text-zinc-300 font-bold block">Exclude HUD Overlay</span>
+                  <span className="text-zinc-500 block">Hides the overlay interface from screenshots/recordings.</span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input 
+                    type="checkbox" className="sr-only peer"
+                    checked={localPreferences.excludeHudFromCapture}
+                    onChange={(e) => setLocalPreferences(s => ({ ...s, excludeHudFromCapture: e.target.checked }))}
+                  />
+                  <div className="w-9 h-5 bg-zinc-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-accent-green"></div>
+                </label>
+              </div>
+            </div>
+          )
+        });
+      }
+
+      // Audio Mixer
+      if (['audio', 'mixer', 'volume', 'step', 'favorite', 'mixer', 'app'].some(k => query.includes(k) || k.includes(query))) {
+        matches.push({
+          title: 'Audio Mixer Settings',
+          category: 'Widget Preferences',
+          content: (
+            <div className="space-y-4 bg-black/20 p-3 rounded-lg border border-white/5 text-xs">
+              <div className="space-y-1">
+                <div className="flex justify-between items-center">
+                  <span className="text-zinc-400 font-medium">Volume Change Increments</span>
+                  <span className="text-primary font-mono">{localPreferences.volumeStep}%</span>
+                </div>
+                <input 
+                  type="range" min="1" max="20" step="1"
+                  value={localPreferences.volumeStep}
+                  onChange={(e) => setLocalPreferences(s => ({ ...s, volumeStep: parseInt(e.target.value) }))}
+                  className="w-full accent-primary"
+                />
+              </div>
+              <div className="space-y-1">
+                <span className="text-zinc-400 font-medium">Favorite Apps (Pinned Mixer Items)</span>
+                <input 
+                  type="text"
+                  value={localPreferences.favoriteMixerApps}
+                  onChange={(e) => setLocalPreferences(s => ({ ...s, favoriteMixerApps: e.target.value }))}
+                  placeholder="e.g. chrome.exe, discord.exe, spotify.exe"
+                  className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 font-mono text-zinc-200 text-xs focus:outline-none"
+                />
+              </div>
+            </div>
+          )
+        });
+      }
+
+      // Voice PTT and Assistant prompt
+      if (['voice', 'assistant', 'prompt', 'override', 'brevity', 'limit', 'system', 'tokens'].some(k => query.includes(k) || k.includes(query))) {
+        matches.push({
+          title: 'Voice PTT & AI Assistant Personas',
+          category: 'Widget Preferences',
+          content: (
+            <div className="space-y-4 bg-black/20 p-3 rounded-lg border border-white/5 text-xs">
+              <div className="space-y-1">
+                <div className="flex justify-between items-center">
+                  <span className="text-zinc-400 font-medium">PTT Brevity Limit</span>
+                  <span className="text-primary font-mono">{localPreferences.pttBrevityLimit} words</span>
+                </div>
+                <input 
+                  type="range" min="50" max="800" step="10"
+                  value={localPreferences.pttBrevityLimit}
+                  onChange={(e) => setLocalPreferences(s => ({ ...s, pttBrevityLimit: parseInt(e.target.value) }))}
+                  className="w-full accent-primary"
+                />
+              </div>
+              <div className="space-y-1">
+                <span className="text-zinc-400 font-medium">Custom System Prompt Override</span>
+                <textarea 
+                  value={localPreferences.systemPromptOverride}
+                  onChange={(e) => setLocalPreferences(s => ({ ...s, systemPromptOverride: e.target.value }))}
+                  placeholder="Explain answers concisely like a fighter jet tactical computer..."
+                  rows={2}
+                  className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 font-mono text-zinc-200 text-xs focus:outline-none resize-none"
+                />
+              </div>
+            </div>
+          )
+        });
+      }
+    }
+
+    // 4. General System Matches
+    if (['general', 'system', 'font', 'size', 'theme', 'color', 'hex', 'blur', 'opacity', 'autostart', 'startup', 'boot', 'revert', 'defaults'].some(k => query.includes(k) || k.includes(query))) {
+      matches.push({
+        title: 'General Interface & Autostart Toggles',
+        category: 'General',
+        content: (
+          <div className="space-y-4 bg-black/20 p-3 rounded-lg border border-white/5 text-xs">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <div className="flex justify-between items-center">
+                  <span className="text-zinc-400 font-medium">Backdrop Transparency</span>
+                  <span className="text-primary font-mono">{localPreferences.backdropOpacity}%</span>
+                </div>
+                <input 
+                  type="range" min="10" max="100" step="5"
+                  value={localPreferences.backdropOpacity}
+                  onChange={(e) => setLocalPreferences(s => ({ ...s, backdropOpacity: parseInt(e.target.value) }))}
+                  className="w-full accent-primary"
+                />
+              </div>
+              <div className="space-y-1">
+                <div className="flex justify-between items-center">
+                  <span className="text-zinc-400 font-medium">Backdrop Blur Strength</span>
+                  <span className="text-primary font-mono">{localPreferences.backgroundBlur}px</span>
+                </div>
+                <input 
+                  type="range" min="0" max="24" step="1"
+                  value={localPreferences.backgroundBlur}
+                  onChange={(e) => setLocalPreferences(s => ({ ...s, backgroundBlur: parseInt(e.target.value) }))}
+                  className="w-full accent-primary"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center bg-black/30 p-2.5 rounded border border-white/5">
+              <div>
+                <span className="text-zinc-300 font-bold block">Launch on Windows Startup</span>
+                <span className="text-zinc-500 block">Registers registry entries to autostart VectorHUD at boot.</span>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input 
+                  type="checkbox" className="sr-only peer"
+                  checked={localPreferences.launchOnStartup}
+                  onChange={(e) => setLocalPreferences(s => ({ ...s, launchOnStartup: e.target.checked }))}
+                />
+                <div className="w-9 h-5 bg-zinc-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-accent-green"></div>
+              </label>
+            </div>
+          </div>
+        )
+      });
+    }
+
+    return matches;
+  };
+
+  const searchResults = getSearchMatches();
 
   if (!isSettingsOpen) return null;
 
@@ -494,639 +1242,1020 @@ export function SettingsModal() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-        className={`absolute inset-0 flex items-center justify-center z-[100] bg-surface/50 pointer-events-auto`}
+        className="absolute inset-0 flex items-center justify-center z-[100] bg-surface/50 pointer-events-auto"
         onClick={handleBackgroundClick}
       >
-        <div className="w-[600px] h-[500px] bg-[#0F0F0F]/95 backdrop-blur-xl border border-border-wire rounded-2xl shadow-2xl overflow-hidden flex flex-col pointer-events-auto" onClick={e => e.stopPropagation()}>
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-border-wire/50 bg-black/20">
-          <h2 className="text-lg font-bold text-white tracking-widest uppercase flex items-center gap-2">
-            <Settings size={20} className="text-primary" /> System Settings
-          </h2>
-          <button onClick={handleClose} className="p-1 rounded-md hover:bg-white/10 text-zinc-400 hover:text-white transition-colors">
-            <X size={20} />
-          </button>
-        </div>
-
-        <div className="flex flex-1 overflow-hidden">
-          {/* Sidebar */}
-          <div className="w-48 border-r border-border-wire/50 p-2 flex flex-col gap-1 bg-black/10">
-            <button
-              onClick={() => setActiveTab('integrations')}
-              className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === 'integrations' ? 'bg-primary/20 text-primary' : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
-              }`}
+        {/* Spacious modal container matching widescreen dimensions */}
+        <div 
+          className="w-[920px] h-[680px] bg-[#0E0E0E]/95 backdrop-blur-2xl border border-border-wire rounded-2xl shadow-2xl overflow-hidden flex flex-col pointer-events-auto" 
+          onClick={e => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b border-border-wire/40 bg-black/30">
+            <h2 className="text-sm font-bold text-white tracking-widest uppercase flex items-center gap-2 font-mono">
+              <Settings size={18} className="text-primary animate-spin" style={{ animationDuration: '6s' }} /> 
+              VectorHUD System Customizer
+            </h2>
+            <button 
+              onClick={handleClose} 
+              className="p-1 rounded-md hover:bg-white/10 text-zinc-400 hover:text-white transition-colors cursor-pointer"
             >
-              <Key size={16} /> Integrations
-            </button>
-            <button
-              onClick={() => setActiveTab('preferences')}
-              className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === 'preferences' ? 'bg-primary/20 text-primary' : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
-              }`}
-            >
-              <Palette size={16} /> Preferences
-            </button>
-            <button
-              onClick={() => setActiveTab('hotkeys')}
-              className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === 'hotkeys' ? 'bg-primary/20 text-primary' : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
-              }`}
-            >
-              <Zap size={16} /> Hotkeys
-            </button>
-            <div className="flex-1"></div>
-            <button
-              onClick={() => setActiveTab('updates')}
-              className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors mt-auto ${
-                activeTab === 'updates' ? 'bg-primary/20 text-primary' : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
-              }`}
-            >
-              <Download size={16} /> About / Updates
+              <X size={18} />
             </button>
           </div>
 
-          {/* Content Area */}
-          <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
-            {activeTab === 'integrations' && (
-              <div className="space-y-6">
-                <div className="space-y-4">
-                  <h3 className="text-md font-semibold text-white flex items-center gap-2 border-b border-white/10 pb-2">
-                    <Zap size={16} className="text-amber-400" /> AI Provider Configuration
-                  </h3>
+          <div className="flex flex-1 overflow-hidden">
+            {/* Sidebar */}
+            <div className="w-64 border-r border-border-wire/40 p-4 flex flex-col gap-1.5 bg-black/15">
+              
+              {/* Accessible Interactive Settings Search Bar */}
+              <div className="mb-4 relative">
+                <input
+                  type="text"
+                  placeholder="Quick Search (e.g. keybind, cpu)..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-black/50 border border-white/10 rounded-lg pl-8 pr-8 py-2 text-xs text-zinc-200 focus:outline-none focus:border-primary transition-colors font-mono"
+                />
+                <Search className="absolute left-2.5 top-2.5 text-zinc-500" size={14} />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2.5 top-2.5 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
 
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Active Provider</label>
-                    <select
-                      value={localPreferences.aiProvider}
-                      onChange={(e) => setLocalPreferences(s => ({ ...s, aiProvider: e.target.value }))}
-                      className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2 text-sm text-zinc-100 focus:outline-none focus:border-primary transition-colors appearance-none"
-                    >
-                      <option value="openrouter">OpenRouter AI (Default)</option>
-                      <option value="openai">OpenAI (Direct API)</option>
-                      <option value="anthropic">Anthropic (Direct API)</option>
-                      <option value="groq">Groq (Direct API)</option>
-                    </select>
+              {/* Sidebar Tabs */}
+              <div className="flex-1 flex flex-col gap-1 overflow-y-auto custom-scrollbar">
+                <button
+                  disabled={!!searchQuery}
+                  onClick={() => setActiveTab('integrations')}
+                  className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold tracking-wider uppercase transition-all border ${
+                    searchQuery 
+                      ? 'opacity-40 border-transparent text-zinc-600'
+                      : activeTab === 'integrations' 
+                        ? 'bg-primary/15 border-primary/35 text-primary shadow-[inset_0_0_10px_rgba(var(--accent-green-rgb,74,246,38),0.08)]' 
+                        : 'border-transparent text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
+                  }`}
+                >
+                  <Key size={14} /> Integrations & API
+                </button>
+
+                <button
+                  disabled={!!searchQuery}
+                  onClick={() => setActiveTab('widgets')}
+                  className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold tracking-wider uppercase transition-all border ${
+                    searchQuery 
+                      ? 'opacity-40 border-transparent text-zinc-600'
+                      : activeTab === 'widgets' 
+                        ? 'bg-primary/15 border-primary/35 text-primary shadow-[inset_0_0_10px_rgba(var(--accent-green-rgb,74,246,38),0.08)]' 
+                        : 'border-transparent text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
+                  }`}
+                >
+                  <Sliders size={14} /> Widget Preferences
+                </button>
+
+                <button
+                  disabled={!!searchQuery}
+                  onClick={() => setActiveTab('hotkeys')}
+                  className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold tracking-wider uppercase transition-all border ${
+                    searchQuery 
+                      ? 'opacity-40 border-transparent text-zinc-600'
+                      : activeTab === 'hotkeys' 
+                        ? 'bg-primary/15 border-primary/35 text-primary shadow-[inset_0_0_10px_rgba(var(--accent-green-rgb,74,246,38),0.08)]' 
+                        : 'border-transparent text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
+                  }`}
+                >
+                  <Zap size={14} /> Hotkey Recorder
+                </button>
+
+                <button
+                  disabled={!!searchQuery}
+                  onClick={() => setActiveTab('general')}
+                  className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold tracking-wider uppercase transition-all border ${
+                    searchQuery 
+                      ? 'opacity-40 border-transparent text-zinc-600'
+                      : activeTab === 'general' 
+                        ? 'bg-primary/15 border-primary/35 text-primary shadow-[inset_0_0_10px_rgba(var(--accent-green-rgb,74,246,38),0.08)]' 
+                        : 'border-transparent text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
+                  }`}
+                >
+                  <Palette size={14} /> General & System
+                </button>
+
+                <button
+                  disabled={!!searchQuery}
+                  onClick={() => setActiveTab('logs')}
+                  className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold tracking-wider uppercase transition-all border ${
+                    searchQuery 
+                      ? 'opacity-40 border-transparent text-zinc-600'
+                      : activeTab === 'logs' 
+                        ? 'bg-primary/15 border-primary/35 text-primary shadow-[inset_0_0_10px_rgba(var(--accent-green-rgb,74,246,38),0.08)]' 
+                        : 'border-transparent text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
+                  }`}
+                >
+                  <Terminal size={14} /> Diagnostics Logs
+                </button>
+
+                <div className="flex-1"></div>
+
+                <button
+                  disabled={!!searchQuery}
+                  onClick={() => setActiveTab('updates')}
+                  className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold tracking-wider uppercase mt-auto border transition-all ${
+                    searchQuery 
+                      ? 'opacity-40 border-transparent text-zinc-600'
+                      : activeTab === 'updates' 
+                        ? 'bg-primary/15 border-primary/35 text-primary' 
+                        : 'border-transparent text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
+                  }`}
+                >
+                  <Download size={14} /> About / Updates
+                </button>
+              </div>
+            </div>
+
+            {/* Content Display Window */}
+            <div className="flex-1 p-6 overflow-y-auto custom-scrollbar bg-black/5">
+              
+              {/* Render Search Results if query exists */}
+              {searchQuery ? (
+                <div className="space-y-6">
+                  <div className="border-b border-white/10 pb-3">
+                    <h3 className="text-sm font-bold text-white font-mono uppercase tracking-wider">
+                      Search Results for "{searchQuery}"
+                    </h3>
+                    <p className="text-xs text-zinc-500 mt-1">
+                      Showing matching parameters in local system settings.
+                    </p>
                   </div>
-
-                  {/* OpenRouter Configuration */}
-                  {localPreferences.aiProvider === 'openrouter' && (
-                    <div className="space-y-4 pt-2 animate-fadeIn">
-                      <div className="space-y-1">
-                        <label className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">OpenRouter API Key</label>
-                        <input 
-                          type="password"
-                          value={openRouterKey}
-                          onChange={(e) => setOpenRouterKey(e.target.value)}
-                          placeholder="sk-or-v1-..."
-                          className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-base text-zinc-200 focus:outline-none focus:border-primary transition-colors"
-                        />
-                      </div>
-
-                      <div className="flex items-center gap-2 bg-black/20 p-2 rounded border border-white/5">
-                        <input
-                          type="checkbox"
-                          id="useCustomOpenRouterModel"
-                          checked={localPreferences.useCustomOpenRouterModel}
-                          onChange={(e) => setLocalPreferences(s => ({ ...s, useCustomOpenRouterModel: e.target.checked }))}
-                          className="rounded border-zinc-700 bg-zinc-900 text-primary focus:ring-primary"
-                        />
-                        <label htmlFor="useCustomOpenRouterModel" className="text-xs text-zinc-300 cursor-pointer select-none">
-                          Use Custom Model ID (override dropdown)
-                        </label>
-                      </div>
-
-                      {localPreferences.useCustomOpenRouterModel ? (
-                        <div className="space-y-1">
-                          <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Custom Model ID</label>
-                          <input 
-                            type="text"
-                            value={localPreferences.customOpenRouterModel}
-                            onChange={(e) => setLocalPreferences(s => ({ ...s, customOpenRouterModel: e.target.value }))}
-                            placeholder="e.g. google/gemini-2.5-flash"
-                            className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 focus:outline-none focus:border-primary transition-colors font-mono"
-                          />
+                  {searchResults.length > 0 ? (
+                    <div className="space-y-4">
+                      {searchResults.map((sr, idx) => (
+                        <div 
+                          key={idx} 
+                          className="p-4 rounded-xl bg-zinc-950 border border-white/5 space-y-2 relative overflow-hidden"
+                        >
+                          <div className="absolute right-3 top-3 px-2 py-0.5 rounded bg-zinc-800 text-[10px] text-zinc-400 font-mono font-semibold uppercase">
+                            {sr.category}
+                          </div>
+                          <h4 className="text-xs font-bold text-white uppercase tracking-wide pr-20">
+                            {sr.title}
+                          </h4>
+                          <div className="pt-2 text-zinc-300">
+                            {sr.content}
+                          </div>
                         </div>
-                      ) : (
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-12 text-center">
+                      <HelpCircle size={36} className="text-zinc-600 mb-2" />
+                      <p className="text-sm text-zinc-400 font-bold">No settings match your query.</p>
+                      <p className="text-xs text-zinc-600 mt-1">Try refining search parameters like 'key', 'blur', 'cpu', or 'timer'.</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Standard Tab Render Layout */
+                <>
+                  {activeTab === 'integrations' && (
+                    <div className="space-y-6">
+                      <div className="space-y-4 bg-zinc-950/40 p-5 rounded-xl border border-white/5">
+                        <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-2 border-b border-white/10 pb-2">
+                          <Zap size={14} className="text-amber-400" /> AI Provider Configuration
+                        </h3>
+
                         <div className="space-y-1">
-                          <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">OpenRouter Model</label>
+                          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Active AI Interface Provider</label>
                           <select
-                            value={localPreferences.openRouterModel}
-                            onChange={(e) => setLocalPreferences(s => ({ ...s, openRouterModel: e.target.value }))}
-                            className="w-full bg-zinc-800 border border-zinc-600 rounded-lg px-4 py-2 text-sm text-zinc-100 focus:outline-none focus:border-primary transition-colors appearance-none"
+                            value={localPreferences.aiProvider}
+                            onChange={(e) => setLocalPreferences(s => ({ ...s, aiProvider: e.target.value }))}
+                            className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2 text-xs text-zinc-200 focus:outline-none focus:border-primary transition-colors appearance-none cursor-pointer"
                           >
-                            <option value="google/gemini-2.5-flash">Gemini 2.5 Flash [Vision/Actions] (Recommended)</option>
-                            <option value="google/gemini-2.5-pro">Gemini 2.5 Pro [Vision/Actions]</option>
-                            <option value="openai/gpt-4o-mini">GPT-4o Mini [Vision/Actions]</option>
-                            <option value="openai/gpt-4o">GPT-4o [Vision/Actions]</option>
-                            <option value="anthropic/claude-sonnet-4.6">Claude 3.5 Sonnet v2 [Vision/Actions]</option>
-                            <option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B Instruct [Text-Only/Actions] (Free)</option>
-                            <option value="meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B Instruct [Text-Only/Actions]</option>
+                            <option value="openrouter">OpenRouter AI (Consolidated Cloud)</option>
+                            <option value="openai">OpenAI (Direct Endpoints)</option>
+                            <option value="anthropic">Anthropic Claude (Direct Endpoints)</option>
+                            <option value="groq">Groq Llama (Direct Endpoints)</option>
                           </select>
                         </div>
-                      )}
-                    </div>
-                  )}
 
-                  {/* OpenAI Configuration */}
-                  {localPreferences.aiProvider === 'openai' && (
-                    <div className="space-y-4 pt-2 animate-fadeIn">
-                      <div className="space-y-1">
-                        <label className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">OpenAI API Key</label>
-                        <input 
-                          type="password"
-                          value={openaiKey}
-                          onChange={(e) => setOpenaiKey(e.target.value)}
-                          placeholder="sk-..."
-                          className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-base text-zinc-200 focus:outline-none focus:border-primary transition-colors"
-                        />
-                      </div>
+                        {/* OpenRouter configuration */}
+                        {localPreferences.aiProvider === 'openrouter' && (
+                          <div className="space-y-4 pt-2">
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">OpenRouter API Key</label>
+                              <input 
+                                type="password"
+                                value={openRouterKey}
+                                onChange={(e) => setOpenRouterKey(e.target.value)}
+                                placeholder="sk-or-v1-..."
+                                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-xs text-zinc-200 focus:outline-none focus:border-primary font-mono"
+                              />
+                            </div>
+                            
+                            <div className="flex items-center gap-2.5 bg-black/20 p-2.5 rounded border border-white/5">
+                              <input
+                                type="checkbox"
+                                id="useCustomOpenRouterModelMain"
+                                checked={localPreferences.useCustomOpenRouterModel}
+                                onChange={(e) => setLocalPreferences(s => ({ ...s, useCustomOpenRouterModel: e.target.checked }))}
+                                className="rounded border-zinc-700 bg-zinc-900 text-primary focus:ring-primary cursor-pointer"
+                              />
+                              <label htmlFor="useCustomOpenRouterModelMain" className="text-xs text-zinc-400 select-none cursor-pointer">
+                                Overwrite standard list with custom Model ID
+                              </label>
+                            </div>
 
-                      <div className="space-y-1">
-                        <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">OpenAI Model</label>
-                        <select
-                          value={localPreferences.openaiModel}
-                          onChange={(e) => setLocalPreferences(s => ({ ...s, openaiModel: e.target.value }))}
-                          className="w-full bg-zinc-800 border border-zinc-600 rounded-lg px-4 py-2 text-sm text-zinc-100 focus:outline-none focus:border-primary transition-colors appearance-none font-mono"
-                        >
-                          <option value="gpt-4o-mini">gpt-4o-mini [Vision/Actions] (Recommended)</option>
-                          <option value="gpt-4o">gpt-4o [Vision/Actions]</option>
-                          <option value="gpt-4-turbo">gpt-4-turbo [Vision/Actions]</option>
-                        </select>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Anthropic Configuration */}
-                  {localPreferences.aiProvider === 'anthropic' && (
-                    <div className="space-y-4 pt-2 animate-fadeIn">
-                      <div className="space-y-1">
-                        <label className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Anthropic API Key</label>
-                        <input 
-                          type="password"
-                          value={anthropicKey}
-                          onChange={(e) => setAnthropicKey(e.target.value)}
-                          placeholder="sk-ant-..."
-                          className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-base text-zinc-200 focus:outline-none focus:border-primary transition-colors"
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Anthropic Model</label>
-                        <select
-                          value={localPreferences.anthropicModel}
-                          onChange={(e) => setLocalPreferences(s => ({ ...s, anthropicModel: e.target.value }))}
-                          className="w-full bg-zinc-800 border border-zinc-600 rounded-lg px-4 py-2 text-sm text-zinc-100 focus:outline-none focus:border-primary transition-colors appearance-none font-mono"
-                        >
-                          <option value="claude-3-5-sonnet-20241022">claude-3-5-sonnet-20241022 [Vision/Actions] (Recommended)</option>
-                          <option value="claude-3-5-haiku-20241022">claude-3-5-haiku-20241022 [Text-Only/Actions]</option>
-                          <option value="claude-3-opus-20240229">claude-3-opus-20240229 [Vision/Actions]</option>
-                        </select>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Groq Configuration */}
-                  {localPreferences.aiProvider === 'groq' && (
-                    <div className="space-y-4 pt-2 animate-fadeIn">
-                      <div className="space-y-1">
-                        <label className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Groq API Key</label>
-                        <input 
-                          type="password"
-                          value={groqKey}
-                          onChange={(e) => setGroqKey(e.target.value)}
-                          placeholder="gsk_..."
-                          className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-base text-zinc-200 focus:outline-none focus:border-primary transition-colors"
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Groq Model</label>
-                        <select
-                          value={localPreferences.groqModel}
-                          onChange={(e) => setLocalPreferences(s => ({ ...s, groqModel: e.target.value }))}
-                          className="w-full bg-zinc-800 border border-zinc-600 rounded-lg px-4 py-2 text-sm text-zinc-100 focus:outline-none focus:border-primary transition-colors appearance-none font-mono"
-                        >
-                          <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile [Text-Only/Actions] (Recommended)</option>
-                          <option value="llama-3.1-8b-instant">llama-3.1-8b-instant [Text-Only/Actions]</option>
-                          <option value="mixtral-8x7b-32768">mixtral-8x7b-32768 [Text-Only/Actions]</option>
-                          <option value="gemma2-9b-it">gemma2-9b-it [Text-Only/Actions]</option>
-                        </select>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-4">
-                  <h3 className="text-md font-semibold text-white flex items-center gap-2 border-b border-white/10 pb-2 mt-6">
-                    <Edit3 size={16} className="text-blue-400" /> Notion Sync
-                  </h3>
-                  
-                  <div className="space-y-1">
-                    <label className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Integration Secret</label>
-                    <input 
-                      type="password"
-                      value={notionKey}
-                      onChange={(e) => setNotionKey(e.target.value)}
-                      placeholder="secret_..."
-                      className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-base text-zinc-200 focus:outline-none focus:border-primary transition-colors"
-                    />
-                  </div>
-                  
-                  <div className="space-y-1 mt-4">
-                    <label className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Database ID or Shared Link</label>
-                    <input 
-                      type="text"
-                      value={notionDbId}
-                      onChange={(e) => {
-                        let val = e.target.value;
-                        const match = val.match(/([a-f0-9]{32})/i);
-                        if (match) val = match[1];
-                        setNotionDbId(val);
-                      }}
-                      placeholder="e.g., 68482d8c90384a8..."
-                      className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-base text-zinc-200 focus:outline-none focus:border-primary transition-colors"
-                    />
-                    
-                    <div className="bg-zinc-800/40 p-3 rounded-md mt-2 border border-white/5 space-y-2">
-                      <p className="text-xs text-zinc-400 font-bold">How to connect an empty Notion Database:</p>
-                      <p className="text-xs text-zinc-400 leading-relaxed">
-                        1. Go to <a href="https://www.notion.so/my-integrations" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline">Notion Integrations</a> and create a new integration to get your <b>Internal Integration Secret</b>.
-                        <br/>
-                        2. Create a new empty page in Notion and type <code>/database</code> to add a full-page database.
-                        <br/>
-                        3. Click the <code>...</code> menu in the top right of your database page, go to <b>Connections</b>, and add the integration you just created.
-                        <br/>
-                        4. Click <b>Share</b>, select "Copy Link", and paste the entire link directly into the box above. VectorHUD will automatically extract the 32-character Database ID.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'preferences' && (
-              <div className="space-y-6">
-                <h3 className="text-md font-semibold text-white flex items-center gap-2 border-b border-white/10 pb-2">
-                  <Palette size={16} className="text-purple-400" /> UI Customization
-                </h3>
-                
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Global Font Size</label>
-                    <span className="text-xs text-primary font-mono">{localPreferences.globalFontSize}px</span>
-                  </div>
-                  <input 
-                    type="range" 
-                    min="10" 
-                    max="24" 
-                    step="1"
-                    value={localPreferences.globalFontSize}
-                    onChange={(e) => setLocalPreferences(s => ({ ...s, globalFontSize: parseInt(e.target.value) }))}
-                    className="w-full accent-primary"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">HUD Theme</label>
-                  <select
-                    value={localPreferences.theme}
-                    onChange={(e) => setLocalPreferences(s => ({ ...s, theme: e.target.value }))}
-                    className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2 text-sm text-zinc-100 focus:outline-none focus:border-primary transition-colors appearance-none"
-                  >
-                    <option value="default">Default</option>
-                    <option value="amber">Cyberpunk Amber</option>
-                    <option value="neon_blue">Neon Blue</option>
-                    <option value="matrix_green">Matrix Green</option>
-                    <option value="outrun_pink">Outrun Pink</option>
-                    <option value="custom">Custom Color (RGB)</option>
-                  </select>
-                </div>
-
-                {localPreferences.theme === 'custom' && (
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Custom Hex Color</label>
-                    <div className="flex gap-2 items-center">
-                      <input 
-                        type="color" 
-                        value={localPreferences.customColor}
-                        onChange={(e) => setLocalPreferences(s => ({ ...s, customColor: e.target.value }))}
-                        className="w-10 h-10 rounded bg-transparent border-none cursor-pointer"
-                      />
-                      <input 
-                        type="text" 
-                        value={localPreferences.customColor}
-                        onChange={(e) => setLocalPreferences(s => ({ ...s, customColor: e.target.value }))}
-                        className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2 text-sm text-zinc-100 focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                <h3 className="text-md font-semibold text-white flex items-center gap-2 border-b border-white/10 pb-2 mt-6">
-                  <Palette size={16} className="text-purple-400" /> Video Recording
-                </h3>
-
-                <div className="flex justify-between items-center bg-black/40 p-3 rounded-lg border border-white/5">
-                  <div>
-                    <label className="text-sm font-semibold text-zinc-200">Record System Audio</label>
-                    <p className="text-xs text-zinc-500 mt-0.5">Include game and desktop sound output in recordings.</p>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      className="sr-only peer" 
-                      checked={localPreferences.recordSystemAudio}
-                      onChange={(e) => setLocalPreferences(s => ({ ...s, recordSystemAudio: e.target.checked }))}
-                    />
-                    <div className="w-11 h-6 bg-zinc-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent-green"></div>
-                  </label>
-                </div>
-
-                <div className="flex justify-between items-center bg-black/40 p-3 rounded-lg border border-white/5">
-                  <div>
-                    <label className="text-sm font-semibold text-zinc-200">Record Microphone</label>
-                    <p className="text-xs text-zinc-500 mt-0.5">Include voice input from default microphone.</p>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      className="sr-only peer" 
-                      checked={localPreferences.recordMicrophone}
-                      onChange={(e) => setLocalPreferences(s => ({ ...s, recordMicrophone: e.target.checked }))}
-                    />
-                    <div className="w-11 h-6 bg-zinc-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent-green"></div>
-                  </label>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'hotkeys' && (
-              <div className="space-y-6">
-                <div className="space-y-2">
-                  <h3 className="text-md font-semibold text-white border-b border-white/10 pb-2 flex items-center gap-2">
-                    <Zap size={16} className="text-amber-400" /> Global Hotkeys
-                  </h3>
-                  <p className="text-xs text-zinc-400 mb-4">
-                    Set system-wide hotkeys. Use combinations like <code>CommandOrControl+Shift+X</code>.
-                  </p>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Main Overlay Toggle</label>
-                    <input 
-                      type="text"
-                      value={localHotkeys.overlay}
-                      onChange={(e) => setLocalHotkeys(s => ({ ...s, overlay: e.target.value }))}
-                      placeholder="ctrl+alt+o"
-                      className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-primary transition-colors uppercase"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Capture Screenshot</label>
-                    <input 
-                      type="text"
-                      value={localHotkeys.screenshot}
-                      onChange={(e) => setLocalHotkeys(s => ({ ...s, screenshot: e.target.value }))}
-                      placeholder="ctrl+alt+s"
-                      className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-primary transition-colors uppercase"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Toggle Recording</label>
-                    <input 
-                      type="text"
-                      value={localHotkeys.record}
-                      onChange={(e) => setLocalHotkeys(s => ({ ...s, record: e.target.value }))}
-                      placeholder="ctrl+alt+r"
-                      className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-primary transition-colors uppercase"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Save Replay Buffer</label>
-                    <input 
-                      type="text"
-                      value={localHotkeys.replay}
-                      onChange={(e) => setLocalHotkeys(s => ({ ...s, replay: e.target.value }))}
-                      placeholder="ctrl+alt+b"
-                      className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-primary transition-colors uppercase"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Toggle Timer</label>
-                    <input 
-                      type="text"
-                      value={localHotkeys.timer}
-                      onChange={(e) => setLocalHotkeys(s => ({ ...s, timer: e.target.value }))}
-                      placeholder="ctrl+alt+t"
-                      className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-primary transition-colors uppercase"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Reset Timers</label>
-                    <input 
-                      type="text"
-                      value={localHotkeys.timerReset}
-                      onChange={(e) => setLocalHotkeys(s => ({ ...s, timerReset: e.target.value }))}
-                      placeholder="ctrl+alt+y"
-                      className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-primary transition-colors uppercase"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Toggle Stopwatch</label>
-                    <input 
-                      type="text"
-                      value={localHotkeys.stopwatch}
-                      onChange={(e) => setLocalHotkeys(s => ({ ...s, stopwatch: e.target.value }))}
-                      placeholder="ctrl+alt+w"
-                      className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-primary transition-colors uppercase"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Voice PTT Assistant</label>
-                    <input 
-                      type="text"
-                      value={localHotkeys.voicePtt}
-                      onChange={(e) => setLocalHotkeys(s => ({ ...s, voicePtt: e.target.value }))}
-                      placeholder="ctrl+alt+v"
-                      className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-primary transition-colors uppercase"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Toggle Interactivity</label>
-                    <input 
-                      type="text"
-                      value={localHotkeys.interact}
-                      onChange={(e) => setLocalHotkeys(s => ({ ...s, interact: e.target.value }))}
-                      placeholder="ctrl+alt+i"
-                      className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-primary transition-colors uppercase"
-                    />
-                  </div>
-                </div>
-                <p className="text-xs text-zinc-500 italic mt-4">
-                  Note: Updating hotkeys requires an application restart to take effect. Supported modifiers: ctrl, alt, shift, super.
-                </p>
-              </div>
-            )}
-
-            {activeTab === 'updates' && (
-              <div className="space-y-6 flex flex-col h-full">
-                <div className="flex flex-col items-center justify-center py-6 text-center">
-                  <div className="w-16 h-16 bg-gradient-to-tr from-primary to-blue-500 rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-primary/20">
-                    <span className="text-3xl font-black text-white italic">V</span>
-                  </div>
-                  <h3 className="text-xl font-bold text-white tracking-wide">VectorHUD</h3>
-                  <p className="text-sm text-zinc-400 mt-1">Version {currentVersion}</p>
-                </div>
-
-                <div className="bg-black/20 border border-white/5 rounded-xl p-5 flex flex-col items-center justify-center gap-4 text-center">
-                  {updateInfo ? (
-                    <>
-                      <div className="flex items-center gap-3 text-green-400 font-semibold">
-                        <Download size={20} />
-                        New Update Available!
-                      </div>
-                      <p className="text-zinc-300 text-sm">
-                        Version <strong className="text-white">{updateInfo.version}</strong> is ready to download.
-                      </p>
-                      
-                      <button
-                        onClick={async () => {
-                          try {
-                            setIsDownloadingUpdate(true);
-                            setUpdateMessage('Downloading and installing...');
-                            await updateInfo.downloadAndInstall();
-                            setUpdateMessage('Restarting app...');
-                            await relaunch();
-                          } catch (err: any) {
-                            console.error(err);
-                            setUpdateMessage(`Update failed: ${err?.message || err}`);
-                            setIsDownloadingUpdate(false);
-                          }
-                        }}
-                        disabled={isDownloadingUpdate}
-                        className="px-6 py-2.5 bg-primary text-white font-semibold rounded-lg hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 flex items-center gap-2 mt-2"
-                      >
-                        {isDownloadingUpdate ? (
-                          <><RefreshCw size={16} className="animate-spin" /> Installing...</>
-                        ) : (
-                          <><Download size={16} /> Download & Install</>
+                            {localPreferences.useCustomOpenRouterModel ? (
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Custom Model ID</label>
+                                <input 
+                                  type="text"
+                                  value={localPreferences.customOpenRouterModel}
+                                  onChange={(e) => setLocalPreferences(s => ({ ...s, customOpenRouterModel: e.target.value }))}
+                                  placeholder="e.g. google/gemini-2.5-flash"
+                                  className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-primary"
+                                />
+                              </div>
+                            ) : (
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Model Selection</label>
+                                <select
+                                  value={localPreferences.openRouterModel}
+                                  onChange={(e) => setLocalPreferences(s => ({ ...s, openRouterModel: e.target.value }))}
+                                  className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2 text-xs text-zinc-200 focus:outline-none focus:border-primary appearance-none cursor-pointer"
+                                >
+                                  <option value="google/gemini-2.5-flash">Gemini 2.5 Flash [Vision/Actions] (Recommended)</option>
+                                  <option value="google/gemini-2.5-pro">Gemini 2.5 Pro [Vision/Actions]</option>
+                                  <option value="openai/gpt-4o-mini">GPT-4o Mini [Vision/Actions]</option>
+                                  <option value="openai/gpt-4o">GPT-4o [Vision/Actions]</option>
+                                  <option value="anthropic/claude-sonnet-4.6">Claude 3.5 Sonnet v2 [Vision/Actions]</option>
+                                  <option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B Instruct [Text-Only/Actions] (Free)</option>
+                                  <option value="meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B Instruct [Text-Only/Actions]</option>
+                                </select>
+                              </div>
+                            )}
+                          </div>
                         )}
-                      </button>
-                      {updateMessage && <p className="text-xs text-zinc-400 mt-2">{updateMessage}</p>}
-                    </>
-                  ) : (
-                    <>
-                      <div className="flex items-center justify-center w-12 h-12 bg-white/5 rounded-full mb-2">
-                        <CheckCircle2 size={24} className="text-zinc-400" />
-                      </div>
-                      <p className="text-zinc-300 font-medium">You're up to date.</p>
-                      <p className="text-xs text-zinc-500">VectorHUD checks for updates automatically.</p>
-                      
-                      <button
-                        onClick={async () => {
-                          try {
-                            setIsCheckingUpdate(true);
-                            setUpdateMessage('Checking...');
-                            const update = await check();
-                            if (update?.available) {
-                              setUpdateInfo(update);
-                              setUpdateMessage('');
-                            } else {
-                              setUpdateMessage('You are on the latest version.');
-                              setTimeout(() => setUpdateMessage(''), 3000);
-                            }
-                          } catch (error: any) {
-                            console.error(`Update check failed: ${error}`);
-                            setUpdateMessage(`Error: ${error?.message || error}`);
-                          } finally {
-                            setIsCheckingUpdate(false);
-                          }
-                        }}
-                        disabled={isCheckingUpdate}
-                        className="mt-2 px-5 py-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
-                      >
-                        <RefreshCw size={14} className={isCheckingUpdate ? 'animate-spin' : ''} />
-                        {isCheckingUpdate ? 'Checking...' : 'Check for Updates'}
-                      </button>
-                      {updateMessage && <p className="text-xs text-zinc-400 mt-2">{updateMessage}</p>}
-                    </>
-                  )}
-                </div>
 
-                <div className="mt-auto pt-4 flex justify-between items-center text-xs text-zinc-500 border-t border-white/5">
-                  <p>Built with ❤️ by Fernando</p>
-                  <button onClick={() => openUrl("https://github.com/Francefernance12/VectorHUD")} className="hover:text-white transition-colors cursor-pointer">View on GitHub</button>
-                </div>
+                        {/* OpenAI configuration */}
+                        {localPreferences.aiProvider === 'openai' && (
+                          <div className="space-y-4 pt-2">
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">OpenAI API Key</label>
+                              <input 
+                                type="password"
+                                value={openaiKey}
+                                onChange={(e) => setOpenaiKey(e.target.value)}
+                                placeholder="sk-proj-..."
+                                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-xs text-zinc-200 focus:outline-none focus:border-primary font-mono"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">OpenAI Model</label>
+                              <select
+                                value={localPreferences.openaiModel}
+                                onChange={(e) => setLocalPreferences(s => ({ ...s, openaiModel: e.target.value }))}
+                                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2 text-xs text-zinc-200 appearance-none cursor-pointer"
+                              >
+                                <option value="gpt-4o-mini">gpt-4o-mini [Vision]</option>
+                                <option value="gpt-4o">gpt-4o [Vision]</option>
+                              </select>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Anthropic configuration */}
+                        {localPreferences.aiProvider === 'anthropic' && (
+                          <div className="space-y-4 pt-2">
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Anthropic API Key</label>
+                              <input 
+                                type="password"
+                                value={anthropicKey}
+                                onChange={(e) => setAnthropicKey(e.target.value)}
+                                placeholder="sk-ant-..."
+                                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-xs text-zinc-200 focus:outline-none focus:border-primary font-mono"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Anthropic Model</label>
+                              <select
+                                value={localPreferences.anthropicModel}
+                                onChange={(e) => setLocalPreferences(s => ({ ...s, anthropicModel: e.target.value }))}
+                                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2 text-xs text-zinc-200 appearance-none cursor-pointer font-mono"
+                              >
+                                <option value="claude-3-5-sonnet-20241022">claude-3-5-sonnet-20241022</option>
+                                <option value="claude-3-5-haiku-20241022">claude-3-5-haiku-20241022</option>
+                              </select>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Groq configuration */}
+                        {localPreferences.aiProvider === 'groq' && (
+                          <div className="space-y-4 pt-2">
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Groq API Key</label>
+                              <input 
+                                type="password"
+                                value={groqKey}
+                                onChange={(e) => setGroqKey(e.target.value)}
+                                placeholder="gsk_..."
+                                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-xs text-zinc-200 focus:outline-none focus:border-primary font-mono"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Groq Model</label>
+                              <select
+                                value={localPreferences.groqModel}
+                                onChange={(e) => setLocalPreferences(s => ({ ...s, groqModel: e.target.value }))}
+                                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2 text-xs text-zinc-200 appearance-none cursor-pointer font-mono"
+                              >
+                                <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile</option>
+                                <option value="llama-3.1-8b-instant">llama-3.1-8b-instant</option>
+                              </select>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Notion Sync configuration */}
+                      <div className="space-y-4 bg-zinc-950/40 p-5 rounded-xl border border-white/5">
+                        <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-2 border-b border-white/10 pb-2">
+                          <Edit3 size={14} className="text-blue-450" /> Notion Database Quick-Capture
+                        </h3>
+                        
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Internal Integration Secret</label>
+                          <input 
+                            type="password"
+                            value={notionKey}
+                            onChange={(e) => setNotionKey(e.target.value)}
+                            placeholder="secret_..."
+                            className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-xs text-zinc-200 focus:outline-none focus:border-primary font-mono"
+                          />
+                        </div>
+                        
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Database ID or Page Link</label>
+                          <input 
+                            type="text"
+                            value={notionDbId}
+                            onChange={(e) => {
+                              let val = e.target.value;
+                              const match = val.match(/([a-f0-9]{32})/i);
+                              if (match) val = match[1];
+                              setNotionDbId(val);
+                            }}
+                            placeholder="e.g. 68482d8c90384a86b97621a..."
+                            className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-xs text-zinc-200 focus:outline-none focus:border-primary font-mono"
+                          />
+                        </div>
+
+                        <div className="bg-zinc-900/60 p-3.5 rounded border border-white/5 space-y-1.5 text-xs text-zinc-400">
+                          <span className="font-bold text-zinc-300">Set Up Instructions:</span>
+                          <p className="leading-relaxed">
+                            1. Create a Notion integration on the <a href="https://www.notion.so/my-integrations" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline">Notion Developers portal</a>.
+                            <br />
+                            2. Create a Database block on a Notion page, click the <b>...</b>, add your newly created connection.
+                            <br />
+                            3. Copy the database link and paste it above; VectorHUD will isolate the 32-character ID.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Widgets tab - detailed settings for widgets */}
+                  {activeTab === 'widgets' && (
+                    <div className="space-y-6">
+                      
+                      {/* Hardware Metrics Settings */}
+                      <div className="space-y-4 bg-zinc-950/40 p-5 rounded-xl border border-white/5">
+                        <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-2 border-b border-white/10 pb-2">
+                          <Cpu size={14} className="text-emerald-450" /> System Metrics Widget
+                        </h3>
+                        <div className="space-y-4">
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-zinc-300 font-medium">Metrics Polling Rate</span>
+                              <span className="text-primary font-mono font-bold">{localPreferences.metricsPollInterval}ms</span>
+                            </div>
+                            <input 
+                              type="range" min="200" max="5000" step="100"
+                              value={localPreferences.metricsPollInterval}
+                              onChange={(e) => setLocalPreferences(s => ({ ...s, metricsPollInterval: parseInt(e.target.value) }))}
+                              className="w-full accent-primary"
+                            />
+                            <p className="text-[10px] text-zinc-500">How frequently the overlay requests CPU, GPU, VRAM and RAM performance data. Lower rates hit accuracy but use slightly more resources.</p>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-2">
+                            <div className="space-y-1.5">
+                              <div className="flex justify-between items-center text-xs">
+                                <span className="text-zinc-300 font-medium">CPU Temp Alert Threshold</span>
+                                <span className="text-amber-500 font-mono font-bold">{localPreferences.cpuTempAlertThreshold}°C</span>
+                              </div>
+                              <input 
+                                type="range" min="40" max="100" step="1"
+                                value={localPreferences.cpuTempAlertThreshold}
+                                onChange={(e) => setLocalPreferences(s => ({ ...s, cpuTempAlertThreshold: parseInt(e.target.value) }))}
+                                className="w-full accent-primary"
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <div className="flex justify-between items-center text-xs">
+                                <span className="text-zinc-300 font-medium">GPU Temp Alert Threshold</span>
+                                <span className="text-amber-500 font-mono font-bold">{localPreferences.gpuTempAlertThreshold}°C</span>
+                              </div>
+                              <input 
+                                type="range" min="40" max="100" step="1"
+                                value={localPreferences.gpuTempAlertThreshold}
+                                onChange={(e) => setLocalPreferences(s => ({ ...s, gpuTempAlertThreshold: parseInt(e.target.value) }))}
+                                className="w-full accent-primary"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Media Capture Settings */}
+                      <div className="space-y-4 bg-zinc-950/40 p-5 rounded-xl border border-white/5">
+                        <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-2 border-b border-white/10 pb-2">
+                          <Monitor size={14} className="text-cyan-400" /> Media Capture & Replays
+                        </h3>
+                        <div className="space-y-4">
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-zinc-300 font-medium">Replay Clip Duration</span>
+                              <span className="text-primary font-mono font-bold">{localPreferences.replayDuration} seconds</span>
+                            </div>
+                            <input 
+                              type="range" min="5" max="120" step="5"
+                              value={localPreferences.replayDuration}
+                              onChange={(e) => setLocalPreferences(s => ({ ...s, replayDuration: parseInt(e.target.value) }))}
+                              className="w-full accent-primary"
+                            />
+                            <p className="text-[10px] text-zinc-500">Duration of rolling buffer clips written to disk when the replay hotkey is triggered.</p>
+                          </div>
+
+                          <div className="flex justify-between items-center bg-black/40 p-3.5 rounded-lg border border-white/5 text-xs">
+                            <div>
+                              <span className="text-zinc-200 font-bold block">Exclude VectorHUD overlay from captures</span>
+                              <span className="text-zinc-500 block">Instructs the capture engine to dynamically hide overlay windows during screenshots or recordings.</span>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input 
+                                type="checkbox" className="sr-only peer" 
+                                checked={localPreferences.excludeHudFromCapture}
+                                onChange={(e) => setLocalPreferences(s => ({ ...s, excludeHudFromCapture: e.target.checked }))}
+                              />
+                              <div className="w-11 h-6 bg-zinc-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent-green"></div>
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Audio Mixer Settings */}
+                      <div className="space-y-4 bg-zinc-950/40 p-5 rounded-xl border border-white/5">
+                        <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-2 border-b border-white/10 pb-2">
+                          <Volume2 size={14} className="text-indigo-400" /> Audio Mixer Preferences
+                        </h3>
+                        <div className="space-y-4">
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-zinc-300 font-medium">Mixer Volume Step</span>
+                              <span className="text-primary font-mono font-bold">{localPreferences.volumeStep}%</span>
+                            </div>
+                            <input 
+                              type="range" min="1" max="20" step="1"
+                              value={localPreferences.volumeStep}
+                              onChange={(e) => setLocalPreferences(s => ({ ...s, volumeStep: parseInt(e.target.value) }))}
+                              className="w-full accent-primary"
+                            />
+                            <p className="text-[10px] text-zinc-500">Volume increments when adjust steps are triggered via hotkeys or mouse wheel over the mixer widgets.</p>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Favorite Applications (Always Pinned)</label>
+                            <input 
+                              type="text"
+                              value={localPreferences.favoriteMixerApps}
+                              onChange={(e) => setLocalPreferences(s => ({ ...s, favoriteMixerApps: e.target.value }))}
+                              placeholder="e.g. chrome.exe, discord.exe, spotify.exe"
+                              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-primary"
+                            />
+                            <p className="text-[10px] text-zinc-500">Comma-separated process names that should stay at the top of the Audio Mixer list even when idle.</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* AI & Voice Assistant PTT Settings */}
+                      <div className="space-y-4 bg-zinc-950/40 p-5 rounded-xl border border-white/5">
+                        <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-2 border-b border-white/10 pb-2">
+                          <Zap size={14} className="text-amber-450" /> Voice Assistant & PTT Settings
+                        </h3>
+                        <div className="space-y-4">
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-zinc-300 font-medium">PTT Voice Assistant Brevity Limit</span>
+                              <span className="text-primary font-mono font-bold">{localPreferences.pttBrevityLimit} words</span>
+                            </div>
+                            <input 
+                              type="range" min="50" max="800" step="10"
+                              value={localPreferences.pttBrevityLimit}
+                              onChange={(e) => setLocalPreferences(s => ({ ...s, pttBrevityLimit: parseInt(e.target.value) }))}
+                              className="w-full accent-primary"
+                            />
+                            <p className="text-[10px] text-zinc-500">Restricts voice response cards length to ensure UI readability while in-game.</p>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Custom System Prompt Override</label>
+                            <textarea 
+                              value={localPreferences.systemPromptOverride}
+                              onChange={(e) => setLocalPreferences(s => ({ ...s, systemPromptOverride: e.target.value }))}
+                              placeholder="e.g. Act as a tactical military hardware computer. Keep answers under 2 sentences and focus on metrics."
+                              rows={3}
+                              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-primary resize-none"
+                            />
+                            <p className="text-[10px] text-zinc-500">Overrides the default agent prompt template. Useful for roleplays, brevity constraints or custom integrations.</p>
+                          </div>
+                        </div>
+                      </div>
+
+                    </div>
+                  )}
+
+                  {/* Hotkeys tab - lists all keyboard hotkeys */}
+                  {activeTab === 'hotkeys' && (
+                    <div className="space-y-6">
+                      <div className="space-y-2 bg-zinc-950/20 p-4 border border-dashed border-white/10 rounded-xl">
+                        <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-2">
+                          <Shield size={14} className="text-primary" /> Global Shortcuts Recorder
+                        </h3>
+                        <p className="text-xs text-zinc-400 leading-relaxed">
+                          Click <b>Record</b> and press any key combination. Shortcuts must include at least one modifier key (Ctrl, Alt, Shift, Win) or be a function key (F1-F12) to be valid. 
+                          Apply settings to load changes.
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {renderHotkeyField('Main Overlay Toggle', 'overlay')}
+                        {renderHotkeyField('Capture Screenshot', 'screenshot')}
+                        {renderHotkeyField('Toggle Video Recording', 'record')}
+                        {renderHotkeyField('Save Replay Clip', 'replay')}
+                        {renderHotkeyField('Toggle Timer', 'timer')}
+                        {renderHotkeyField('Reset Active Timers', 'timerReset')}
+                        {renderHotkeyField('Toggle Stopwatch', 'stopwatch')}
+                        {renderHotkeyField('Voice Assistant PTT', 'voicePtt')}
+                        {renderHotkeyField('Toggle Interactivity', 'interact')}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* General / System tab */}
+                  {activeTab === 'general' && (
+                    <div className="space-y-6">
+                      
+                      {/* Theme and fonts */}
+                      <div className="space-y-4 bg-zinc-950/40 p-5 rounded-xl border border-white/5">
+                        <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-2 border-b border-white/10 pb-2">
+                          <Palette size={14} className="text-primary" /> Visual Theme & Typography
+                        </h3>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">HUD Theme Preset</label>
+                            <select
+                              value={localPreferences.theme}
+                              onChange={(e) => setLocalPreferences(s => ({ ...s, theme: e.target.value }))}
+                              className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2 text-xs text-zinc-200 focus:outline-none appearance-none cursor-pointer"
+                            >
+                              <option value="default">Default VectorHUD Green</option>
+                              <option value="amber">Tactical Amber</option>
+                              <option value="neon_blue">Cyber Blue</option>
+                              <option value="matrix_green">Legacy Terminal Green</option>
+                              <option value="outrun_pink">Outrun Pink</option>
+                              <option value="custom">Custom Hex Preset</option>
+                            </select>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-zinc-300 font-medium">Base Font Size</span>
+                              <span className="text-primary font-mono font-bold">{localPreferences.globalFontSize}px</span>
+                            </div>
+                            <input 
+                              type="range" min="10" max="24" step="1"
+                              value={localPreferences.globalFontSize}
+                              onChange={(e) => setLocalPreferences(s => ({ ...s, globalFontSize: parseInt(e.target.value) }))}
+                              className="w-full accent-primary"
+                            />
+                          </div>
+                        </div>
+
+                        {localPreferences.theme === 'custom' && (
+                          <div className="space-y-2 pt-2 animate-fadeIn">
+                            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Custom Accent Color</label>
+                            <div className="flex gap-2.5 items-center">
+                              <input 
+                                type="color" 
+                                value={localPreferences.customColor}
+                                onChange={(e) => setLocalPreferences(s => ({ ...s, customColor: e.target.value }))}
+                                className="w-10 h-10 rounded bg-transparent border border-white/10 cursor-pointer"
+                              />
+                              <input 
+                                type="text" 
+                                value={localPreferences.customColor}
+                                onChange={(e) => setLocalPreferences(s => ({ ...s, customColor: e.target.value }))}
+                                className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-primary"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Backdrop parameters */}
+                      <div className="space-y-4 bg-zinc-950/40 p-5 rounded-xl border border-white/5">
+                        <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-2 border-b border-white/10 pb-2">
+                          <Sliders size={14} className="text-cyan-400" /> Overlay Backdrop Physics
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-zinc-300 font-medium">Backdrop Blur Strength</span>
+                              <span className="text-primary font-mono font-bold">{localPreferences.backgroundBlur}px</span>
+                            </div>
+                            <input 
+                              type="range" min="0" max="25" step="1"
+                              value={localPreferences.backgroundBlur}
+                              onChange={(e) => {
+                                setLocalPreferences(s => ({ ...s, backgroundBlur: parseInt(e.target.value) }));
+                                // Dynamic feedback preview
+                                document.documentElement.style.setProperty('--bg-blur-amount', `${e.target.value}px`);
+                              }}
+                              className="w-full accent-primary"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-zinc-300 font-medium">Backdrop Opacity Density</span>
+                              <span className="text-primary font-mono font-bold">{localPreferences.backdropOpacity}%</span>
+                            </div>
+                            <input 
+                              type="range" min="10" max="95" step="5"
+                              value={localPreferences.backdropOpacity}
+                              onChange={(e) => {
+                                setLocalPreferences(s => ({ ...s, backdropOpacity: parseInt(e.target.value) }));
+                                // Dynamic feedback preview
+                                document.documentElement.style.setProperty('--bg-opacity-amount', `${parseInt(e.target.value) / 100}`);
+                              }}
+                              className="w-full accent-primary"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* System and startup settings */}
+                      <div className="space-y-4 bg-zinc-950/40 p-5 rounded-xl border border-white/5">
+                        <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-2 border-b border-white/10 pb-2">
+                          <Settings size={14} className="text-indigo-400" /> Windows System Registry
+                        </h3>
+
+                        <div className="flex justify-between items-center bg-black/40 p-3.5 rounded-lg border border-white/5 text-xs">
+                          <div>
+                            <span className="text-zinc-200 font-bold block">Launch on Windows Startup</span>
+                            <span className="text-zinc-500 block">Automatically boots VectorHUD silently into system tray on login.</span>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input 
+                              type="checkbox" className="sr-only peer" 
+                              checked={localPreferences.launchOnStartup}
+                              onChange={(e) => setLocalPreferences(s => ({ ...s, launchOnStartup: e.target.checked }))}
+                            />
+                            <div className="w-11 h-6 bg-zinc-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent-green"></div>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Hard reset controls */}
+                      <div className="bg-red-950/20 border border-red-500/20 rounded-xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                          <h4 className="text-xs font-bold text-red-400 uppercase tracking-wider flex items-center gap-1.5">
+                            <AlertTriangle size={14} /> Danger Zone / Revert Presets
+                          </h4>
+                          <p className="text-xs text-zinc-500 mt-1">
+                            Resets all local coordinate positions, keyboard shortcuts, themes and widget sliders back to defaults.
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setShowConfirmReset(true)}
+                          className="px-4 py-2 border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-lg text-xs font-semibold tracking-wider uppercase transition-colors cursor-pointer self-start md:self-auto"
+                        >
+                          Reset Settings
+                        </button>
+                      </div>
+
+                    </div>
+                  )}
+
+                  {/* Diagnostics trace logs tab */}
+                  {activeTab === 'logs' && (
+                    <div className="flex flex-col h-full space-y-4">
+                      <div className="flex justify-between items-center border-b border-white/10 pb-3">
+                        <div>
+                          <h3 className="text-xs font-bold text-white font-mono uppercase tracking-wider flex items-center gap-2">
+                            <Terminal size={14} className="text-primary" /> Rolling Diagnostics Trace Output
+                          </h3>
+                          <p className="text-[10px] text-zinc-500 mt-0.5">
+                            Reading the last 200 trace and console lines from local daily logs.
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => setShowConfirmClearChat(true)}
+                            className="px-3 py-1.5 bg-red-950/30 hover:bg-red-950/60 border border-red-500/25 hover:border-red-500/40 text-red-400 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
+                          >
+                            <Trash2 size={13} /> Purge Chat History
+                          </button>
+                          
+                          <button
+                            onClick={loadLogs}
+                            disabled={isRefreshingLogs}
+                            className="px-3 py-1.5 bg-white/5 border border-white/10 hover:bg-white/10 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                          >
+                            <RefreshCw size={13} className={isRefreshingLogs ? 'animate-spin' : ''} /> Refresh Logs
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Rolling Monospaced Log Viewer */}
+                      <pre 
+                        ref={logsContainerRef}
+                        className="flex-1 p-4 bg-[#050505] border border-white/5 rounded-xl font-mono text-[10px] text-zinc-400 overflow-y-auto leading-relaxed custom-scrollbar max-h-[360px] whitespace-pre-wrap select-text"
+                      >
+                        {logsContent || 'Log stream is currently empty.'}
+                      </pre>
+                    </div>
+                  )}
+
+                  {/* Updates & about tab */}
+                  {activeTab === 'updates' && (
+                    <div className="space-y-6 flex flex-col h-full">
+                      <div className="flex flex-col items-center justify-center py-6 text-center">
+                        <div className="w-16 h-16 bg-gradient-to-tr from-primary to-emerald-500 rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-primary/10">
+                          <span className="text-3xl font-black text-white italic">V</span>
+                        </div>
+                        <h3 className="text-lg font-bold text-white tracking-wide">VectorHUD Overlay</h3>
+                        <p className="text-xs text-zinc-500 mt-1">Production Release: v{currentVersion}</p>
+                      </div>
+
+                      <div className="bg-black/20 border border-white/5 rounded-xl p-5 flex flex-col items-center justify-center gap-4 text-center">
+                        {updateInfo ? (
+                          <>
+                            <div className="flex items-center gap-3 text-green-400 font-semibold text-xs uppercase tracking-wider">
+                              <Download size={18} /> New Update Available!
+                            </div>
+                            <p className="text-zinc-300 text-sm">
+                              Version <strong className="text-white">v{updateInfo.version}</strong> is ready to download.
+                            </p>
+                            
+                            <button
+                              onClick={async () => {
+                                try {
+                                  setIsDownloadingUpdate(true);
+                                  setUpdateMessage('Downloading and installing bundle...');
+                                  await updateInfo.downloadAndInstall();
+                                  setUpdateMessage('Restarting app...');
+                                  await relaunch();
+                                } catch (err: any) {
+                                  console.error(err);
+                                  setUpdateMessage(`Update failed: ${err?.message || err}`);
+                                  setIsDownloadingUpdate(false);
+                                }
+                              }}
+                              disabled={isDownloadingUpdate}
+                              className="px-6 py-2 bg-primary text-black font-bold text-xs uppercase tracking-wider rounded-lg hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center gap-2 mt-2 cursor-pointer shadow-lg shadow-primary/15"
+                            >
+                              {isDownloadingUpdate ? (
+                                <><RefreshCw size={14} className="animate-spin" /> Installing...</>
+                              ) : (
+                                <><Download size={14} /> Download & Install</>
+                              )}
+                            </button>
+                            {updateMessage && <p className="text-xs text-zinc-400 mt-2">{updateMessage}</p>}
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex items-center justify-center w-10 h-10 bg-white/5 rounded-full mb-1">
+                              <CheckCircle2 size={20} className="text-zinc-405" />
+                            </div>
+                            <p className="text-zinc-350 text-xs font-semibold uppercase tracking-wider">VectorHUD is fully updated</p>
+                            <p className="text-[10px] text-zinc-650">The app checks registry distributions automatically at startup.</p>
+                            
+                            <button
+                              onClick={async () => {
+                                try {
+                                  setIsCheckingUpdate(true);
+                                  setUpdateMessage('Querying tauri releases...');
+                                  const update = await check();
+                                  if (update?.available) {
+                                    setUpdateInfo(update);
+                                    setUpdateMessage('');
+                                  } else {
+                                    setUpdateMessage('You are on the latest version.');
+                                    setTimeout(() => setUpdateMessage(''), 3000);
+                                  }
+                                } catch (error: any) {
+                                  console.error(`Update check failed: ${error}`);
+                                  setUpdateMessage(`Error: ${error?.message || error}`);
+                                } finally {
+                                  setIsCheckingUpdate(false);
+                                }
+                              }}
+                              disabled={isCheckingUpdate}
+                              className="mt-2 px-4 py-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2 cursor-pointer"
+                            >
+                              <RefreshCw size={12} className={isCheckingUpdate ? 'animate-spin' : ''} />
+                              {isCheckingUpdate ? 'Checking...' : 'Check for Updates'}
+                            </button>
+                            {updateMessage && <p className="text-xs text-zinc-400 mt-2">{updateMessage}</p>}
+                          </>
+                        )}
+                      </div>
+
+                      <div className="mt-auto pt-4 flex justify-between items-center text-xs text-zinc-500 border-t border-white/5 font-mono">
+                        <p>Built with ❤️ for Gamers</p>
+                        <button 
+                          onClick={() => openUrl("https://github.com/Francefernance12/VectorHUD")} 
+                          className="hover:text-white transition-colors cursor-pointer bg-transparent border-none text-xs"
+                        >
+                          View GitHub Repo
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Footer controls */}
+          <div className="p-4 border-t border-border-wire/40 bg-black/30 flex flex-col gap-2">
+            {hotkeyError && (
+              <div className="bg-red-950/30 border border-red-500/50 rounded-md p-3 mb-1">
+                <span className="text-xs font-mono text-red-400 whitespace-pre-wrap flex items-center gap-1.5">
+                  <AlertTriangle size={14} className="shrink-0" /> {hotkeyError}
+                </span>
               </div>
             )}
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-border-wire/50 bg-black/20 flex flex-col gap-2">
-          {hotkeyError && (
-            <div className="bg-red-900/30 border border-red-500/50 rounded-md p-3 mb-2">
-              <span className="text-xs font-mono text-red-400 whitespace-pre-wrap">
-                {hotkeyError}
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-mono text-primary font-bold">
+                {saveMessage}
               </span>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleClose}
+                  className="px-5 py-2 text-xs font-semibold text-zinc-400 hover:text-white hover:bg-white/5 rounded-lg border border-transparent hover:border-white/10 transition-all cursor-pointer uppercase tracking-wider"
+                >
+                  Close
+                </button>
+                <button 
+                  onClick={handleSave}
+                  disabled={isSaving}
+                  className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-black font-black px-6 py-2.5 rounded-lg text-xs uppercase tracking-widest transition-all disabled:opacity-50 cursor-pointer shadow-lg shadow-primary/10"
+                >
+                  {isSaving ? 'Saving...' : (
+                    <>
+                      <Save size={14} /> Apply Settings
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
-          )}
-          <div className="flex justify-between items-center">
-            <span className="text-xs font-mono text-emerald-400">
-              {saveMessage}
-            </span>
-            <button 
-            onClick={handleSave}
-            disabled={isSaving}
-            className="flex items-center gap-2 bg-primary hover:bg-primary/80 text-black font-bold px-6 py-2 rounded-lg transition-colors disabled:opacity-50"
-          >
-            {isSaving ? 'Saving...' : (
-              <>
-                <Save size={16} /> Apply Settings
-              </>
-            )}
-            </button>
           </div>
-        </div>
         </div>
       </motion.div>
 
-      {/* Unsaved Changes Confirm Dialog */}
+      {/* Confirmation Discard Modal */}
       <AnimatePresence>
         {showConfirmClose && (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="absolute inset-0 flex items-center justify-center z-[200] bg-black/60 pointer-events-auto"
+            className="absolute inset-0 flex items-center justify-center z-[200] bg-black/70 pointer-events-auto"
             onClick={(e) => { e.stopPropagation(); setShowConfirmClose(false); }}
           >
             <div 
-              className="bg-zinc-900 border border-border-wire rounded-xl shadow-2xl p-6 max-w-sm w-full mx-4"
+              className="bg-[#121212] border border-border-wire rounded-xl shadow-2xl p-6 max-w-sm w-full mx-4"
               onClick={e => e.stopPropagation()}
             >
-              <h3 className="text-lg font-bold text-white mb-2">Unsaved Changes</h3>
-              <p className="text-zinc-400 text-sm mb-6">
-                You have unsaved changes. Are you sure you want to discard them?
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono flex items-center gap-1.5">
+                <AlertTriangle size={16} className="text-amber-500" /> Unsaved Configuration
+              </h3>
+              <p className="text-zinc-400 text-xs leading-relaxed mt-2.5">
+                You have modifications that haven't been applied to VectorHUD. Are you sure you want to discard them?
               </p>
-              <div className="flex justify-end gap-3">
+              <div className="flex justify-end gap-3 mt-6">
                 <button 
                   onClick={() => setShowConfirmClose(false)}
-                  className="px-4 py-2 text-sm font-medium text-zinc-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                  className="px-4 py-2 text-xs font-bold text-zinc-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors cursor-pointer uppercase tracking-wider"
                 >
                   Cancel
                 </button>
                 <button 
                   onClick={handleConfirmDiscard}
-                  className="px-4 py-2 text-sm font-medium bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 rounded-lg transition-colors"
+                  className="px-4 py-2 text-xs font-bold bg-red-950/40 text-red-400 border border-red-500/30 hover:bg-red-500/30 rounded-lg transition-colors cursor-pointer uppercase tracking-wider"
                 >
                   Discard Changes
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Confirmation Reset Defaults Modal */}
+      <AnimatePresence>
+        {showConfirmReset && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="absolute inset-0 flex items-center justify-center z-[200] bg-black/70 pointer-events-auto"
+            onClick={(e) => { e.stopPropagation(); setShowConfirmReset(false); }}
+          >
+            <div 
+              className="bg-[#121212] border border-border-wire rounded-xl shadow-2xl p-6 max-w-sm w-full mx-4"
+              onClick={e => e.stopPropagation()}
+            >
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono flex items-center gap-1.5">
+                <RotateCcw size={16} className="text-red-500" /> Revert all presets?
+              </h3>
+              <p className="text-zinc-400 text-xs leading-relaxed mt-2.5">
+                This will overwrite hotkeys, polling rates, backdrop parameters and themes. This action cannot be undone.
+              </p>
+              <div className="flex justify-end gap-3 mt-6">
+                <button 
+                  onClick={() => setShowConfirmReset(false)}
+                  className="px-4 py-2 text-xs font-bold text-zinc-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors cursor-pointer uppercase tracking-wider"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleResetDefaults}
+                  className="px-4 py-2 text-xs font-bold bg-red-950/40 text-red-405 border border-red-500/30 hover:bg-red-500/30 rounded-lg transition-colors cursor-pointer uppercase tracking-wider"
+                >
+                  Revert to Default
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Confirmation Purge Chat History Modal */}
+      <AnimatePresence>
+        {showConfirmClearChat && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="absolute inset-0 flex items-center justify-center z-[200] bg-black/70 pointer-events-auto"
+            onClick={(e) => { e.stopPropagation(); setShowConfirmClearChat(false); }}
+          >
+            <div 
+              className="bg-[#121212] border border-border-wire rounded-xl shadow-2xl p-6 max-w-sm w-full mx-4"
+              onClick={e => e.stopPropagation()}
+            >
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono flex items-center gap-1.5">
+                <Trash2 size={16} className="text-red-500" /> Wipe Chat Threads?
+              </h3>
+              <p className="text-zinc-400 text-xs leading-relaxed mt-2.5">
+                This will permanently delete all saved threads and AI chat history from the local database.
+              </p>
+              <div className="flex justify-end gap-3 mt-6">
+                <button 
+                  onClick={() => setShowConfirmClearChat(false)}
+                  className="px-4 py-2 text-xs font-bold text-zinc-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors cursor-pointer uppercase tracking-wider"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleClearChatHistory}
+                  disabled={isClearingChat}
+                  className="px-4 py-2 text-xs font-bold bg-red-950/40 text-red-405 border border-red-500/30 hover:bg-red-500/30 rounded-lg transition-colors cursor-pointer uppercase tracking-wider disabled:opacity-50"
+                >
+                  {isClearingChat ? 'Wiping...' : 'Confirm Purge'}
                 </button>
               </div>
             </div>

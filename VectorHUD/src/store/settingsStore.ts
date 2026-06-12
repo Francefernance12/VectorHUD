@@ -26,6 +26,20 @@ interface SettingsState {
   timerResetHotkey: string;
   voicePttHotkey: string;
   interactHotkey: string;
+
+  // New settings fields
+  metricsPollInterval: number;
+  gpuTempAlertThreshold: number;
+  cpuTempAlertThreshold: number;
+  replayDuration: number;
+  excludeHudFromCapture: boolean;
+  favoriteMixerApps: string;
+  volumeStep: number;
+  pttBrevityLimit: number;
+  systemPromptOverride: string;
+  backgroundBlur: number;
+  backdropOpacity: number;
+  launchOnStartup: boolean;
   
   toggleSettings: () => void;
   setOpenRouterModel: (model: string) => Promise<void>;
@@ -51,6 +65,21 @@ interface SettingsState {
   setTimerResetHotkey: (hotkey: string) => Promise<void>;
   setVoicePttHotkey: (hotkey: string) => Promise<void>;
   setInteractHotkey: (hotkey: string) => Promise<void>;
+
+  // New settings setters
+  setMetricsPollInterval: (val: number) => Promise<void>;
+  setGpuTempAlertThreshold: (val: number) => Promise<void>;
+  setCpuTempAlertThreshold: (val: number) => Promise<void>;
+  setReplayDuration: (val: number) => Promise<void>;
+  setExcludeHudFromCapture: (val: boolean) => Promise<void>;
+  setFavoriteMixerApps: (val: string) => Promise<void>;
+  setVolumeStep: (val: number) => Promise<void>;
+  setPttBrevityLimit: (val: number) => Promise<void>;
+  setSystemPromptOverride: (val: string) => Promise<void>;
+  setBackgroundBlur: (val: number) => Promise<void>;
+  setBackdropOpacity: (val: number) => Promise<void>;
+  setLaunchOnStartup: (val: boolean) => Promise<void>;
+  
   loadPreferences: () => Promise<void>;
   syncHotkeys: () => Promise<void>;
 }
@@ -113,6 +142,19 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   timerResetHotkey: 'ctrl+alt+y',
   voicePttHotkey: 'ctrl+alt+v',
   interactHotkey: 'ctrl+alt+i',
+
+  metricsPollInterval: 1000,
+  gpuTempAlertThreshold: 80,
+  cpuTempAlertThreshold: 80,
+  replayDuration: 30,
+  excludeHudFromCapture: true,
+  favoriteMixerApps: 'chrome.exe, discord.exe, spotify.exe',
+  volumeStep: 5,
+  pttBrevityLimit: 320,
+  systemPromptOverride: '',
+  backgroundBlur: 8,
+  backdropOpacity: 60,
+  launchOnStartup: false,
 
   toggleSettings: () => set((state) => ({ isSettingsOpen: !state.isSettingsOpen })),
 
@@ -281,6 +323,102 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     set({ interactHotkey: hotkey });
   },
 
+  setMetricsPollInterval: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('metricsPollInterval', val);
+    await store.save();
+    set({ metricsPollInterval: val });
+  },
+
+  setGpuTempAlertThreshold: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('gpuTempAlertThreshold', val);
+    await store.save();
+    set({ gpuTempAlertThreshold: val });
+  },
+
+  setCpuTempAlertThreshold: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('cpuTempAlertThreshold', val);
+    await store.save();
+    set({ cpuTempAlertThreshold: val });
+  },
+
+  setReplayDuration: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('replayDuration', val);
+    await store.save();
+    set({ replayDuration: val });
+  },
+
+  setExcludeHudFromCapture: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('excludeHudFromCapture', val);
+    await store.save();
+    set({ excludeHudFromCapture: val });
+  },
+
+  setFavoriteMixerApps: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('favoriteMixerApps', val);
+    await store.save();
+    set({ favoriteMixerApps: val });
+  },
+
+  setVolumeStep: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('volumeStep', val);
+    await store.save();
+    set({ volumeStep: val });
+  },
+
+  setPttBrevityLimit: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('pttBrevityLimit', val);
+    await store.save();
+    set({ pttBrevityLimit: val });
+  },
+
+  setSystemPromptOverride: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('systemPromptOverride', val);
+    await store.save();
+    set({ systemPromptOverride: val });
+  },
+
+  setBackgroundBlur: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('backgroundBlur', val);
+    await store.save();
+    set({ backgroundBlur: val });
+    document.documentElement.style.setProperty('--bg-blur-amount', `${val}px`);
+  },
+
+  setBackdropOpacity: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('backdropOpacity', val);
+    await store.save();
+    set({ backdropOpacity: val });
+    document.documentElement.style.setProperty('--bg-opacity-amount', `${val / 100}`);
+  },
+
+  setLaunchOnStartup: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('launchOnStartup', val);
+    await store.save();
+    try {
+      const { enable, disable } = await import('@tauri-apps/plugin-autostart');
+      if (val) {
+        await enable();
+      } else {
+        await disable();
+      }
+    } catch (e) {
+      console.error('Failed to update autostart status:', e);
+    }
+    set({ launchOnStartup: val });
+  },
+
   loadPreferences: async () => {
     const store = await getSettingsStore();
     const model = await store.get<string>('openRouterModel');
@@ -307,8 +445,30 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const vpHot = await store.get<string>('voicePttHotkey');
     const iHot = await store.get<string>('interactHotkey');
 
+    // New preferences hydration
+    const mInterval = await store.get<number>('metricsPollInterval');
+    const gTemp = await store.get<number>('gpuTempAlertThreshold');
+    const cTemp = await store.get<number>('cpuTempAlertThreshold');
+    const rDur = await store.get<number>('replayDuration');
+    const exHud = await store.get<boolean>('excludeHudFromCapture');
+    const favApps = await store.get<string>('favoriteMixerApps');
+    const volStep = await store.get<number>('volumeStep');
+    const brevity = await store.get<number>('pttBrevityLimit');
+    const sysPrompt = await store.get<string>('systemPromptOverride');
+    const bgBlur = await store.get<number>('backgroundBlur');
+    const bdOpacity = await store.get<number>('backdropOpacity');
+    const startStartup = await store.get<boolean>('launchOnStartup');
+
     const finalTheme = theme || 'default';
     const finalColor = customColor || '#FF0000';
+
+    let finalLaunchOnStartup = startStartup !== undefined ? startStartup : false;
+    try {
+      const { isEnabled } = await import('@tauri-apps/plugin-autostart');
+      finalLaunchOnStartup = await isEnabled();
+    } catch (e) {
+      console.warn('Failed to check autostart status at load:', e);
+    }
 
     set({
       openRouterModel: model || 'google/gemini-2.5-flash',
@@ -334,6 +494,19 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       timerResetHotkey: trHot || 'ctrl+alt+y',
       voicePttHotkey: vpHot || 'ctrl+alt+v',
       interactHotkey: iHot || 'ctrl+alt+i',
+
+      metricsPollInterval: mInterval !== undefined ? mInterval : 1000,
+      gpuTempAlertThreshold: gTemp !== undefined ? gTemp : 80,
+      cpuTempAlertThreshold: cTemp !== undefined ? cTemp : 80,
+      replayDuration: rDur !== undefined ? rDur : 30,
+      excludeHudFromCapture: exHud !== undefined ? exHud : true,
+      favoriteMixerApps: favApps !== undefined ? favApps : 'chrome.exe, discord.exe, spotify.exe',
+      volumeStep: volStep !== undefined ? volStep : 5,
+      pttBrevityLimit: brevity !== undefined ? brevity : 320,
+      systemPromptOverride: sysPrompt !== undefined ? sysPrompt : '',
+      backgroundBlur: bgBlur !== undefined ? bgBlur : 8,
+      backdropOpacity: bdOpacity !== undefined ? bdOpacity : 60,
+      launchOnStartup: finalLaunchOnStartup,
     });
 
     applyThemeColors(finalTheme, finalColor);
@@ -347,6 +520,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     if (fontSize) {
       document.documentElement.style.setProperty('--base-font-size', `${fontSize}px`);
     }
+
+    const finalBlur = bgBlur !== undefined ? bgBlur : 8;
+    const finalOpacity = bdOpacity !== undefined ? bdOpacity : 60;
+    document.documentElement.style.setProperty('--bg-blur-amount', `${finalBlur}px`);
+    document.documentElement.style.setProperty('--bg-opacity-amount', `${finalOpacity / 100}`);
   },
 
   syncHotkeys: async () => {

@@ -619,6 +619,7 @@ pub fn run() {
             start_voice_recording,
             stop_voice_recording,
             commands::telemetry::frontend_log,
+            commands::telemetry::read_latest_logs,
             commands::api::sync_to_notion,
             commands::api::save_local_note,
             commands::api::open_notes_folder,

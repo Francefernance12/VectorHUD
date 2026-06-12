@@ -868,7 +868,12 @@ function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 shadow-[inset_0_0_100px_rgba(var(--accent-amber-rgb,0,0,0),0.1)] backdrop-blur-sm transition-all duration-300 pointer-events-auto z-[40]"
+            style={{
+              backgroundColor: `rgba(0, 0, 0, var(--bg-opacity-amount, 0.6))`,
+              backdropFilter: `blur(var(--bg-blur-amount, 8px))`,
+              WebkitBackdropFilter: `blur(var(--bg-blur-amount, 8px))`
+            }}
+            className="fixed inset-0 shadow-[inset_0_0_100px_rgba(var(--accent-amber-rgb,0,0,0),0.1)] transition-all duration-300 pointer-events-auto z-[40]"
             onClick={(e) => {
               // Only dismiss if they clicked directly on the backdrop, not on the widgets inside
               if (e.target === e.currentTarget) {
