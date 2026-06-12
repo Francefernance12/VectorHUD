@@ -43,6 +43,7 @@ export function NotionCaptureWidget() {
   const [editContent, setEditContent] = useState('');
   const [editTasks, setEditTasks] = useState<string[]>([]);
   const [isEditingLoading, setIsEditingLoading] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   useEffect(() => {
     if (activeTab === 'notes') {
@@ -152,6 +153,8 @@ export function NotionCaptureWidget() {
 
   const handleUpdateNote = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (isSavingEdit) return;
+    setIsSavingEdit(true);
     try {
         const creds = await getNotionCreds();
         await invoke('update_notion_page_full', { 
@@ -170,6 +173,8 @@ export function NotionCaptureWidget() {
         logger.info(`Updated note ${id}`);
     } catch (err) {
         logger.error(`Failed to update note: ${getErrorMessage(err)}`);
+    } finally {
+        setIsSavingEdit(false);
     }
   };
 
@@ -551,7 +556,9 @@ export function NotionCaptureWidget() {
                                
                                <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-zinc-800/50">
                                   <button onClick={(e) => { e.stopPropagation(); setEditingNoteId(null); }} className="text-xs px-4 py-2 bg-zinc-800 text-zinc-400 border border-zinc-700 hover:bg-zinc-700 hover:text-white transition-colors uppercase tracking-widest font-bold">Cancel</button>
-                                  <button onClick={(e) => handleUpdateNote(note.id, e)} disabled={isEditingLoading} className="text-xs px-4 py-2 bg-accent-green/20 text-accent-green border border-accent-green/30 hover:bg-accent-green hover:text-black transition-colors uppercase tracking-widest font-bold disabled:opacity-50">Save Changes</button>
+                                  <button onClick={(e) => handleUpdateNote(note.id, e)} disabled={isEditingLoading || isSavingEdit} className="text-xs px-4 py-2 bg-accent-green/20 text-accent-green border border-accent-green/30 hover:bg-accent-green hover:text-black transition-colors uppercase tracking-widest font-bold disabled:opacity-50">
+                                    {isSavingEdit ? 'Saving...' : 'Save Changes'}
+                                  </button>
                                </div>
                              </>
                            )}
