@@ -1971,6 +1971,9 @@ export function SettingsModal() {
                                 className="w-full accent-primary"
                               />
                             </div>
+                            <p className="text-[10px] text-zinc-500 md:col-span-2 mt-1">
+                              Note: CPU temperature monitoring on Windows requires running the application as Administrator. GPU monitoring is supported without admin rights.
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -2063,7 +2066,7 @@ export function SettingsModal() {
                               onChange={(e) => setLocalPreferences(s => ({ ...s, pttBrevityLimit: parseInt(e.target.value) }))}
                               className="w-full accent-primary"
                             />
-                            <p className="text-xs text-zinc-500 font-sans">Limits the length of the voice assistant's response so it fits nicely on your screen during gameplay.</p>
+                            <p className="text-xs text-zinc-500 font-sans">Controls the maximum length of the AI assistant's responses.</p>
                           </div>
 
                           <div className="space-y-1.5">
@@ -2460,9 +2463,9 @@ export function SettingsModal() {
                           <Volume2 size={14} className="text-accent-green" /> Speaker / Playback Output
                         </h3>
                         
-                        <div className="space-y-2">
+                        <div className="space-y-2 min-w-0 w-full">
                           <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider block">Speaker / Output Device</label>
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-3 min-w-0 w-full">
                             <select
                               value={localPreferences.selectedAudioOutput}
                               onChange={(e) => setLocalPreferences(s => ({ ...s, selectedAudioOutput: e.target.value }))}
@@ -2504,9 +2507,9 @@ export function SettingsModal() {
                           <Mic size={14} className="text-accent-green" /> Microphone / Capture Input
                         </h3>
 
-                        <div className="space-y-2">
+                        <div className="space-y-2 min-w-0 w-full">
                           <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider block">Microphone / Input Device</label>
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-3 min-w-0 w-full">
                             <select
                               value={localPreferences.selectedAudioInput}
                               onChange={(e) => setLocalPreferences(s => ({ ...s, selectedAudioInput: e.target.value }))}

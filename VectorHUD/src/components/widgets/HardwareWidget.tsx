@@ -101,7 +101,7 @@ export function HardwareWidget() {
       <div className="flex flex-col space-y-1">
         <div className="flex justify-between items-center text-xs">
           <span className={`font-bold tracking-widest flex items-center gap-1.5 ${cpuOverheated ? 'text-red-500 animate-pulse' : 'text-accent-green'}`}>
-            CPU {cpuTemp !== null ? `(${cpuTemp}°C)` : ''}
+            CPU {cpuTemp !== null ? `(${cpuTemp}°C)` : '(--°C)'}
             {cpuOverheated && <AlertTriangle size={12} className="text-red-500 animate-bounce" />}
           </span>
           <span className={`font-bold ${cpuOverheated ? 'text-red-500' : 'text-accent-green'}`}>{cpuUsage}%</span>
@@ -118,7 +118,7 @@ export function HardwareWidget() {
       <div className="flex flex-col space-y-1">
         <div className="flex justify-between items-center text-xs">
           <span className={`font-bold tracking-widest flex items-center gap-1.5 ${gpuOverheated ? 'text-red-500 animate-pulse' : 'text-accent-green'}`}>
-            GPU {gpuTemp !== null ? `(${gpuTemp}°C)` : ''}
+            GPU {gpuTemp !== null ? `(${gpuTemp}°C)` : '(--°C)'}
             {gpuOverheated && <AlertTriangle size={12} className="text-red-500 animate-bounce" />}
           </span>
           <span className={`font-bold ${gpuOverheated ? 'text-red-500' : 'text-accent-green'}`}>{gpuUsage}%</span>

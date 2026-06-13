@@ -293,7 +293,7 @@ export function AudioHubWidget() {
   };
 
   return (
-    <div className="flex flex-col h-full text-text-primary font-mono text-sm p-4 space-y-6 overflow-y-auto custom-scrollbar">
+    <div className="flex flex-col h-full text-text-primary font-mono text-sm p-4 space-y-6 overflow-y-auto overflow-x-hidden w-full min-w-0 custom-scrollbar">
       
       {/* Media Player Section */}
       {currentMedia && (
@@ -323,13 +323,13 @@ export function AudioHubWidget() {
       )}
 
       {/* Hardware Interface Selectors & VU Meters */}
-      <div className="flex flex-col space-y-4 bg-black/45 border border-white/5 p-3 rounded-lg">
+      <div className="flex flex-col space-y-4 bg-black/45 border border-white/5 p-3 rounded-lg min-w-0 w-full overflow-hidden">
         <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Hardware Interfaces</div>
         
         {/* Output Selector & Test */}
-        <div className="flex flex-col space-y-2">
+        <div className="flex flex-col space-y-2 min-w-0 w-full">
           <label className="text-xs text-zinc-400">Speaker / Output Device</label>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0 w-full">
             <select
               value={selectedAudioOutput}
               onChange={(e) => setSelectedAudioOutput(e.target.value)}
@@ -361,8 +361,8 @@ export function AudioHubWidget() {
         </div>
 
         {/* Input Selector & Volume */}
-        <div className="flex flex-col space-y-2">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col space-y-2 min-w-0 w-full">
+          <div className="flex items-center gap-2 min-w-0 w-full">
             <select
               value={selectedAudioInput}
               onChange={(e) => setSelectedAudioInput(e.target.value)}
