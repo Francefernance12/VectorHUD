@@ -111,7 +111,7 @@ impl VoiceRecorder {
             cpal::SampleFormat::F32 => device.build_input_stream(
                 config.into(),
                 move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                    let mut buf = samples_clone.lock().unwrap();
+                    let mut buf = samples_clone.lock().unwrap_or_else(|e| e.into_inner());
                     if buf.len() >= max_samples {
                         return;
                     }
@@ -130,7 +130,7 @@ impl VoiceRecorder {
             cpal::SampleFormat::I16 => device.build_input_stream(
                 config.into(),
                 move |data: &[i16], _: &cpal::InputCallbackInfo| {
-                    let mut buf = samples_clone.lock().unwrap();
+                    let mut buf = samples_clone.lock().unwrap_or_else(|e| e.into_inner());
                     if buf.len() >= max_samples {
                         return;
                     }
@@ -147,7 +147,7 @@ impl VoiceRecorder {
             cpal::SampleFormat::U16 => device.build_input_stream(
                 config.into(),
                 move |data: &[u16], _: &cpal::InputCallbackInfo| {
-                    let mut buf = samples_clone.lock().unwrap();
+                    let mut buf = samples_clone.lock().unwrap_or_else(|e| e.into_inner());
                     if buf.len() >= max_samples {
                         return;
                     }
@@ -180,7 +180,11 @@ impl VoiceRecorder {
     }
 
     pub fn get_wav_bytes(&self) -> Result<Vec<u8>, String> {
-        let raw_samples = self.samples.lock().unwrap().clone();
+        let raw_samples = self
+            .samples
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
         encode_wav(&raw_samples, self.sample_rate, self.channels)
     }
 }

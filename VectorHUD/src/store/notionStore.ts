@@ -1,6 +1,21 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+export interface NotionNote {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  date: string;
+}
+
+export interface NotionBlock {
+  id: string;
+  b_type: string;
+  task_text: string;
+  checked: boolean;
+}
+
 interface NotionDraft {
   title: string;
   description: string;
@@ -14,12 +29,12 @@ interface NotionState {
   clearDraft: () => void;
   activeTab: 'draft' | 'notes';
   setActiveTab: (tab: 'draft' | 'notes') => void;
-  notes: any[];
-  setNotes: (notes: any[]) => void;
+  notes: NotionNote[];
+  setNotes: (notes: NotionNote[]) => void;
   expandedNoteId: string | null;
   setExpandedNoteId: (id: string | null) => void;
-  noteBlocks: Record<string, any[]>;
-  setNoteBlocks: (blocks: Record<string, any[]>) => void;
+  noteBlocks: Record<string, NotionBlock[]>;
+  setNoteBlocks: (blocks: Record<string, NotionBlock[]>) => void;
 }
 
 const defaultDraft: NotionDraft = {

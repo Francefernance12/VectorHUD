@@ -13,6 +13,7 @@ import { useSettingsStore } from '../store/settingsStore';
 import { useShallow } from 'zustand/react/shallow';
 import { invoke } from '@tauri-apps/api/core';
 import { getDb } from '../utils/db';
+import { getErrorMessage } from '../types';
 
 export function SettingsModal() {
   const { 
@@ -2703,9 +2704,10 @@ export function SettingsModal() {
                                   await updateInfo.downloadAndInstall();
                                   setUpdateMessage('Restarting app...');
                                   await relaunch();
-                                } catch (err: any) {
+                                } catch (err: unknown) {
                                   console.error(err);
-                                  setUpdateMessage(`Update failed: ${err?.message || err}`);
+                                  const errMsg = err instanceof Error ? err.message : String(err);
+                                  setUpdateMessage(`Update failed: ${errMsg}`);
                                   setIsDownloadingUpdate(false);
                                 }
                               }}
@@ -2741,9 +2743,9 @@ export function SettingsModal() {
                                     setUpdateMessage('You are on the latest version.');
                                     setTimeout(() => setUpdateMessage(''), 3000);
                                   }
-                                } catch (error: any) {
+                                } catch (error: unknown) {
                                   console.error(`Update check failed: ${error}`);
-                                  setUpdateMessage(`Error: ${error?.message || error}`);
+                                  setUpdateMessage(`Error: ${getErrorMessage(error)}`);
                                 } finally {
                                   setIsCheckingUpdate(false);
                                 }

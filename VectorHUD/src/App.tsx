@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { check } from '@tauri-apps/plugin-updater';
 import { AnimatePresence, motion } from "framer-motion";
-import { logger } from "./utils/logger";
+import { logger, sanitizeError } from "./utils/logger";
 import { getDb } from "./utils/db";
 import { setSetting, getSetting } from "./utils/store";
 import { useShellStore } from "./store/shellStore";
@@ -115,9 +115,10 @@ function App() {
         showToast("🎙️ Voice Assistant: No speech detected");
         setPttState('idle');
       }
-    } catch (err: any) {
-      logger.error(`PTT transcription failed: ${err?.message || String(err)}`);
-      showToast(`🎙️ Transcription failed: ${err?.message || String(err)}`);
+    } catch (err: unknown) {
+      const errMsg = sanitizeError(err);
+      logger.error(`PTT transcription failed: ${errMsg}`);
+      showToast(`🎙️ Transcription failed: ${errMsg}`);
       setPttState('idle');
     }
   };
@@ -344,9 +345,10 @@ function App() {
       setPttState('response');
       setShowPttResponse(true);
 
-    } catch (err: any) {
-      logger.error(`PTT AI assistant error: ${err?.message || String(err)}`);
-      showToast(`🎙️ Voice Assistant error: ${err?.message || String(err)}`);
+    } catch (err: unknown) {
+      const errMsg = sanitizeError(err);
+      logger.error(`PTT AI assistant error: ${errMsg}`);
+      showToast(`🎙️ Voice Assistant error: ${errMsg}`);
       setPttState('idle');
     }
   };

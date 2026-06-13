@@ -140,3 +140,11 @@ This document tracks all important decisions made throughout the lifecycle of th
 - **Reasoning:** Extremely small font sizes degrade visual accessibility under different screen resolutions. Aligning to a minimum `text-xs` baseline ensures the Tactical Gamer's HUD remains highly readable while preserving its technical, clean appearance.
 
 
+
+## Session 21: Code Optimization & Hardening
+
+- **Decision:** Rely on duration-based trimming for the 30-second rolling replay buffer. Bounding by duration naturally constrains memory usage and avoids continuous GPU/RAM inspection overhead, which is the most optimal approach.
+- **Decision:** Shifted transcription API requests to the backend (`transcribe_audio_api`) to keep API keys secure and enforce clean architectural boundaries.
+- **Decision:** Standardized on strict types instead of `any`, including typing all caught errors as `unknown` and using a central sanitizing error utility.
+- **Decision:** Implemented client-side API key redaction in logging/toasts via `sanitizeError`.
+- **Decision:** Clamped Hardware Metrics Polling Rate to a safe `1000`–`10000` ms range.

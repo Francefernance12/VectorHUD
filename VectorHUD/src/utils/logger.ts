@@ -86,3 +86,23 @@ export const logger = {
   },
 };
 
+/**
+ * Sanitizes errors by redacting any API keys or credentials.
+ */
+export function sanitizeError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg
+    // Redact OpenAI keys: sk-[a-zA-Z0-9_-]{20,}
+    .replace(/\bsk-[a-zA-Z0-9_-]{20,}\b/g, '[REDACTED_OPENAI_KEY]')
+    // Redact Anthropic keys: sk-ant-[a-zA-Z0-9_-]{20,}
+    .replace(/\bsk-ant-[a-zA-Z0-9_-]{20,}\b/g, '[REDACTED_ANTHROPIC_KEY]')
+    // Redact Groq keys: gsk_[a-zA-Z0-9_-]{20,}
+    .replace(/\bgsk_[a-zA-Z0-9_-]{20,}\b/g, '[REDACTED_GROQ_KEY]')
+    // Redact Notion secrets: secret_[a-zA-Z0-9_-]{20,}
+    .replace(/\bsecret_[a-zA-Z0-9_-]{20,}\b/g, '[REDACTED_NOTION_SECRET]')
+    // Generic authorization token / Bearer pattern
+    .replace(/Bearer\s+[a-zA-Z0-9_\-\.]+/gi, 'Bearer [REDACTED]')
+    // Generic long hex strings (40+ characters)
+    .replace(/\b[a-fA-F0-9]{40,}\b/g, '[REDACTED_KEY]');
+}
+

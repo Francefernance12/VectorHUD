@@ -411,6 +411,9 @@ pub fn spawn_metrics_thread(app: AppHandle, shutdown: Arc<AtomicBool>) {
         let mut last_valid_app: Option<String> = None;
         let mut last_valid_fs: Option<bool> = None;
 
+        let mut loop_counter = 0;
+        let mut sleep_ms = 1000;
+
         loop {
             // Check if the application has requested shutdown
             if shutdown.load(Ordering::Relaxed) {
@@ -529,8 +532,28 @@ pub fn spawn_metrics_thread(app: AppHandle, shutdown: Arc<AtomicBool>) {
             // Emit the event to the frontend
             let _ = app.emit("hardware-metrics-update", metrics);
 
-            // Wait 1 second before polling again
-            std::thread::sleep(Duration::from_secs(1));
+            // Reload settings every 5 iterations to minimize disk I/O
+            if loop_counter % 5 == 0 {
+                let path = std::path::PathBuf::from("settings.json");
+                if let Ok(store) = tauri_plugin_store::StoreBuilder::new(&app, path).build() {
+                    let _ = store.reload();
+                    if let Some(val) = store.get("metricsPollInterval") {
+                        if let Some(interval) = val.as_u64() {
+                            sleep_ms = interval;
+                        } else if let Some(interval) = val.as_f64() {
+                            sleep_ms = interval as u64;
+                        }
+                    }
+                }
+
+                // Clamp sleep_ms between 1000ms and 10000ms
+                sleep_ms = sleep_ms.clamp(1000, 10000);
+            }
+
+            loop_counter += 1;
+
+            // Wait configured sleep duration before polling again
+            std::thread::sleep(Duration::from_millis(sleep_ms));
         }
     });
 }

@@ -33,6 +33,9 @@ vi.mock('@tauri-apps/api/core', () => ({
     if (cmd === 'decrypt_data') {
       return Promise.resolve(args.encoded === 'enc_groq' ? 'dec_groq_key' : 'dec_openai_key');
     }
+    if (cmd === 'transcribe_audio_api') {
+      return Promise.resolve('Hello world transcription');
+    }
     return Promise.resolve();
   }
 }));
@@ -186,8 +189,8 @@ describe('aiActions', () => {
 
     it('should search notion tasks matching query', async () => {
       const notes = [
-        { id: '1', title: 'Buy milk', description: 'Grocery shopping', status: 'Not started' },
-        { id: '2', title: 'Code VectorHUD', description: 'Implement tool calling', status: 'In progress' }
+        { id: '1', title: 'Buy milk', description: 'Grocery shopping', status: 'Not started', date: '2026-06-01' },
+        { id: '2', title: 'Code VectorHUD', description: 'Implement tool calling', status: 'In progress', date: '2026-06-02' }
       ];
       useNotionStore.setState({ notes });
       const res = await executeTool('search_notion_tasks', { query: 'vectorhud' });
@@ -203,7 +206,7 @@ describe('aiActions', () => {
 
     it('should handle notion task search no matches', async () => {
       const notes = [
-        { id: '1', title: 'Buy milk', description: 'Grocery shopping', status: 'Not started' }
+        { id: '1', title: 'Buy milk', description: 'Grocery shopping', status: 'Not started', date: '2026-06-01' }
       ];
       useNotionStore.setState({ notes });
       const res = await executeTool('search_notion_tasks', { query: 'nonexistent' });
@@ -451,19 +454,21 @@ describe('aiActions', () => {
         if (cmd === 'decrypt_data' && args.encoded === 'enc_groq') {
           return Promise.resolve('dec_groq_key');
         }
+        if (cmd === 'transcribe_audio_api') {
+          return Promise.resolve('Hello world transcription');
+        }
         return Promise.resolve('');
       });
 
       const result = await transcribeAudio('data:audio/wav;base64,AAAA');
       expect(result).toBe('Hello world transcription');
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.groq.com/openai/v1/audio/transcriptions',
-        expect.objectContaining({
-          method: 'POST',
-          headers: {
-            'Authorization': 'Bearer dec_groq_key'
-          }
-        })
+      expect(mockInvoke).toHaveBeenLastCalledWith(
+        'transcribe_audio_api',
+        {
+          provider: 'groq',
+          apiKey: 'dec_groq_key',
+          base64Wav: 'data:audio/wav;base64,AAAA'
+        }
       );
     });
 
@@ -482,19 +487,21 @@ describe('aiActions', () => {
         if (cmd === 'decrypt_data' && args.encoded === 'enc_openai') {
           return Promise.resolve('dec_openai_key');
         }
+        if (cmd === 'transcribe_audio_api') {
+          return Promise.resolve('Hello world transcription');
+        }
         return Promise.resolve('');
       });
 
       const result = await transcribeAudio('data:audio/wav;base64,AAAA');
       expect(result).toBe('Hello world transcription');
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.openai.com/v1/audio/transcriptions',
-        expect.objectContaining({
-          method: 'POST',
-          headers: {
-            'Authorization': 'Bearer dec_openai_key'
-          }
-        })
+      expect(mockInvoke).toHaveBeenLastCalledWith(
+        'transcribe_audio_api',
+        {
+          provider: 'openai',
+          apiKey: 'dec_openai_key',
+          base64Wav: 'data:audio/wav;base64,AAAA'
+        }
       );
     });
   });

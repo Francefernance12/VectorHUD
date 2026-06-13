@@ -87,8 +87,9 @@ export function OpenRouterWidget() {
       if (text.trim()) {
         setInput(text.trim());
       }
-    } catch (err: any) {
-      showToast(`🎙️ Transcription failed: ${err?.message || String(err)}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      showToast(`🎙️ Transcription failed: ${errMsg}`);
     }
   };
 
@@ -99,8 +100,9 @@ export function OpenRouterWidget() {
         await invoke('start_voice_recording', { deviceName: selectedAudioInput });
         setIsRecordingMic(true);
         setMicSeconds(30);
-      } catch (err: any) {
-        showToast(`🎙️ Failed to start mic: ${err?.message || String(err)}`);
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        showToast(`🎙️ Failed to start mic: ${errMsg}`);
       }
     } else {
       await stopAndTranscribe();

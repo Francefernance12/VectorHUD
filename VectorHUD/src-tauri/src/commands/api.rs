@@ -1040,3 +1040,106 @@ pub async fn call_ai_api(
         }
     }
 }
+
+#[tauri::command]
+pub async fn transcribe_audio_api(
+    provider: String,
+    api_key: String,
+    base64_wav: String,
+) -> Result<String, String> {
+    tracing::info!("transcribe_audio_api: provider='{}'", provider);
+
+    if api_key.is_empty() {
+        return Err("API key is missing".to_string());
+    }
+
+    if base64_wav.is_empty() {
+        return Err("Audio data is empty".to_string());
+    }
+
+    // Parse base64
+    let base64_data = if let Some(comma_idx) = base64_wav.find(',') {
+        &base64_wav[comma_idx + 1..]
+    } else {
+        &base64_wav
+    };
+
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+    let wav_bytes = STANDARD
+        .decode(base64_data)
+        .map_err(|e| format!("Failed to decode base64 audio: {}", e))?;
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
+
+    let (url, model) = match provider.as_str() {
+        "groq" => (
+            "https://api.groq.com/openai/v1/audio/transcriptions",
+            "whisper-large-v3",
+        ),
+        "openai" => (
+            "https://api.openai.com/v1/audio/transcriptions",
+            "whisper-1",
+        ),
+        _ => return Err(format!("Unsupported transcription provider: {}", provider)),
+    };
+
+    // Construct multipart form
+    use reqwest::multipart;
+    let part = multipart::Part::bytes(wav_bytes)
+        .file_name("speech.wav")
+        .mime_str("audio/wav")
+        .map_err(|e| format!("Failed to set mime type: {}", e))?;
+
+    let form = multipart::Form::new()
+        .text("model", model)
+        .part("file", part);
+
+    let res = client
+        .post(url)
+        .header("Authorization", format!("Bearer {}", api_key))
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|e| format!("HTTP request to {} transcription failed: {}", provider, e))?;
+
+    let status = res.status();
+    let raw_text = res
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read response body: {}", e))?;
+
+    if !status.is_success() {
+        tracing::error!(
+            "Transcription API Error ({}): Raw Body: {}",
+            status,
+            raw_text
+        );
+        if let Ok(data) = serde_json::from_str::<serde_json::Value>(&raw_text) {
+            if let Some(err_msg) = data
+                .get("error")
+                .and_then(|e| e.get("message"))
+                .and_then(|m| m.as_str())
+            {
+                return Err(format!("Transcription API Error: {}", err_msg));
+            }
+        }
+        return Err(format!(
+            "Transcription request failed with status {}",
+            status
+        ));
+    }
+
+    let data: serde_json::Value = serde_json::from_str(&raw_text)
+        .map_err(|e| format!("Failed to parse response JSON: {}", e))?;
+
+    let text = data
+        .get("text")
+        .and_then(|t| t.as_str())
+        .ok_or_else(|| "Transcription response contains no text".to_string())?
+        .to_string();
+
+    Ok(text)
+}

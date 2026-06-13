@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { useTimerStore } from '../store/timerStore';
 import { useHardwareStore } from '../store/hardwareStore';
-import { useNotionStore } from '../store/notionStore';
+import { useNotionStore, NotionNote } from '../store/notionStore';
 import { useShellStore } from '../store/shellStore';
 import { useAudioStore } from '../store/audioStore';
 import { useSettingsStore } from '../store/settingsStore';
@@ -288,11 +288,11 @@ export function getAnthropicTools() {
   }));
 }
 
-export async function executeTool(name: string, args: any): Promise<string> {
+export async function executeTool(name: string, args: Record<string, unknown>): Promise<string> {
   try {
     switch (name) {
       case 'set_master_volume': {
-        const volInput = args.volume_percent !== undefined ? args.volume_percent : args.volume;
+        const volInput = args['volume_percent'] !== undefined ? args['volume_percent'] : args['volume'];
         let vol = Number(volInput);
         if (isNaN(vol)) {
           return "Error: volume must be a number between 0 and 100.";
@@ -314,7 +314,7 @@ export async function executeTool(name: string, args: any): Promise<string> {
         return "Success: toggled master system mute state.";
       }
       case 'media_control': {
-        const cmd = args.command;
+        const cmd = args['command'] as string | undefined;
         if (cmd === 'play_pause') {
           await invoke('media_play_pause');
         } else if (cmd === 'next') {
@@ -327,7 +327,7 @@ export async function executeTool(name: string, args: any): Promise<string> {
         return `Success: media command '${cmd}' executed.`;
       }
       case 'start_timer': {
-        const sec = Number(args.duration_seconds);
+        const sec = Number(args['duration_seconds']);
         if (isNaN(sec) || sec <= 0) {
           return "Error: duration must be greater than 0.";
         }
@@ -340,7 +340,7 @@ export async function executeTool(name: string, args: any): Promise<string> {
         return "Success: reset countdown timer.";
       }
       case 'control_stopwatch': {
-        const cmd = args.command;
+        const cmd = args['command'] as string | undefined;
         if (cmd === 'start') {
           useTimerStore.getState().startSw();
         } else if (cmd === 'pause') {
@@ -378,7 +378,7 @@ export async function executeTool(name: string, args: any): Promise<string> {
         return "Success: silent screenshot captured and saved to gallery.";
       }
       case 'search_notion_tasks': {
-        const query = String(args.query || '').toLowerCase();
+        const query = String(args['query'] || '').toLowerCase();
         const notes = await ensureNotionNotesLoaded();
         if (notes.length === 0) {
           return "No Notion notes or tasks loaded in database. Ask user to fetch notes first.";
@@ -394,13 +394,15 @@ export async function executeTool(name: string, args: any): Promise<string> {
       }
       case 'fill_notion_draft': {
         const draftState = useNotionStore.getState().draft;
-        const title = args.title !== undefined ? String(args.title) : draftState.title;
-        const description = args.description !== undefined ? String(args.description) : draftState.description;
-        const content = args.content !== undefined ? String(args.content) : draftState.content;
+        const title = args['title'] !== undefined ? String(args['title']) : draftState.title;
+        const description = args['description'] !== undefined ? String(args['description']) : draftState.description;
+        const content = args['content'] !== undefined ? String(args['content']) : draftState.content;
         
         let tasks = draftState.tasks;
-        if (args.tasks !== undefined) {
-          const newTasks = Array.isArray(args.tasks) ? args.tasks.map((t: any) => String(t).trim()).filter(Boolean) : [String(args.tasks).trim()];
+        if (args['tasks'] !== undefined) {
+          const newTasks = Array.isArray(args['tasks']) 
+            ? args['tasks'].map((t: unknown) => String(t).trim()).filter(Boolean) 
+            : [String(args['tasks']).trim()];
           const existingTasks = tasks.map(t => t.trim()).filter(Boolean);
           
           // Merge preserving order, ignoring duplicates case-insensitively
@@ -418,7 +420,7 @@ export async function executeTool(name: string, args: any): Promise<string> {
         return "Success: populated Notion draft form and selected draft tab.";
       }
       case 'list_notion_tasks': {
-        const limit = Number(args.limit || 10);
+        const limit = Number(args['limit'] || 10);
         const notes = await ensureNotionNotesLoaded();
         if (notes.length === 0) {
           return "No Notion notes or tasks loaded in database. Ask user to fetch notes first.";
@@ -427,11 +429,11 @@ export async function executeTool(name: string, args: any): Promise<string> {
         return JSON.stringify(limited.map(n => ({ id: n.id, title: n.title, description: n.description, status: n.status, date: n.date })));
       }
       case 'query_notion_db': {
-        const query = String(args.query || '').toLowerCase();
-        const status = args.status ? String(args.status).toLowerCase() : null;
-        const sort_by = args.sort_by || 'date';
-        const sort_order = args.sort_order || 'desc';
-        const limit = Number(args.limit || 10);
+        const query = String(args['query'] || '').toLowerCase();
+        const status = args['status'] ? String(args['status']).toLowerCase() : null;
+        const sort_by = (args['sort_by'] as string) || 'date';
+        const sort_order = (args['sort_order'] as string) || 'desc';
+        const limit = Number(args['limit'] || 10);
 
         let notes = await ensureNotionNotesLoaded();
         if (notes.length === 0) {
@@ -450,8 +452,8 @@ export async function executeTool(name: string, args: any): Promise<string> {
         }
 
         filtered.sort((a, b) => {
-          let valA: any = '';
-          let valB: any = '';
+          let valA: string | number = '';
+          let valB: string | number = '';
 
           if (sort_by === 'date') {
             valA = a.date ? new Date(a.date).getTime() : 0;
@@ -508,7 +510,7 @@ export async function executeTool(name: string, args: any): Promise<string> {
         const path = await invoke<string>('start_video_recording', { micEnabled, audioEnabled });
         useRecordingStore.getState().setRecording(true);
 
-        const duration = args.duration_seconds ? Number(args.duration_seconds) : undefined;
+        const duration = args['duration_seconds'] ? Number(args['duration_seconds']) : undefined;
         if (duration && !isNaN(duration) && duration > 0) {
           if (activeRecordingTimeout) {
             clearTimeout(activeRecordingTimeout);
@@ -574,12 +576,13 @@ export async function executeTool(name: string, args: any): Promise<string> {
       default:
         return `Error: unknown tool function '${name}'.`;
     }
-  } catch (err: any) {
-    return `Error executing tool '${name}': ${err?.message || String(err)}`;
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    return `Error executing tool '${name}': ${errMsg}`;
   }
 }
 
-async function ensureNotionNotesLoaded(): Promise<any[]> {
+async function ensureNotionNotesLoaded(): Promise<NotionNote[]> {
   const currentNotes = useNotionStore.getState().notes || [];
   if (currentNotes.length > 0) {
     return currentNotes;
@@ -621,16 +624,12 @@ export async function transcribeAudio(base64Wav: string): Promise<string> {
 
   let apiKey = '';
   let provider = '';
-  let model = '';
-  let url = '';
 
   if (groqKeyRes.length > 0) {
     const rawKey = await invoke<string>('decrypt_data', { encoded: groqKeyRes[0].encrypted_value });
     if (rawKey && rawKey.trim() !== '') {
       apiKey = rawKey.trim();
       provider = 'groq';
-      model = 'whisper-large-v3';
-      url = 'https://api.groq.com/openai/v1/audio/transcriptions';
     }
   }
 
@@ -639,8 +638,6 @@ export async function transcribeAudio(base64Wav: string): Promise<string> {
     if (rawKey && rawKey.trim() !== '') {
       apiKey = rawKey.trim();
       provider = 'openai';
-      model = 'whisper-1';
-      url = 'https://api.openai.com/v1/audio/transcriptions';
     }
   }
 
@@ -648,40 +645,13 @@ export async function transcribeAudio(base64Wav: string): Promise<string> {
     throw new Error("Neither Groq nor OpenAI API key is configured. Please add one in Settings.");
   }
 
-  logger.info(`Transcribing audio using ${provider} with model ${model}...`);
+  logger.info(`Transcribing audio using backend command with provider ${provider}...`);
 
-  // Decode base64 to blob
-  const parts = base64Wav.split(',');
-  const base64Data = parts.length > 1 ? parts[1] : parts[0];
-  const binaryString = atob(base64Data);
-  const len = binaryString.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  const audioBlob = new Blob([bytes], { type: 'audio/wav' });
-
-  const formData = new FormData();
-  formData.append('file', audioBlob, 'speech.wav');
-  formData.append('model', model);
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`
-    },
-    body: formData
+  const text = await invoke<string>('transcribe_audio_api', {
+    provider,
+    apiKey,
+    base64Wav
   });
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Transcription API request failed (${response.status}): ${errText}`);
-  }
-
-  const result = await response.json();
-  if (!result.text) {
-    throw new Error("Transcription API returned empty response");
-  }
-
-  return result.text;
+  return text;
 }
