@@ -53,18 +53,27 @@ export function NotionCaptureWidget() {
   }, [activeTab]);
 
   const getNotionCreds = async () => {
-    const db = await getDb();
-    const secretRes = await db.select<{ encrypted_value: string }[]>("SELECT encrypted_value FROM user_credentials WHERE id = 'notion_secret'");
-    const dbIdRes = await db.select<{ encrypted_value: string }[]>("SELECT encrypted_value FROM user_credentials WHERE id = 'notion_db_id'");
+    const fetchPromise = async () => {
+      const db = await getDb();
+      const secretRes = await db.select<{ encrypted_value: string }[]>("SELECT encrypted_value FROM user_credentials WHERE id = 'notion_secret'");
+      const dbIdRes = await db.select<{ encrypted_value: string }[]>("SELECT encrypted_value FROM user_credentials WHERE id = 'notion_db_id'");
 
-    if (secretRes.length > 0 && dbIdRes.length > 0) {
-      const token = await invoke<string>('decrypt_data', { encoded: secretRes[0].encrypted_value });
-      const dbId = await invoke<string>('decrypt_data', { encoded: dbIdRes[0].encrypted_value });
-      if (token && dbId) {
-        return { token, dbId };
+      if (secretRes.length > 0 && dbIdRes.length > 0) {
+        const token = await invoke<string>('decrypt_data', { encoded: secretRes[0].encrypted_value });
+        const dbId = await invoke<string>('decrypt_data', { encoded: dbIdRes[0].encrypted_value });
+        if (token && dbId) {
+          return { token, dbId };
+        }
       }
-    }
-    throw new Error("API keys missing.");
+      throw new Error("API keys missing.");
+    };
+
+    return Promise.race([
+      fetchPromise(),
+      new Promise<{ token: string; dbId: string }>((_, reject) => 
+        setTimeout(() => reject(new Error('Credential fetch timeout')), 5000)
+      )
+    ]);
   };
 
   const fetchNotes = async () => {
