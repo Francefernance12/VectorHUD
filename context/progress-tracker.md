@@ -4,7 +4,7 @@ Update this file after every meaningful implementation change.
 
 ## Current Goal
 
-- Session 21: Discord Webhook Integration (Implement Discord Webhook configuration and gallery share button to upload screenshots/clips directly to Discord).
+- Session 22: Discord Webhook Integration (Implement Discord Webhook configuration and gallery share button to upload screenshots/clips directly to Discord).
 
 ## Completed
 
@@ -42,6 +42,8 @@ Update this file after every meaningful implementation change.
 - Session 20.3: Layout, Audio Test, Temps & Custom Colors (Fixed select dropdown bounds overflow and layout stretching in AudioHubWidget and SettingsModal; implemented frontend Web Audio API peak analysis for settings live mic test; replaced slow coordinates style transitions with translate3d in WidgetContainer to solve drag/resize lag; allowed transition from minutes to seconds inputs in TimerWidget without premature commits; implemented non-elevated GPU temperature polling via nvidia-smi with sysinfo fallback and overheating flashing red style alerts, adding a default HUD-style (--°C) fallback and an administrator note in settings for CPU monitoring; simplified voice assistant brevity settings copy to controls maximum response length; suspended global hotkeys while settings is open to prevent capture conflict; resolved green reset bug; added Sync Border & Glow settings checkbox and custom border/glow color pickers).
 - Session 20.4: Layout Reflow, Microphone Test Permission Fix, CPU Temp Tooltip & Independent Sync Toggles (Added min-h-0 and flex flex-col to WidgetContainer and replaced h-full with flex-1 on the AudioHubWidget outer container to force browser flex container layout reflow, enabling scrolling and immediately displaying the Hardware Interfaces section without window resizes; fixed microphone stream device matching fallback to prompt for Webview permissions; added a HelpCircle hover tooltip explaining Windows CPU temperature Administrator limitations; split theme border/glow sync into independent settings with separate color pickers).
 - Session 20.6: Tabbed Audio Widget Rework (Reworked the Audio Mixer widget into a tabbed layout, splitting the Mixer controls and App volume list from the Output/Input Hardware Device selection and VU meter tests, constraining App list heights to fit within HUD viewports under 330px; resolved all visual truncation issues; updated SettingsModal local state handlers to avoid stale theme sync saving; verified 100% test pass and successful production builds).
+- Session 21: Code Optimization & Hardening (Backend Mutex safety and WAV encoding error handling; audio transcription backend mediation; strict type safety refactoring of catching unknown errors and tool requests; API key error sanitization; metrics interval clamping; and frontend unit test updates).
+- Session 21B: UI/UX Enhancements (Categorized settings hotkeys into logical groups; added a comprehensive Tutorial & Guide tab to the settings panel; and implemented a smooth mouse-draggable sessions sidebar for the OpenRouter AI chat widget).
 
 
 
@@ -55,7 +57,7 @@ Update this file after every meaningful implementation change.
 
 | Session | Unit Name | Focus | Goal |
 | :--- | :--- | :--- | :--- |
-| **Session 21** | Discord Webhook Integration | API | Implement Discord Webhook configuration and gallery share button to upload screenshots/clips directly to Discord. |
+| **Session 22** | Discord Webhook Integration | API | Implement Discord Webhook configuration and gallery share button to upload screenshots/clips directly to Discord. |
 
 ## Architecture Decisions
 

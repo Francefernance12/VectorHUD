@@ -34,6 +34,27 @@ interface ChatSession {
 export function OpenRouterWidget() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [sidebarWidth, setSidebarWidth] = useState(240);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = sidebarWidth;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const newWidth = Math.max(160, Math.min(400, startWidth + deltaX));
+      setSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
   
   const { 
     input, 
@@ -87,8 +108,9 @@ export function OpenRouterWidget() {
       if (text.trim()) {
         setInput(text.trim());
       }
-    } catch (err: any) {
-      showToast(`🎙️ Transcription failed: ${err?.message || String(err)}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      showToast(`🎙️ Transcription failed: ${errMsg}`);
     }
   };
 
@@ -99,8 +121,9 @@ export function OpenRouterWidget() {
         await invoke('start_voice_recording', { deviceName: selectedAudioInput });
         setIsRecordingMic(true);
         setMicSeconds(30);
-      } catch (err: any) {
-        showToast(`🎙️ Failed to start mic: ${err?.message || String(err)}`);
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        showToast(`🎙️ Failed to start mic: ${errMsg}`);
       }
     } else {
       await stopAndTranscribe();
@@ -610,7 +633,10 @@ export function OpenRouterWidget() {
     <div className="flex h-full bg-black/60 font-mono overflow-hidden w-full min-w-0">
       {/* Sidebar */}
       {sidebarOpen && (
-        <div className="w-64 border-r border-zinc-800 bg-black flex flex-col shrink-0 overflow-hidden">
+        <div 
+          style={{ width: `${sidebarWidth}px` }}
+          className="bg-black flex flex-col shrink-0 overflow-hidden"
+        >
           <div className="p-3 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50">
                 <h3 className="text-xs font-bold tracking-widest text-zinc-500 uppercase">Chat Sessions</h3>
                 <button onClick={createNewSession} className="text-zinc-400 hover:text-accent-amber transition-colors" title="New Session">
@@ -639,8 +665,8 @@ export function OpenRouterWidget() {
                   />
                 ) : (
                   <div className="flex flex-col overflow-hidden mr-2">
-                    <span className="text-xs text-zinc-300 truncate font-semibold">{s.title}</span>
-                    <span className="text-[11px] text-zinc-650 font-mono mt-1 uppercase">{new Date(s.timestamp).toLocaleDateString()}</span>
+                     <span className="text-xs text-zinc-300 truncate font-semibold">{s.title}</span>
+                     <span className="text-[11px] text-zinc-650 font-mono mt-1 uppercase">{new Date(s.timestamp).toLocaleDateString()}</span>
                   </div>
                 )}
                 
@@ -669,6 +695,14 @@ export function OpenRouterWidget() {
             )}
           </div>
         </div>
+      )}
+
+      {sidebarOpen && (
+        <div
+          onMouseDown={handleMouseDown}
+          className="w-[3px] hover:w-[5px] bg-zinc-800 hover:bg-accent-amber/50 active:bg-accent-amber/80 cursor-col-resize transition-all h-full shrink-0 z-20 relative select-none"
+          title="Drag to resize sidebar"
+        />
       )}
 
       {/* Main Chat Area */}

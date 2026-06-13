@@ -19,12 +19,20 @@ export interface CaptureHistory {
   timestamp: string;
 }
 
+import { sanitizeError } from './utils/logger';
+
 /**
- * Extracts a displayable error message from an unknown caught value.
+ * Extracts a displayable error message from an unknown caught value and sanitizes it.
  * Avoids the need for `catch (err: any)` throughout the codebase.
  */
 export function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (typeof error === 'string') return error;
-  return String(error);
+  let message = '';
+  if (error instanceof Error) {
+    message = error.message;
+  } else if (typeof error === 'string') {
+    message = error;
+  } else {
+    message = String(error);
+  }
+  return sanitizeError(message);
 }

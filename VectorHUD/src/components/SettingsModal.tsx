@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   X, Key, Zap, Palette, Save, Settings, Edit3, Download, RefreshCw, 
   CheckCircle2, Search, Terminal, Sliders, Volume2, Cpu, Monitor, 
-  Trash2, RotateCcw, HelpCircle, Shield, AlertTriangle, VolumeX, Mic
+  Trash2, RotateCcw, HelpCircle, Shield, AlertTriangle, VolumeX, Mic,
+  BookOpen, Camera, Clock
 } from 'lucide-react';
 import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
@@ -13,6 +14,7 @@ import { useSettingsStore } from '../store/settingsStore';
 import { useShallow } from 'zustand/react/shallow';
 import { invoke } from '@tauri-apps/api/core';
 import { getDb } from '../utils/db';
+import { getErrorMessage } from '../types';
 
 export function SettingsModal() {
   const { 
@@ -221,7 +223,7 @@ export function SettingsModal() {
     }))
   );
 
-  const [activeTab, setActiveTab] = useState<'integrations' | 'widgets' | 'hotkeys' | 'audio' | 'general' | 'logs' | 'updates'>('integrations');
+  const [activeTab, setActiveTab] = useState<'integrations' | 'widgets' | 'hotkeys' | 'audio' | 'general' | 'logs' | 'updates' | 'docs'>('integrations');
   const [searchQuery, setSearchQuery] = useState('');
   
   // Credentials loaded from SQLite
@@ -1670,6 +1672,20 @@ export function SettingsModal() {
                   <Terminal size={14} /> Diagnostics Logs
                 </button>
 
+                <button
+                  disabled={!!searchQuery}
+                  onClick={() => setActiveTab('docs')}
+                  className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold tracking-wider uppercase transition-all border ${
+                    searchQuery 
+                      ? 'opacity-40 border-transparent text-zinc-600'
+                      : activeTab === 'docs' 
+                        ? 'bg-primary/15 border-primary/35 text-primary shadow-[inset_0_0_10px_rgba(var(--accent-green-rgb,74,246,38),0.08)]' 
+                        : 'border-transparent text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
+                  }`}
+                >
+                  <BookOpen size={14} /> Tutorial & Guide
+                </button>
+
                 <div className="flex-1"></div>
 
                 <button
@@ -2112,22 +2128,57 @@ export function SettingsModal() {
                         <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-2">
                           <Shield size={14} className="text-primary" /> Global Shortcuts Recorder
                         </h3>
-                        <p className="text-xs text-zinc-400 leading-relaxed">
+                        <p className="text-xs text-zinc-400 leading-relaxed font-sans">
                           Click <b>Record</b> and press any key combination. Shortcuts must include at least one modifier key (Ctrl, Alt, Shift, Win) or be a function key (F1-F12) to be valid. 
                           Apply settings to load changes.
                         </p>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {renderHotkeyField('Main Overlay Toggle', 'overlay')}
-                        {renderHotkeyField('Capture Screenshot', 'screenshot')}
-                        {renderHotkeyField('Toggle Video Recording', 'record')}
-                        {renderHotkeyField('Save Replay Clip', 'replay')}
-                        {renderHotkeyField('Toggle Timer', 'timer')}
-                        {renderHotkeyField('Reset Active Timers', 'timerReset')}
-                        {renderHotkeyField('Toggle Stopwatch', 'stopwatch')}
-                        {renderHotkeyField('Voice Assistant PTT', 'voicePtt')}
-                        {renderHotkeyField('Toggle Interactivity', 'interact')}
+                      <div className="space-y-6">
+                        {/* Core Overlay & System Controls */}
+                        <div className="bg-zinc-950/40 p-4 border border-white/5 rounded-xl space-y-3">
+                          <h4 className="text-xs font-bold text-accent-green font-mono uppercase tracking-wider flex items-center gap-1.5 border-b border-white/5 pb-2">
+                            <Sliders size={13} /> Core Overlay & System Controls
+                          </h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {renderHotkeyField('Main Overlay Toggle', 'overlay')}
+                            {renderHotkeyField('Toggle Interactivity', 'interact')}
+                          </div>
+                        </div>
+
+                        {/* Media & Capture Controls */}
+                        <div className="bg-zinc-950/40 p-4 border border-white/5 rounded-xl space-y-3">
+                          <h4 className="text-xs font-bold text-accent-green font-mono uppercase tracking-wider flex items-center gap-1.5 border-b border-white/5 pb-2">
+                            <Camera size={13} /> Media & Capture Controls
+                          </h4>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            {renderHotkeyField('Capture Screenshot', 'screenshot')}
+                            {renderHotkeyField('Toggle Video Recording', 'record')}
+                            {renderHotkeyField('Save Replay Clip', 'replay')}
+                          </div>
+                        </div>
+
+                        {/* Timer & Utility Controls */}
+                        <div className="bg-zinc-950/40 p-4 border border-white/5 rounded-xl space-y-3">
+                          <h4 className="text-xs font-bold text-accent-green font-mono uppercase tracking-wider flex items-center gap-1.5 border-b border-white/5 pb-2">
+                            <Clock size={13} /> Timer & Utility Controls
+                          </h4>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            {renderHotkeyField('Toggle Timer', 'timer')}
+                            {renderHotkeyField('Toggle Stopwatch', 'stopwatch')}
+                            {renderHotkeyField('Reset Active Timers', 'timerReset')}
+                          </div>
+                        </div>
+
+                        {/* Voice Assistant Controls */}
+                        <div className="bg-zinc-950/40 p-4 border border-white/5 rounded-xl space-y-3">
+                          <h4 className="text-xs font-bold text-accent-green font-mono uppercase tracking-wider flex items-center gap-1.5 border-b border-white/5 pb-2">
+                            <Mic size={13} /> Voice Assistant Controls
+                          </h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {renderHotkeyField('Voice Assistant PTT', 'voicePtt')}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -2703,9 +2754,10 @@ export function SettingsModal() {
                                   await updateInfo.downloadAndInstall();
                                   setUpdateMessage('Restarting app...');
                                   await relaunch();
-                                } catch (err: any) {
+                                } catch (err: unknown) {
                                   console.error(err);
-                                  setUpdateMessage(`Update failed: ${err?.message || err}`);
+                                  const errMsg = err instanceof Error ? err.message : String(err);
+                                  setUpdateMessage(`Update failed: ${errMsg}`);
                                   setIsDownloadingUpdate(false);
                                 }
                               }}
@@ -2741,9 +2793,9 @@ export function SettingsModal() {
                                     setUpdateMessage('You are on the latest version.');
                                     setTimeout(() => setUpdateMessage(''), 3000);
                                   }
-                                } catch (error: any) {
+                                } catch (error: unknown) {
                                   console.error(`Update check failed: ${error}`);
-                                  setUpdateMessage(`Error: ${error?.message || error}`);
+                                  setUpdateMessage(`Error: ${getErrorMessage(error)}`);
                                 } finally {
                                   setIsCheckingUpdate(false);
                                 }
@@ -2767,6 +2819,120 @@ export function SettingsModal() {
                         >
                           View GitHub Repo
                         </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {activeTab === 'docs' && (
+                    <div className="space-y-6 animate-fadeIn">
+                      <div className="space-y-4 bg-zinc-950/40 p-5 rounded-xl border border-white/5">
+                        <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-2 border-b border-white/10 pb-2 font-mono">
+                          <BookOpen size={14} className="text-accent-green" /> VectorHUD Operational Manual
+                        </h3>
+                        <p className="text-xs text-zinc-400 leading-relaxed font-sans">
+                          Welcome to the VectorHUD Operational Manual. Use this guide to optimize your heads-up display telemetry, media capturing systems, and integrations.
+                        </p>
+                      </div>
+
+                      {/* Getting Started Section */}
+                      <div className="space-y-4 bg-zinc-950/40 p-5 rounded-xl border border-white/5">
+                        <h4 className="text-xs font-bold text-accent-green tracking-wider uppercase font-mono border-b border-white/5 pb-1">
+                          01. Getting Started & Controls
+                        </h4>
+                        <div className="space-y-3 text-xs text-zinc-350 font-sans">
+                          <p className="leading-relaxed">
+                            VectorHUD runs silently in the background of your system to minimize performance footprint. You can summon and dismiss the interface instantly at any time using:
+                          </p>
+                          <div className="bg-black/40 p-3 rounded-lg border border-white/5 font-mono text-xs flex flex-col gap-2">
+                            <div className="flex justify-between items-center">
+                              <span className="text-zinc-400 uppercase">Summon Overlay</span>
+                              <span className="text-accent-green font-bold bg-zinc-900 border border-white/10 px-2 py-0.5 rounded">Alt + O</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-zinc-400 uppercase">Toggle Interactivity</span>
+                              <span className="text-accent-green font-bold bg-zinc-900 border border-white/10 px-2 py-0.5 rounded">Alt + I</span>
+                            </div>
+                          </div>
+                          <p className="leading-relaxed">
+                            <strong className="text-white">Pinning Widgets (Ghost Mode):</strong> Click the pin icon on any widget container. When the overlay is dismissed, pinned widgets remain on screen as floaters and are set to click-through so they don't block your gameplay. Summon the main hotkey to drag/resize or unpin them.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Hardware Telemetry Section */}
+                      <div className="space-y-4 bg-zinc-950/40 p-5 rounded-xl border border-white/5">
+                        <h4 className="text-xs font-bold text-accent-green tracking-wider uppercase font-mono border-b border-white/5 pb-1">
+                          02. HUD Widgets Deep Dive
+                        </h4>
+                        <div className="space-y-4 text-xs text-zinc-350 font-sans">
+                          <div className="space-y-1">
+                            <h5 className="font-bold text-white font-mono uppercase tracking-wide flex items-center gap-1.5">
+                              <Cpu size={12} className="text-accent-green" /> System Telemetry
+                            </h5>
+                            <p className="leading-relaxed pl-4">
+                              Tracks CPU usage, RAM utilization, GPU core load, and VRAM occupancy. Flashes red when temperatures exceed thresholds configured in <span className="text-accent-green">Widget Preferences</span>.
+                            </p>
+                          </div>
+
+                          <div className="space-y-1">
+                            <h5 className="font-bold text-white font-mono uppercase tracking-wide flex items-center gap-1.5">
+                              <Volume2 size={12} className="text-accent-green" /> Audio Mixer & Peak Analysis
+                            </h5>
+                            <p className="leading-relaxed pl-4">
+                              Adjust individual application volumes and swap output/input devices without minimizing your game. Displays real-time VU peak meter signals. Set your favorite apps in preferences to pin them to the mixer.
+                            </p>
+                          </div>
+
+                          <div className="space-y-1">
+                            <h5 className="font-bold text-white font-mono uppercase tracking-wide flex items-center gap-1.5">
+                              <Camera size={12} className="text-accent-green" /> Media Capture & Replays
+                            </h5>
+                            <p className="leading-relaxed pl-4">
+                              Capture screenshots or record standard clips. Press the replay hotkey to save a rolling 30-second HLS replay clip. Screenshots are Reinhard tone-mapped to ensure high dynamic range (HDR) monitors are captured with true-to-life color spaces instead of washed-out tones.
+                            </p>
+                          </div>
+
+                          <div className="space-y-1">
+                            <h5 className="font-bold text-white font-mono uppercase tracking-wide flex items-center gap-1.5">
+                              <Zap size={12} className="text-accent-green" /> AI assistant & Vision Buffer
+                            </h5>
+                            <p className="leading-relaxed pl-4">
+                              Engage the floating AI overlay to query telemetry, adjust master volume, start timers, or parse the screen content (Vision Buffer). Trigger Voice Push-To-Talk via holding the shortcut combination.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Power User Tips Section */}
+                      <div className="space-y-4 bg-zinc-950/40 p-5 rounded-xl border border-white/5">
+                        <h4 className="text-xs font-bold text-accent-green tracking-wider uppercase font-mono border-b border-white/5 pb-1">
+                          03. Power Tips & Troubleshooting
+                        </h4>
+                        <div className="space-y-2 text-xs text-zinc-350 leading-relaxed font-sans">
+                          <ul className="list-none space-y-2.5">
+                            <li className="flex items-start gap-2">
+                              <span className="text-accent-green font-bold font-mono">›</span>
+                              <div>
+                                <strong className="text-white block font-mono uppercase tracking-wider text-[11px]">Run as Administrator for CPU Temps</strong>
+                                Due to Windows security constraints, kernel level temperature sensors on AMD/Intel processors cannot be accessed by non-elevated user-mode processes. Run VectorHUD as administrator to enable CPU temp diagnostics.
+                              </div>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-accent-green font-bold font-mono">›</span>
+                              <div>
+                                <strong className="text-white block font-mono uppercase tracking-wider text-[11px]">Dynamic Styling</strong>
+                                You can style the border widths, radii, and custom colors globally. Uncheck "Sync Border/Glow with Theme" to choose independent styling configurations.
+                              </div>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-accent-green font-bold font-mono">›</span>
+                              <div>
+                                <strong className="text-white block font-mono uppercase tracking-wider text-[11px]">Diagnostics Logs</strong>
+                                Encountered an API error? Check the <span className="text-accent-green">Diagnostics Logs</span> tab to view the rolling trace logs directly from the backend. Sensitive keys are automatically redacted.
+                              </div>
+                            </li>
+                          </ul>
+                        </div>
                       </div>
                     </div>
                   )}

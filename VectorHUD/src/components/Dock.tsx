@@ -49,6 +49,8 @@ export function Dock() {
         
         <button
           onClick={useSettingsStore.getState().toggleSettings}
+          aria-label="Open System Settings"
+          title="Open System Settings"
           className="p-3 rounded-xl transition-all duration-300 hover:bg-white/10 text-zinc-400 hover:text-white"
         >
           <Settings size={24} strokeWidth={1.5} />

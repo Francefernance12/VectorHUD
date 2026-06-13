@@ -76,7 +76,7 @@ fn start_voice_recording(
     state: tauri::State<'_, core::voice_recorder::VoiceRecorderState>,
     device_name: Option<String>,
 ) -> Result<(), String> {
-    let mut lock = state.0.lock().unwrap();
+    let mut lock = state.0.lock().unwrap_or_else(|e| e.into_inner());
     if lock.is_some() {
         return Err("Voice recording is already in progress".to_string());
     }
@@ -89,7 +89,7 @@ fn start_voice_recording(
 fn stop_voice_recording(
     state: tauri::State<'_, core::voice_recorder::VoiceRecorderState>,
 ) -> Result<String, String> {
-    let mut lock = state.0.lock().unwrap();
+    let mut lock = state.0.lock().unwrap_or_else(|e| e.into_inner());
     let recorder = lock
         .take()
         .ok_or_else(|| "No active voice recording to stop".to_string())?;
@@ -102,7 +102,7 @@ fn stop_voice_recording(
 
 #[tauri::command]
 fn unregister_all_hotkeys(app: tauri::AppHandle) -> Result<(), String> {
-    let _lock = HOTKEY_MUTEX.lock().unwrap();
+    let _lock = HOTKEY_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
     use tauri_plugin_global_shortcut::GlobalShortcutExt;
     let shortcut_manager = app.global_shortcut();
     let _ = shortcut_manager.unregister_all();
@@ -123,7 +123,8 @@ fn update_hotkeys(
     voice_ptt_hotkey: String,
     interact_hotkey: String,
 ) -> Result<(), String> {
-    let _lock = HOTKEY_MUTEX.lock().unwrap();
+    let _lock = HOTKEY_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+
     use std::str::FromStr;
     use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
@@ -228,7 +229,7 @@ fn update_hotkeys(
                 tracing::info!("Shortcut triggered: hotkey-voice-ptt with state {:?}", event.state);
                 if event.state == ShortcutState::Pressed {
                     let state = app.state::<core::voice_recorder::VoiceRecorderState>();
-                    let mut lock = state.0.lock().unwrap();
+                    let mut lock = state.0.lock().unwrap_or_else(|e| e.into_inner());
                     if lock.is_none() {
                         let mut device_name = None;
                         let path = std::path::PathBuf::from("settings.json");
@@ -277,7 +278,7 @@ fn update_hotkeys(
                                     }
 
                                     let state = app_handle.state::<core::voice_recorder::VoiceRecorderState>();
-                                    let mut lock = state.0.lock().unwrap();
+                                    let mut lock = state.0.lock().unwrap_or_else(|e| e.into_inner());
                                     if let Some(recorder) = lock.take() {
                                         match recorder.get_wav_bytes() {
                                             Ok(wav_bytes) => {
@@ -657,6 +658,7 @@ pub fn run() {
             commands::api::fetch_notion_blocks,
             commands::api::toggle_notion_task,
             commands::api::call_ai_api,
+            commands::api::transcribe_audio_api,
             core::capture::capture_screenshot,
             core::capture::capture_screen_base64,
             core::capture::check_file_exists,
