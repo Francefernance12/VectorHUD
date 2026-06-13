@@ -5,7 +5,6 @@ import {
   CheckCircle2, Search, Terminal, Sliders, Volume2, Cpu, Monitor, 
   Trash2, RotateCcw, HelpCircle, Shield, AlertTriangle, VolumeX, Mic
 } from 'lucide-react';
-import { getSettingsStore } from '../utils/store';
 import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { getVersion } from '@tauri-apps/api/app';
@@ -112,8 +111,7 @@ export function SettingsModal() {
     customBorderColor,
     setCustomBorderColor,
     customGlowColor,
-    setCustomGlowColor,
-    syncHotkeys
+    setCustomGlowColor
   } = useSettingsStore(
     useShallow((state) => ({
       isSettingsOpen: state.isSettingsOpen,
@@ -212,7 +210,6 @@ export function SettingsModal() {
       setCustomBorderColor: state.setCustomBorderColor,
       customGlowColor: state.customGlowColor,
       setCustomGlowColor: state.setCustomGlowColor,
-      syncHotkeys: state.syncHotkeys,
     }))
   );
 
