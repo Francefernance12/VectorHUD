@@ -52,6 +52,14 @@ export function TimerWidget() {
     setIsEditingCd(false);
   };
 
+  const handleBlurCd = (e: React.FocusEvent) => {
+    const parent = e.currentTarget.parentElement;
+    if (e.relatedTarget && parent && parent.contains(e.relatedTarget as Node)) {
+      return;
+    }
+    handleCommitCd();
+  };
+
   const handleStartEditSw = () => {
     if (swIsRunning) return;
     const m = Math.floor(swTime / 60);
@@ -67,6 +75,14 @@ export function TimerWidget() {
     const total = (mins * 60) + secs;
     setSwTime(total);
     setIsEditingSw(false);
+  };
+
+  const handleBlurSw = (e: React.FocusEvent) => {
+    const parent = e.currentTarget.parentElement;
+    if (e.relatedTarget && parent && parent.contains(e.relatedTarget as Node)) {
+      return;
+    }
+    handleCommitSw();
   };
 
   return (
@@ -97,7 +113,7 @@ export function TimerWidget() {
                 max="999"
                 value={cdMin}
                 onChange={(e) => setCdMin(e.target.value.slice(0, 3))}
-                onBlur={handleCommitCd}
+                onBlur={handleBlurCd}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleCommitCd();
                   if (e.key === 'Escape') setIsEditingCd(false);
@@ -112,7 +128,7 @@ export function TimerWidget() {
                 max="59"
                 value={cdSec}
                 onChange={(e) => setCdSec(e.target.value.slice(0, 2))}
-                onBlur={handleCommitCd}
+                onBlur={handleBlurCd}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleCommitCd();
                   if (e.key === 'Escape') setIsEditingCd(false);
@@ -177,7 +193,7 @@ export function TimerWidget() {
                 max="999"
                 value={swMin}
                 onChange={(e) => setSwMin(e.target.value.slice(0, 3))}
-                onBlur={handleCommitSw}
+                onBlur={handleBlurSw}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleCommitSw();
                   if (e.key === 'Escape') setIsEditingSw(false);
@@ -192,7 +208,7 @@ export function TimerWidget() {
                 max="59"
                 value={swSec}
                 onChange={(e) => setSwSec(e.target.value.slice(0, 2))}
-                onBlur={handleCommitSw}
+                onBlur={handleBlurSw}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleCommitSw();
                   if (e.key === 'Escape') setIsEditingSw(false);

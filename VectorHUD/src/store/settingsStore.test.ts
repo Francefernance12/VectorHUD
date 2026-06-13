@@ -203,4 +203,25 @@ describe('settingsStore', () => {
     expect(mockSave).toHaveBeenCalled();
     expect(useSettingsStore.getState().microphoneMuted).toBe(true);
   });
+
+  it('should call set and save on setSyncBorderGlowWithTheme', async () => {
+    await useSettingsStore.getState().setSyncBorderGlowWithTheme(false);
+    expect(mockSet).toHaveBeenCalledWith('syncBorderGlowWithTheme', false);
+    expect(mockSave).toHaveBeenCalled();
+    expect(useSettingsStore.getState().syncBorderGlowWithTheme).toBe(false);
+  });
+
+  it('should call set and save on setCustomBorderColor', async () => {
+    await useSettingsStore.getState().setCustomBorderColor('#ff0000');
+    expect(mockSet).toHaveBeenCalledWith('customBorderColor', '#ff0000');
+    expect(mockSave).toHaveBeenCalled();
+    expect(useSettingsStore.getState().customBorderColor).toBe('#ff0000');
+  });
+
+  it('should call set and save on setCustomGlowColor', async () => {
+    await useSettingsStore.getState().setCustomGlowColor('#0000ff');
+    expect(mockSet).toHaveBeenCalledWith('customGlowColor', '#0000ff');
+    expect(mockSave).toHaveBeenCalled();
+    expect(useSettingsStore.getState().customGlowColor).toBe('#0000ff');
+  });
 });

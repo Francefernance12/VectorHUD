@@ -107,6 +107,12 @@ export function SettingsModal() {
     setMicrophoneVolume,
     microphoneMuted,
     setMicrophoneMuted,
+    syncBorderGlowWithTheme,
+    setSyncBorderGlowWithTheme,
+    customBorderColor,
+    setCustomBorderColor,
+    customGlowColor,
+    setCustomGlowColor,
     syncHotkeys
   } = useSettingsStore(
     useShallow((state) => ({
@@ -200,6 +206,12 @@ export function SettingsModal() {
       setMicrophoneVolume: state.setMicrophoneVolume,
       microphoneMuted: state.microphoneMuted,
       setMicrophoneMuted: state.setMicrophoneMuted,
+      syncBorderGlowWithTheme: state.syncBorderGlowWithTheme,
+      setSyncBorderGlowWithTheme: state.setSyncBorderGlowWithTheme,
+      customBorderColor: state.customBorderColor,
+      setCustomBorderColor: state.setCustomBorderColor,
+      customGlowColor: state.customGlowColor,
+      setCustomGlowColor: state.setCustomGlowColor,
       syncHotkeys: state.syncHotkeys,
     }))
   );
@@ -286,7 +298,10 @@ export function SettingsModal() {
     selectedAudioInput,
     selectedAudioOutput,
     microphoneVolume,
-    microphoneMuted
+    microphoneMuted,
+    syncBorderGlowWithTheme,
+    customBorderColor,
+    customGlowColor
   });
 
   // Diagnostics logs state
@@ -354,7 +369,10 @@ export function SettingsModal() {
       selectedAudioInput,
       selectedAudioOutput,
       microphoneVolume,
-      microphoneMuted
+      microphoneMuted,
+      syncBorderGlowWithTheme,
+      customBorderColor,
+      customGlowColor
     });
 
     async function loadAudioDevices() {
@@ -530,6 +548,98 @@ export function SettingsModal() {
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [recordingField]);
 
+  // Temporary unregister hotkeys on Settings open to prevent capture conflict
+  useEffect(() => {
+    if (isSettingsOpen) {
+      invoke('unregister_all_hotkeys').catch(console.error);
+    } else {
+      useSettingsStore.getState().syncHotkeys().catch(console.error);
+    }
+  }, [isSettingsOpen]);
+
+  const [isMicTesting, setIsMicTesting] = useState(false);
+  const micStreamRef = useRef<MediaStream | null>(null);
+  const micAudioCtxRef = useRef<AudioContext | null>(null);
+  const micAnimationRef = useRef<number | null>(null);
+
+  const stopMicTest = () => {
+    if (micAnimationRef.current) {
+      cancelAnimationFrame(micAnimationRef.current);
+      micAnimationRef.current = null;
+    }
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach(track => track.stop());
+      micStreamRef.current = null;
+    }
+    if (micAudioCtxRef.current) {
+      micAudioCtxRef.current.close().catch(() => {});
+      micAudioCtxRef.current = null;
+    }
+    setIsMicTesting(false);
+    setRecPeakLevel(0);
+  };
+
+  const toggleMicTest = async () => {
+    if (isMicTesting) {
+      stopMicTest();
+      return;
+    }
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const match = devices.find(d => d.kind === 'audioinput' && (
+        localPreferences.selectedAudioInput === 'Default' || d.label.includes(localPreferences.selectedAudioInput) || localPreferences.selectedAudioInput.includes(d.label)
+      ));
+      const constraints = {
+        audio: match ? { deviceId: { exact: match.deviceId } } : true
+      };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      micStreamRef.current = stream;
+      
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      micAudioCtxRef.current = audioContext;
+      
+      const source = audioContext.createMediaStreamSource(stream);
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      
+      setIsMicTesting(true);
+      
+      const checkVolume = () => {
+        analyser.getByteTimeDomainData(dataArray);
+        let maxVal = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          const val = Math.abs(dataArray[i] - 128) / 128;
+          if (val > maxVal) maxVal = val;
+        }
+        setRecPeakLevel(maxVal * 2.5);
+        micAnimationRef.current = requestAnimationFrame(checkVolume);
+      };
+      
+      checkVolume();
+    } catch (err) {
+      console.warn(`Mic test failed: ${err}`);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (micAnimationRef.current) cancelAnimationFrame(micAnimationRef.current);
+      if (micStreamRef.current) micStreamRef.current.getTracks().forEach(t => t.stop());
+      if (micAudioCtxRef.current) micAudioCtxRef.current.close().catch(() => {});
+    };
+  }, []);
+
+  // Stop mic test automatically when switching away from Audio tab or closing settings
+  useEffect(() => {
+    if (activeTab !== 'audio' || !isSettingsOpen) {
+      stopMicTest();
+    }
+  }, [activeTab, isSettingsOpen]);
+
   // Play test sound on output device
   const playTestSound = () => {
     try {
@@ -662,8 +772,11 @@ export function SettingsModal() {
       await setSelectedAudioOutput(localPreferences.selectedAudioOutput);
       await setMicrophoneVolume(localPreferences.microphoneVolume);
       await setMicrophoneMuted(localPreferences.microphoneMuted);
+      await setSyncBorderGlowWithTheme(localPreferences.syncBorderGlowWithTheme);
+      await setCustomBorderColor(localPreferences.customBorderColor);
+      await setCustomGlowColor(localPreferences.customGlowColor);
 
-      // Sync and bind hotkeys
+      // Save keybind configurations
       try {
         await setOverlayHotkey(localHotkeys.overlay);
         await setScreenshotHotkey(localHotkeys.screenshot);
@@ -675,7 +788,8 @@ export function SettingsModal() {
         await setVoicePttHotkey(localHotkeys.voicePtt);
         await setInteractHotkey(localHotkeys.interact);
 
-        await syncHotkeys();
+        // Note: We do NOT call syncHotkeys() here because hotkeys remain suspended while Settings is open.
+        // They will be registered on close.
         setSaveMessage('Saved & loaded configuration successfully!');
         setHotkeyError('');
         
@@ -755,7 +869,10 @@ export function SettingsModal() {
       localPreferences.selectedAudioInput !== selectedAudioInput ||
       localPreferences.selectedAudioOutput !== selectedAudioOutput ||
       localPreferences.microphoneVolume !== microphoneVolume ||
-      localPreferences.microphoneMuted !== microphoneMuted
+      localPreferences.microphoneMuted !== microphoneMuted ||
+      localPreferences.syncBorderGlowWithTheme !== syncBorderGlowWithTheme ||
+      localPreferences.customBorderColor !== customBorderColor ||
+      localPreferences.customGlowColor !== customGlowColor
     );
   };
 
@@ -823,7 +940,10 @@ export function SettingsModal() {
       selectedAudioInput,
       selectedAudioOutput,
       microphoneVolume,
-      microphoneMuted
+      microphoneMuted,
+      syncBorderGlowWithTheme,
+      customBorderColor,
+      customGlowColor
     });
     
     // Restore CSS variables from saved settings
@@ -881,7 +1001,10 @@ export function SettingsModal() {
       selectedAudioInput: 'Default',
       selectedAudioOutput: 'Default',
       microphoneVolume: 100,
-      microphoneMuted: false
+      microphoneMuted: false,
+      syncBorderGlowWithTheme: true,
+      customBorderColor: '#ffffff',
+      customGlowColor: '#4af626'
     });
 
     setShowConfirmReset(false);
@@ -1304,7 +1427,7 @@ export function SettingsModal() {
             <div className="space-y-4 bg-black/20 p-3 rounded-lg border border-white/5 text-xs">
               <div className="space-y-1">
                 <div className="flex justify-between items-center">
-                  <span className="text-zinc-400 font-medium">PTT Brevity Limit</span>
+                  <span className="text-zinc-400 font-medium">AI Response Word Limit</span>
                   <span className="text-primary font-mono">{localPreferences.pttBrevityLimit} words</span>
                 </div>
                 <input 
@@ -1931,7 +2054,7 @@ export function SettingsModal() {
                         <div className="space-y-4">
                           <div className="space-y-1.5">
                             <div className="flex justify-between items-center text-xs">
-                              <span className="text-zinc-300 font-medium">PTT Voice Assistant Brevity Limit</span>
+                              <span className="text-zinc-300 font-medium">AI Response Word Limit</span>
                               <span className="text-primary font-mono font-bold">{localPreferences.pttBrevityLimit} words</span>
                             </div>
                             <input 
@@ -1940,7 +2063,7 @@ export function SettingsModal() {
                               onChange={(e) => setLocalPreferences(s => ({ ...s, pttBrevityLimit: parseInt(e.target.value) }))}
                               className="w-full accent-primary"
                             />
-                            <p className="text-xs text-zinc-500">Restricts voice response cards length to ensure UI readability while in-game.</p>
+                            <p className="text-xs text-zinc-500 font-sans">Limits the length of the voice assistant's response so it fits nicely on your screen during gameplay.</p>
                           </div>
 
                           <div className="space-y-1.5">
@@ -2181,6 +2304,106 @@ export function SettingsModal() {
                               className="w-full accent-primary cursor-pointer"
                             />
                           </div>
+
+                          <div className="space-y-1.5 md:col-span-2 border-t border-white/5 pt-4">
+                            <div className="flex justify-between items-center bg-black/40 p-3 rounded-lg border border-white/5 text-xs">
+                              <div>
+                                <span className="text-zinc-200 font-bold block">Sync Border & Glow with Theme</span>
+                                <span className="text-zinc-500 block">Enable to automatically match widget border and glow colors with the active HUD theme.</span>
+                              </div>
+                              <label className="relative inline-flex items-center cursor-pointer">
+                                <input 
+                                  type="checkbox" className="sr-only peer" 
+                                  checked={localPreferences.syncBorderGlowWithTheme}
+                                  onChange={(e) => {
+                                    const val = e.target.checked;
+                                    setLocalPreferences(s => ({ ...s, syncBorderGlowWithTheme: val }));
+                                    if (val) {
+                                      document.documentElement.style.removeProperty('--widget-border-color');
+                                      document.documentElement.style.removeProperty('--widget-glow-color-rgb');
+                                    } else {
+                                      document.documentElement.style.setProperty('--widget-border-color', localPreferences.customBorderColor);
+                                      const hexToRgbStr = (hex: string) => {
+                                        let c = hex.substring(1);
+                                        if (c.length === 3) c = c.split('').map(x => x + x).join('');
+                                        return `${parseInt(c.slice(0, 2), 16)}, ${parseInt(c.slice(2, 4), 16)}, ${parseInt(c.slice(4, 6), 16)}`;
+                                      };
+                                      document.documentElement.style.setProperty('--widget-glow-color-rgb', hexToRgbStr(localPreferences.customGlowColor));
+                                    }
+                                  }}
+                                />
+                                <div className="w-11 h-6 bg-zinc-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent-green"></div>
+                              </label>
+                            </div>
+                          </div>
+
+                          {!localPreferences.syncBorderGlowWithTheme && (
+                            <div className="space-y-4 md:col-span-2 bg-black/30 p-4 rounded-lg border border-white/5 animate-fadeIn">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider block">Custom Border Color</label>
+                                  <div className="flex gap-2.5 items-center">
+                                    <input 
+                                      type="color" 
+                                      value={localPreferences.customBorderColor}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setLocalPreferences(s => ({ ...s, customBorderColor: val }));
+                                        document.documentElement.style.setProperty('--widget-border-color', val);
+                                      }}
+                                      className="w-8 h-8 rounded bg-transparent border border-white/10 cursor-pointer"
+                                    />
+                                    <input 
+                                      type="text" 
+                                      value={localPreferences.customBorderColor}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setLocalPreferences(s => ({ ...s, customBorderColor: val }));
+                                        document.documentElement.style.setProperty('--widget-border-color', val);
+                                      }}
+                                      className="flex-grow bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs font-mono text-zinc-200 focus:outline-none focus:border-primary"
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider block">Custom Glow Color</label>
+                                  <div className="flex gap-2.5 items-center">
+                                    <input 
+                                      type="color" 
+                                      value={localPreferences.customGlowColor}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setLocalPreferences(s => ({ ...s, customGlowColor: val }));
+                                        const hexToRgbStr = (hex: string) => {
+                                          let c = hex.substring(1);
+                                          if (c.length === 3) c = c.split('').map(x => x + x).join('');
+                                          return `${parseInt(c.slice(0, 2), 16)}, ${parseInt(c.slice(2, 4), 16)}, ${parseInt(c.slice(4, 6), 16)}`;
+                                        };
+                                        document.documentElement.style.setProperty('--widget-glow-color-rgb', hexToRgbStr(val));
+                                      }}
+                                      className="w-8 h-8 rounded bg-transparent border border-white/10 cursor-pointer"
+                                    />
+                                    <input 
+                                      type="text" 
+                                      value={localPreferences.customGlowColor}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setLocalPreferences(s => ({ ...s, customGlowColor: val }));
+                                        const hexToRgbStr = (hex: string) => {
+                                          let c = hex.substring(1);
+                                          if (c.length === 3) c = c.split('').map(x => x + x).join('');
+                                          return `${parseInt(c.slice(0, 2), 16)}, ${parseInt(c.slice(2, 4), 16)}, ${parseInt(c.slice(4, 6), 16)}`;
+                                        };
+                                        document.documentElement.style.setProperty('--widget-glow-color-rgb', hexToRgbStr(val));
+                                      }}
+                                      className="flex-grow bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs font-mono text-zinc-200 focus:outline-none focus:border-primary"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -2243,7 +2466,7 @@ export function SettingsModal() {
                             <select
                               value={localPreferences.selectedAudioOutput}
                               onChange={(e) => setLocalPreferences(s => ({ ...s, selectedAudioOutput: e.target.value }))}
-                              className="flex-grow bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 px-4 py-2 outline-none rounded-lg font-mono cursor-pointer hover:border-zinc-700 focus:border-primary transition-colors appearance-none"
+                              className="w-0 min-w-0 flex-grow bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 px-4 py-2 outline-none rounded-lg font-mono cursor-pointer hover:border-zinc-700 focus:border-primary transition-colors appearance-none truncate pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2374F61A%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_12px_center] bg-no-repeat"
                             >
                               <option value="Default">Default System Device</option>
                               {audioDevices.outputs?.map(dev => (
@@ -2283,16 +2506,29 @@ export function SettingsModal() {
 
                         <div className="space-y-2">
                           <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider block">Microphone / Input Device</label>
-                          <select
-                            value={localPreferences.selectedAudioInput}
-                            onChange={(e) => setLocalPreferences(s => ({ ...s, selectedAudioInput: e.target.value }))}
-                            className="w-full bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 px-4 py-2 outline-none rounded-lg font-mono cursor-pointer hover:border-zinc-700 focus:border-primary transition-colors appearance-none"
-                          >
-                            <option value="Default">Default System Device</option>
-                            {audioDevices.inputs?.map(dev => (
-                              <option key={dev.id} value={dev.name}>{dev.name}</option>
-                            ))}
-                          </select>
+                          <div className="flex items-center gap-3">
+                            <select
+                              value={localPreferences.selectedAudioInput}
+                              onChange={(e) => setLocalPreferences(s => ({ ...s, selectedAudioInput: e.target.value }))}
+                              className="w-0 min-w-0 flex-grow bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 px-4 py-2 outline-none rounded-lg font-mono cursor-pointer hover:border-zinc-700 focus:border-primary transition-colors appearance-none truncate pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2374F61A%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_12px_center] bg-no-repeat"
+                            >
+                              <option value="Default">Default System Device</option>
+                              {audioDevices.inputs?.map(dev => (
+                                <option key={dev.id} value={dev.name}>{dev.name}</option>
+                              ))}
+                            </select>
+                            <button
+                              onClick={toggleMicTest}
+                              className={`px-4 py-2 border text-xs font-bold uppercase transition-colors shrink-0 rounded-lg cursor-pointer ${
+                                isMicTesting 
+                                  ? 'bg-accent-green/20 border-accent-green text-accent-green hover:bg-accent-green/30' 
+                                  : 'bg-zinc-900 border-zinc-800 hover:border-accent-green hover:text-accent-green'
+                              }`}
+                              title="Test microphone input"
+                            >
+                              {isMicTesting ? 'Stop Test' : 'Test Mic'}
+                            </button>
+                          </div>
                         </div>
 
                         {/* Mic Volume Slider & Mute Toggle */}

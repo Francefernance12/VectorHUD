@@ -55,13 +55,15 @@ export function WidgetContainer({ id, children }: WidgetContainerProps) {
         zIndex: instance.zIndex,
         width: instance.width,
         height: instance.height,
-        left: Math.round(safeX),
-        top: Math.round(safeY),
+        left: 0,
+        top: 0,
+        transform: `translate3d(${Math.round(safeX)}px, ${Math.round(safeY)}px, 0)`,
+        borderColor: 'var(--widget-border-color, var(--border-wire))',
         borderRadius: 'var(--widget-border-radius, 12px)',
         borderWidth: 'var(--widget-border-width, 1px)',
-        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 var(--widget-glow-size, 15px) rgba(var(--accent-green-rgb, 74, 246, 38), var(--widget-glow-opacity, 0.15))',
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 var(--widget-glow-size, 15px) rgba(var(--widget-glow-color-rgb, var(--accent-green-rgb, 74, 246, 38)), var(--widget-glow-opacity, 0.15))',
       }}
-      className="flex flex-col border overflow-hidden transition-all bg-surface border-border-wire"
+      className="flex flex-col border overflow-hidden transition-[border-color,box-shadow,background-color] duration-200 bg-surface border-border-wire"
     >
       {/* Draggable Header (Only show if interactive) */}
       {isInteractive && (

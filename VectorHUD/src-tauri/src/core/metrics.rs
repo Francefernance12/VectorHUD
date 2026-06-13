@@ -2,7 +2,7 @@ use serde::Serialize;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use sysinfo::System;
+use sysinfo::{Components, System};
 use tauri::{AppHandle, Emitter, Manager};
 
 #[derive(Clone, Serialize)]
@@ -19,6 +19,8 @@ pub struct HardwareMetrics {
     pub is_fullscreen: Option<bool>,
     pub hud_cpu_usage: f32,
     pub hud_ram_usage_mb: f32,
+    pub cpu_temp: Option<f32>,
+    pub gpu_temp: Option<f32>,
 }
 
 #[cfg(windows)]
@@ -363,6 +365,34 @@ impl FpsMonitor {
     }
 }
 
+#[cfg(windows)]
+fn get_nvidia_gpu_temp() -> Option<f32> {
+    use std::os::windows::process::CommandExt;
+    use std::process::Command;
+
+    let mut cmd = Command::new("nvidia-smi");
+    cmd.args([
+        "--query-gpu=temperature.gpu",
+        "--format=csv,noheader,nounits",
+    ]);
+    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+
+    if let Ok(output) = cmd.output() {
+        if output.status.success() {
+            let s = String::from_utf8_lossy(&output.stdout);
+            if let Ok(val) = s.trim().parse::<f32>() {
+                return Some(val);
+            }
+        }
+    }
+    None
+}
+
+#[cfg(not(windows))]
+fn get_nvidia_gpu_temp() -> Option<f32> {
+    None
+}
+
 /// Spawns a background thread that polls system hardware metrics every 1 second
 /// and emits them to the frontend. The thread will cleanly exit when `shutdown`
 /// is set to `true` (triggered on application exit).
@@ -376,6 +406,7 @@ pub fn spawn_metrics_thread(app: AppHandle, shutdown: Arc<AtomicBool>) {
 
         let gpu_monitor = GpuMonitor::new();
         let fps_monitor = FpsMonitor::new(app.clone(), shutdown.clone());
+        let mut components = Components::new();
 
         let mut last_valid_app: Option<String> = None;
         let mut last_valid_fs: Option<bool> = None;
@@ -387,9 +418,10 @@ pub fn spawn_metrics_thread(app: AppHandle, shutdown: Arc<AtomicBool>) {
                 break;
             }
 
-            // Refresh CPU and memory
+            // Refresh CPU, memory and components
             sys.refresh_cpu_usage();
             sys.refresh_memory();
+            components.refresh(true);
 
             let cpu_usage = sys.global_cpu_usage();
 
@@ -448,6 +480,35 @@ pub fn spawn_metrics_thread(app: AppHandle, shutdown: Arc<AtomicBool>) {
                 }
             }
 
+            let mut cpu_temp: Option<f32> = None;
+            for c in &components {
+                let name = c.label().to_lowercase();
+                if name.contains("cpu") || name.contains("core") || name.contains("package") {
+                    cpu_temp = c.temperature();
+                    break;
+                }
+            }
+            if cpu_temp.is_none() {
+                if let Some(first_c) = components.first() {
+                    cpu_temp = first_c.temperature();
+                }
+            }
+
+            let mut gpu_temp = get_nvidia_gpu_temp();
+            if gpu_temp.is_none() {
+                for c in &components {
+                    let name = c.label().to_lowercase();
+                    if name.contains("gpu")
+                        || name.contains("graphics")
+                        || name.contains("nvidia")
+                        || name.contains("amd")
+                    {
+                        gpu_temp = c.temperature();
+                        break;
+                    }
+                }
+            }
+
             let metrics = HardwareMetrics {
                 cpu_usage,
                 ram_usage_percent: ram_percent,
@@ -461,6 +522,8 @@ pub fn spawn_metrics_thread(app: AppHandle, shutdown: Arc<AtomicBool>) {
                 is_fullscreen,
                 hud_cpu_usage,
                 hud_ram_usage_mb,
+                cpu_temp,
+                gpu_temp,
             };
 
             // Emit the event to the frontend

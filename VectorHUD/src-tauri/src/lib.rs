@@ -101,6 +101,15 @@ fn stop_voice_recording(
 }
 
 #[tauri::command]
+fn unregister_all_hotkeys(app: tauri::AppHandle) -> Result<(), String> {
+    let _lock = HOTKEY_MUTEX.lock().unwrap();
+    use tauri_plugin_global_shortcut::GlobalShortcutExt;
+    let shortcut_manager = app.global_shortcut();
+    let _ = shortcut_manager.unregister_all();
+    Ok(())
+}
+
+#[tauri::command]
 #[allow(clippy::too_many_arguments)]
 fn update_hotkeys(
     app: tauri::AppHandle,
@@ -630,6 +639,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             set_interactive_mode,
             update_hotkeys,
+            unregister_all_hotkeys,
             start_voice_recording,
             stop_voice_recording,
             commands::telemetry::frontend_log,

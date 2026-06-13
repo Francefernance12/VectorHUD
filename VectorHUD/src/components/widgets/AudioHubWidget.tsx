@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Volume2, VolumeX, Music, Play, Pause, SkipForward, SkipBack, Star, Mic } from 'lucide-react';
 import { logger } from '../../utils/logger';
@@ -43,6 +43,82 @@ export function AudioHubWidget() {
   const [devicesList, setDevicesList] = useState<{ inputs: any[], outputs: any[] }>({ inputs: [], outputs: [] });
   const [playPeakLevel, setPlayPeakLevel] = useState(0);
   const [recPeakLevel, setRecPeakLevel] = useState(0);
+
+  const [isMicTesting, setIsMicTesting] = useState(false);
+  const micStreamRef = useRef<MediaStream | null>(null);
+  const micAudioCtxRef = useRef<AudioContext | null>(null);
+  const micAnimationRef = useRef<number | null>(null);
+
+  const stopMicTest = () => {
+    if (micAnimationRef.current) {
+      cancelAnimationFrame(micAnimationRef.current);
+      micAnimationRef.current = null;
+    }
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach(track => track.stop());
+      micStreamRef.current = null;
+    }
+    if (micAudioCtxRef.current) {
+      micAudioCtxRef.current.close().catch(() => {});
+      micAudioCtxRef.current = null;
+    }
+    setIsMicTesting(false);
+    setRecPeakLevel(0);
+  };
+
+  const toggleMicTest = async () => {
+    if (isMicTesting) {
+      stopMicTest();
+      return;
+    }
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const match = devices.find(d => d.kind === 'audioinput' && (
+        selectedAudioInput === 'Default' || d.label.includes(selectedAudioInput) || selectedAudioInput.includes(d.label)
+      ));
+      const constraints = {
+        audio: match ? { deviceId: { exact: match.deviceId } } : true
+      };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      micStreamRef.current = stream;
+      
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      micAudioCtxRef.current = audioContext;
+      
+      const source = audioContext.createMediaStreamSource(stream);
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      
+      setIsMicTesting(true);
+      
+      const checkVolume = () => {
+        analyser.getByteTimeDomainData(dataArray);
+        let maxVal = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          const val = Math.abs(dataArray[i] - 128) / 128;
+          if (val > maxVal) maxVal = val;
+        }
+        setRecPeakLevel(maxVal * 2.5);
+        micAnimationRef.current = requestAnimationFrame(checkVolume);
+      };
+      
+      checkVolume();
+    } catch (err) {
+      logger.error(`Mic test failed: ${err}`);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (micAnimationRef.current) cancelAnimationFrame(micAnimationRef.current);
+      if (micStreamRef.current) micStreamRef.current.getTracks().forEach(t => t.stop());
+      if (micAudioCtxRef.current) micAudioCtxRef.current.close().catch(() => {});
+    };
+  }, []);
 
   const fetchAudioState = async () => {
     try {
@@ -149,13 +225,15 @@ export function AudioHubWidget() {
       try {
         const [playPeak, recPeak] = await invoke<[number, number]>('get_audio_peak_levels');
         setPlayPeakLevel(playPeak);
-        setRecPeakLevel(recPeak);
+        if (!isMicTesting) {
+          setRecPeakLevel(recPeak);
+        }
       } catch {}
       setTimeout(pollPeak, 100);
     };
     pollPeak();
     return () => { active = false; };
-  }, []);
+  }, [isMicTesting]);
 
   const handleAppVolumeChange = async (pid: number, volume: number) => {
     try {
@@ -255,7 +333,7 @@ export function AudioHubWidget() {
             <select
               value={selectedAudioOutput}
               onChange={(e) => setSelectedAudioOutput(e.target.value)}
-              className="flex-1 bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 px-3 py-2 outline-none rounded-sm font-mono cursor-pointer hover:border-zinc-700 transition-colors"
+              className="w-0 min-w-0 flex-1 bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 px-3 py-2 outline-none rounded-sm font-mono cursor-pointer hover:border-zinc-700 transition-colors appearance-none truncate pr-6 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2374F61A%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_8px_center] bg-no-repeat"
             >
               <option value="Default">Default System Device</option>
               {devicesList.outputs?.map(dev => (
@@ -284,17 +362,29 @@ export function AudioHubWidget() {
 
         {/* Input Selector & Volume */}
         <div className="flex flex-col space-y-2">
-          <label className="text-xs text-zinc-400">Microphone / Input Device</label>
-          <select
-            value={selectedAudioInput}
-            onChange={(e) => setSelectedAudioInput(e.target.value)}
-            className="w-full bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 px-3 py-2 outline-none rounded-sm font-mono cursor-pointer hover:border-zinc-700 transition-colors"
-          >
-            <option value="Default">Default System Device</option>
-            {devicesList.inputs?.map(dev => (
-              <option key={dev.id} value={dev.name}>{dev.name}</option>
-            ))}
-          </select>
+          <div className="flex items-center gap-2">
+            <select
+              value={selectedAudioInput}
+              onChange={(e) => setSelectedAudioInput(e.target.value)}
+              className="w-0 min-w-0 flex-1 bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 px-3 py-2 outline-none rounded-sm font-mono cursor-pointer hover:border-zinc-700 transition-colors appearance-none truncate pr-6 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2374F61A%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_8px_center] bg-no-repeat"
+            >
+              <option value="Default">Default System Device</option>
+              {devicesList.inputs?.map(dev => (
+                <option key={dev.id} value={dev.name}>{dev.name}</option>
+              ))}
+            </select>
+            <button
+              onClick={toggleMicTest}
+              className={`px-3 py-2 border text-xs font-bold uppercase transition-colors shrink-0 rounded-sm ${
+                isMicTesting 
+                  ? 'bg-accent-green/20 border-accent-green text-accent-green hover:bg-accent-green/30' 
+                  : 'bg-zinc-900 border-zinc-800 hover:border-accent-green hover:text-accent-green'
+              }`}
+              title="Test microphone input"
+            >
+              {isMicTesting ? 'Stop' : 'Test'}
+            </button>
+          </div>
 
           {/* Mic Volume Slider & Mute */}
           <div className="flex items-center gap-3 pt-1">

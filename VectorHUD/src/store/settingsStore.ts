@@ -53,6 +53,10 @@ interface SettingsState {
   selectedAudioOutput: string;
   microphoneVolume: number;
   microphoneMuted: boolean;
+
+  syncBorderGlowWithTheme: boolean;
+  customBorderColor: string;
+  customGlowColor: string;
   
   toggleSettings: () => void;
   setOpenRouterModel: (model: string) => Promise<void>;
@@ -102,6 +106,10 @@ interface SettingsState {
   setSelectedAudioOutput: (val: string) => Promise<void>;
   setMicrophoneVolume: (val: number) => Promise<void>;
   setMicrophoneMuted: (val: boolean) => Promise<void>;
+
+  setSyncBorderGlowWithTheme: (val: boolean) => Promise<void>;
+  setCustomBorderColor: (val: string) => Promise<void>;
+  setCustomGlowColor: (val: string) => Promise<void>;
   
   loadPreferences: () => Promise<void>;
   syncHotkeys: () => Promise<void>;
@@ -137,6 +145,21 @@ const applyThemeColors = (theme: string, customColor: string) => {
     root.style.setProperty('--accent-amber', '#FFB000');
     root.style.setProperty('--accent-amber-rgb', '255, 176, 0');
     root.style.setProperty('--accent-green', '#4AF626');
+    root.style.setProperty('--accent-green-rgb', '74, 246, 38');
+  }
+
+  // Border & Glow customizations
+  const state = useSettingsStore.getState();
+  const sync = state.syncBorderGlowWithTheme !== undefined ? state.syncBorderGlowWithTheme : true;
+  const customBorder = state.customBorderColor || '#ffffff';
+  const customGlow = state.customGlowColor || '#4af626';
+
+  if (sync) {
+    root.style.removeProperty('--widget-border-color');
+    root.style.removeProperty('--widget-glow-color-rgb');
+  } else {
+    root.style.setProperty('--widget-border-color', customBorder);
+    root.style.setProperty('--widget-glow-color-rgb', hexToRgb(customGlow));
   }
 };
 
@@ -188,6 +211,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   selectedAudioOutput: 'Default',
   microphoneVolume: 100,
   microphoneMuted: false,
+
+  syncBorderGlowWithTheme: true,
+  customBorderColor: '#ffffff',
+  customGlowColor: '#4af626',
 
   toggleSettings: () => set((state) => ({ isSettingsOpen: !state.isSettingsOpen })),
 
@@ -524,6 +551,30 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     await invoke('set_microphone_mute', { muted: val });
   },
 
+  setSyncBorderGlowWithTheme: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('syncBorderGlowWithTheme', val);
+    await store.save();
+    set({ syncBorderGlowWithTheme: val });
+    applyThemeColors(useSettingsStore.getState().theme, useSettingsStore.getState().customColor);
+  },
+
+  setCustomBorderColor: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('customBorderColor', val);
+    await store.save();
+    set({ customBorderColor: val });
+    applyThemeColors(useSettingsStore.getState().theme, useSettingsStore.getState().customColor);
+  },
+
+  setCustomGlowColor: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('customGlowColor', val);
+    await store.save();
+    set({ customGlowColor: val });
+    applyThemeColors(useSettingsStore.getState().theme, useSettingsStore.getState().customColor);
+  },
+
   loadPreferences: async () => {
     const store = await getSettingsStore();
     const model = await store.get<string>('openRouterModel');
@@ -573,6 +624,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const audioOutput = await store.get<string>('selectedAudioOutput');
     const micVol = await store.get<number>('microphoneVolume');
     const micMuted = await store.get<boolean>('microphoneMuted');
+
+    const syncBorderGlow = await store.get<boolean>('syncBorderGlowWithTheme');
+    const customBorder = await store.get<string>('customBorderColor');
+    const customGlow = await store.get<string>('customGlowColor');
 
     const finalTheme = theme || 'default';
     const finalColor = customColor || '#FF0000';
@@ -632,6 +687,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       selectedAudioOutput: audioOutput || 'Default',
       microphoneVolume: micVol !== undefined ? micVol : 100,
       microphoneMuted: micMuted !== undefined ? micMuted : false,
+
+      syncBorderGlowWithTheme: syncBorderGlow !== undefined ? syncBorderGlow : true,
+      customBorderColor: customBorder || '#ffffff',
+      customGlowColor: customGlow || '#4af626',
     });
 
     applyThemeColors(finalTheme, finalColor);

@@ -1,5 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { useSettingsStore } from '../../store/settingsStore';
+import { useToastStore } from '../../store/toastStore';
+import { AlertTriangle } from 'lucide-react';
 
 interface HardwareMetrics {
   cpu_usage: number;
@@ -12,6 +15,8 @@ interface HardwareMetrics {
   fps: number;
   hud_cpu_usage: number;
   hud_ram_usage_mb: number;
+  cpu_temp?: number;
+  gpu_temp?: number;
 }
 
 export function HardwareWidget() {
@@ -25,6 +30,17 @@ export function HardwareWidget() {
   const [fps, setFps] = useState(0);
   const [hudCpuUsage, setHudCpuUsage] = useState(0);
   const [hudRamUsageMb, setHudRamUsageMb] = useState(0);
+  
+  // Temperatures
+  const [cpuTemp, setCpuTemp] = useState<number | null>(null);
+  const [gpuTemp, setGpuTemp] = useState<number | null>(null);
+
+  // Settings thresholds
+  const { cpuTempAlertThreshold, gpuTempAlertThreshold } = useSettingsStore();
+
+  // Alert throttling refs (prevent toast spamming, limit to every 60s)
+  const lastCpuAlertRef = useRef<number>(0);
+  const lastGpuAlertRef = useRef<number>(0);
 
   useEffect(() => {
     let unlisten: UnlistenFn | undefined;
@@ -42,6 +58,27 @@ export function HardwareWidget() {
         setFps(payload.fps);
         setHudCpuUsage(payload.hud_cpu_usage || 0);
         setHudRamUsageMb(payload.hud_ram_usage_mb || 0);
+
+        // Temperatures
+        const cTemp = payload.cpu_temp !== undefined && payload.cpu_temp !== null ? Math.round(payload.cpu_temp) : null;
+        const gTemp = payload.gpu_temp !== undefined && payload.gpu_temp !== null ? Math.round(payload.gpu_temp) : null;
+        setCpuTemp(cTemp);
+        setGpuTemp(gTemp);
+
+        // Alert Triggers
+        const now = Date.now();
+        if (cTemp && cTemp >= cpuTempAlertThreshold) {
+          if (now - lastCpuAlertRef.current > 60000) {
+            useToastStore.getState().showToast(`⚠️ CPU TEMPERATURE CRITICAL: ${cTemp}°C`);
+            lastCpuAlertRef.current = now;
+          }
+        }
+        if (gTemp && gTemp >= gpuTempAlertThreshold) {
+          if (now - lastGpuAlertRef.current > 60000) {
+            useToastStore.getState().showToast(`⚠️ GPU TEMPERATURE CRITICAL: ${gTemp}°C`);
+            lastGpuAlertRef.current = now;
+          }
+        }
       });
     };
 
@@ -52,7 +89,10 @@ export function HardwareWidget() {
         unlisten();
       }
     };
-  }, []);
+  }, [cpuTempAlertThreshold, gpuTempAlertThreshold]);
+
+  const cpuOverheated = cpuTemp !== null && cpuTemp >= cpuTempAlertThreshold;
+  const gpuOverheated = gpuTemp !== null && gpuTemp >= gpuTempAlertThreshold;
 
   return (
     <div className="flex flex-col h-full text-text-primary font-mono text-sm p-4 space-y-4">
@@ -60,12 +100,15 @@ export function HardwareWidget() {
       {/* CPU Section */}
       <div className="flex flex-col space-y-1">
         <div className="flex justify-between items-center text-xs">
-          <span className="font-bold text-accent-green tracking-widest">CPU</span>
-          <span className="text-accent-green font-bold">{cpuUsage}%</span>
+          <span className={`font-bold tracking-widest flex items-center gap-1.5 ${cpuOverheated ? 'text-red-500 animate-pulse' : 'text-accent-green'}`}>
+            CPU {cpuTemp !== null ? `(${cpuTemp}°C)` : ''}
+            {cpuOverheated && <AlertTriangle size={12} className="text-red-500 animate-bounce" />}
+          </span>
+          <span className={`font-bold ${cpuOverheated ? 'text-red-500' : 'text-accent-green'}`}>{cpuUsage}%</span>
         </div>
         <div className="w-full h-2 bg-black border border-border-wire rounded-sm overflow-hidden relative">
           <div 
-            className="h-full bg-accent-green transition-all duration-500 ease-in-out"
+            className={`h-full transition-all duration-500 ease-in-out ${cpuOverheated ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : 'bg-accent-green'}`}
             style={{ width: `${cpuUsage}%` }}
           />
         </div>
@@ -74,12 +117,15 @@ export function HardwareWidget() {
       {/* GPU Section */}
       <div className="flex flex-col space-y-1">
         <div className="flex justify-between items-center text-xs">
-          <span className="font-bold text-accent-green tracking-widest">GPU</span>
-          <span className="text-accent-green font-bold">{gpuUsage}%</span>
+          <span className={`font-bold tracking-widest flex items-center gap-1.5 ${gpuOverheated ? 'text-red-500 animate-pulse' : 'text-accent-green'}`}>
+            GPU {gpuTemp !== null ? `(${gpuTemp}°C)` : ''}
+            {gpuOverheated && <AlertTriangle size={12} className="text-red-500 animate-bounce" />}
+          </span>
+          <span className={`font-bold ${gpuOverheated ? 'text-red-500' : 'text-accent-green'}`}>{gpuUsage}%</span>
         </div>
         <div className="w-full h-2 bg-black border border-border-wire rounded-sm overflow-hidden relative">
           <div 
-            className="h-full bg-accent-green transition-all duration-500 ease-in-out"
+            className={`h-full transition-all duration-500 ease-in-out ${gpuOverheated ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : 'bg-accent-green'}`}
             style={{ width: `${gpuUsage}%` }}
           />
         </div>
