@@ -259,7 +259,7 @@ export function MediaCaptureWidget() {
           {activeApp !== 'Desktop' && activeApp !== '' && (
             <button 
               onClick={handleToggleGame}
-              className={`text-[10px] px-2 py-1 rounded-sm uppercase tracking-widest font-bold transition-colors ${
+              className={`text-[11px] px-2 py-1 rounded-sm uppercase tracking-widest font-bold transition-colors ${
                 isKnownGame ? 'bg-accent-green/20 text-accent-green hover:bg-red-500/20 hover:text-red-500' : 'bg-white/10 text-zinc-400 hover:bg-white/20 hover:text-white'
               }`}
             >
@@ -350,7 +350,7 @@ export function MediaCaptureWidget() {
                     {cap.media_type === 'video' ? (
                       <>
                         <Zap size={11} className="text-accent-amber fill-accent-amber/20 animate-pulse" />
-                        <span className="text-[9px] tracking-widest font-bold text-accent-amber uppercase">CLIP</span>
+                        <span className="text-[11px] tracking-widest font-bold text-accent-amber uppercase">CLIP</span>
                       </>
                     ) : (
                       <>
@@ -359,7 +359,7 @@ export function MediaCaptureWidget() {
                           alt="Thumbnail" 
                           className="w-8 h-5 object-cover rounded-[2px] border border-white/10"
                         />
-                        <span className="text-[9px] tracking-widest font-bold text-accent-green uppercase">IMG</span>
+                        <span className="text-[11px] tracking-widest font-bold text-accent-green uppercase">IMG</span>
                       </>
                     )}
                   </span>

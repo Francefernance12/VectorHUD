@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useTimerStore } from '../../store/timerStore';
 
 export function TimerWidget() {
@@ -9,6 +10,7 @@ export function TimerWidget() {
   const startSw = useTimerStore(state => state.startSw);
   const pauseSw = useTimerStore(state => state.pauseSw);
   const resetSw = useTimerStore(state => state.resetSw);
+  const setSwTime = useTimerStore(state => state.setSwTime);
 
   const cdInput = useTimerStore(state => state.cdInput);
   const cdTime = useTimerStore(state => state.cdTime);
@@ -19,10 +21,52 @@ export function TimerWidget() {
   const pauseCd = useTimerStore(state => state.pauseCd);
   const resetCd = useTimerStore(state => state.resetCd);
 
+  const [isEditingCd, setIsEditingCd] = useState(false);
+  const [cdMin, setCdMin] = useState('0');
+  const [cdSec, setCdSec] = useState('0');
+
+  const [isEditingSw, setIsEditingSw] = useState(false);
+  const [swMin, setSwMin] = useState('0');
+  const [swSec, setSwSec] = useState('0');
+
   const formatTime = (timeInSeconds: number) => {
     const m = Math.floor(timeInSeconds / 60).toString().padStart(2, '0');
     const s = (timeInSeconds % 60).toString().padStart(2, '0');
     return `${m}:${s}`;
+  };
+
+  const handleStartEditCd = () => {
+    if (cdIsRunning) return;
+    const m = Math.floor(cdTime / 60);
+    const s = cdTime % 60;
+    setCdMin(m.toString().padStart(2, '0'));
+    setCdSec(s.toString().padStart(2, '0'));
+    setIsEditingCd(true);
+  };
+
+  const handleCommitCd = () => {
+    const mins = Math.max(0, parseInt(cdMin) || 0);
+    const secs = Math.max(0, Math.min(59, parseInt(cdSec) || 0));
+    const total = (mins * 60) + secs;
+    setCdInput(total);
+    setIsEditingCd(false);
+  };
+
+  const handleStartEditSw = () => {
+    if (swIsRunning) return;
+    const m = Math.floor(swTime / 60);
+    const s = swTime % 60;
+    setSwMin(m.toString().padStart(2, '0'));
+    setSwSec(s.toString().padStart(2, '0'));
+    setIsEditingSw(true);
+  };
+
+  const handleCommitSw = () => {
+    const mins = Math.max(0, parseInt(swMin) || 0);
+    const secs = Math.max(0, Math.min(59, parseInt(swSec) || 0));
+    const total = (mins * 60) + secs;
+    setSwTime(total);
+    setIsEditingSw(false);
   };
 
   return (
@@ -45,9 +89,46 @@ export function TimerWidget() {
 
       {activeTab === 'countdown' ? (
         <div className="flex flex-col flex-1 items-center justify-center space-y-6">
-          <div className={`text-6xl font-bold tracking-wider ${cdFinished ? 'text-red-500 animate-pulse' : 'text-accent-amber'}`}>
-            {formatTime(cdTime)}
-          </div>
+          {isEditingCd ? (
+            <div className="flex items-center text-6xl font-bold tracking-wider text-accent-amber font-mono select-text">
+              <input
+                type="number"
+                min="0"
+                max="999"
+                value={cdMin}
+                onChange={(e) => setCdMin(e.target.value.slice(0, 3))}
+                onBlur={handleCommitCd}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleCommitCd();
+                  if (e.key === 'Escape') setIsEditingCd(false);
+                }}
+                autoFocus
+                className="w-[100px] bg-transparent text-center border-b border-accent-amber/30 focus:border-accent-amber focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+              <span className="px-1 text-zinc-600">:</span>
+              <input
+                type="number"
+                min="0"
+                max="59"
+                value={cdSec}
+                onChange={(e) => setCdSec(e.target.value.slice(0, 2))}
+                onBlur={handleCommitCd}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleCommitCd();
+                  if (e.key === 'Escape') setIsEditingCd(false);
+                }}
+                className="w-[80px] bg-transparent text-center border-b border-accent-amber/30 focus:border-accent-amber focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+            </div>
+          ) : (
+            <div 
+              onClick={handleStartEditCd}
+              className={`text-6xl font-bold tracking-wider select-none cursor-pointer ${cdIsRunning ? 'cursor-default' : 'hover:text-accent-amber/80 border-b border-transparent hover:border-accent-amber/30'} ${cdFinished ? 'text-red-500 animate-pulse' : 'text-accent-amber'}`}
+              title={!cdIsRunning ? "Click to set custom time" : undefined}
+            >
+              {formatTime(cdTime)}
+            </div>
+          )}
           
           <div className="flex space-x-4">
             <button
@@ -88,9 +169,46 @@ export function TimerWidget() {
         </div>
       ) : (
         <div className="flex flex-col flex-1 items-center justify-center space-y-6">
-          <div className="text-6xl font-bold tracking-wider text-accent-green">
-            {formatTime(swTime)}
-          </div>
+          {isEditingSw ? (
+            <div className="flex items-center text-6xl font-bold tracking-wider text-accent-green font-mono select-text">
+              <input
+                type="number"
+                min="0"
+                max="999"
+                value={swMin}
+                onChange={(e) => setSwMin(e.target.value.slice(0, 3))}
+                onBlur={handleCommitSw}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleCommitSw();
+                  if (e.key === 'Escape') setIsEditingSw(false);
+                }}
+                autoFocus
+                className="w-[100px] bg-transparent text-center border-b border-accent-green/30 focus:border-accent-green focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+              <span className="px-1 text-zinc-600">:</span>
+              <input
+                type="number"
+                min="0"
+                max="59"
+                value={swSec}
+                onChange={(e) => setSwSec(e.target.value.slice(0, 2))}
+                onBlur={handleCommitSw}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleCommitSw();
+                  if (e.key === 'Escape') setIsEditingSw(false);
+                }}
+                className="w-[80px] bg-transparent text-center border-b border-accent-green/30 focus:border-accent-green focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+            </div>
+          ) : (
+            <div 
+              onClick={handleStartEditSw}
+              className={`text-6xl font-bold tracking-wider select-none cursor-pointer ${swIsRunning ? 'cursor-default' : 'hover:text-accent-green/80 border-b border-transparent hover:border-accent-green/30'} text-accent-green`}
+              title={!swIsRunning ? "Click to set custom time" : undefined}
+            >
+              {formatTime(swTime)}
+            </div>
+          )}
           
           <div className="flex space-x-4 mt-auto">
             <button

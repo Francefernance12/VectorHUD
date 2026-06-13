@@ -1,10 +1,12 @@
 use serde::Serialize;
+use std::ffi::OsString;
+use std::os::windows::ffi::OsStringExt;
 use tauri::command;
 use windows::core::{ComInterface, Result as WinResult};
 use windows::Win32::Foundation::{CloseHandle, BOOL, MAX_PATH};
-use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
+use windows::Win32::Media::Audio::Endpoints::{IAudioEndpointVolume, IAudioMeterInformation};
 use windows::Win32::Media::Audio::{
-    eConsole, eRender, IAudioSessionControl2, IAudioSessionManager2, IMMDevice,
+    eCapture, eConsole, eRender, IAudioSessionControl2, IAudioSessionManager2, IMMDevice,
     IMMDeviceEnumerator, ISimpleAudioVolume, MMDeviceEnumerator, DEVICE_STATE_ACTIVE,
 };
 use windows::Win32::System::Com::{
@@ -294,4 +296,174 @@ unsafe fn toggle_app_mute_impl(target_pid: u32) -> WinResult<()> {
         }
     }
     Ok(())
+}
+
+#[derive(Serialize, Clone)]
+pub struct AudioDevice {
+    pub id: String,
+    pub name: String,
+    pub is_default: bool,
+}
+
+#[derive(Serialize, Clone)]
+pub struct AudioDevicesLists {
+    pub inputs: Vec<AudioDevice>,
+    pub outputs: Vec<AudioDevice>,
+}
+
+#[command]
+pub async fn get_audio_devices() -> Result<AudioDevicesLists, String> {
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        let enumerator: IMMDeviceEnumerator =
+            CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).map_err(|e| e.to_string())?;
+
+        let default_output_id = enumerator
+            .GetDefaultAudioEndpoint(eRender, eConsole)
+            .and_then(|d| d.GetId())
+            .map(|id| {
+                let s = id.as_wide();
+                OsString::from_wide(s).to_string_lossy().to_string()
+            })
+            .unwrap_or_default();
+
+        let default_input_id = enumerator
+            .GetDefaultAudioEndpoint(eCapture, eConsole)
+            .and_then(|d| d.GetId())
+            .map(|id| {
+                let s = id.as_wide();
+                OsString::from_wide(s).to_string_lossy().to_string()
+            })
+            .unwrap_or_default();
+
+        let input_devices =
+            windows_record::enumerate_audio_input_devices().map_err(|e| e.to_string())?;
+
+        let output_devices =
+            windows_record::enumerate_audio_output_devices().map_err(|e| e.to_string())?;
+
+        let inputs = input_devices
+            .into_iter()
+            .map(|d| AudioDevice {
+                is_default: d.id == default_input_id,
+                id: d.id,
+                name: d.name,
+            })
+            .collect();
+
+        let outputs = output_devices
+            .into_iter()
+            .map(|d| AudioDevice {
+                is_default: d.id == default_output_id,
+                id: d.id,
+                name: d.name,
+            })
+            .collect();
+
+        Ok(AudioDevicesLists { inputs, outputs })
+    }
+}
+
+#[command]
+pub async fn get_microphone_volume() -> Result<f32, String> {
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        let enumerator: IMMDeviceEnumerator =
+            CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).map_err(|e| e.to_string())?;
+        let device: IMMDevice = enumerator
+            .GetDefaultAudioEndpoint(eCapture, eConsole)
+            .map_err(|e| e.to_string())?;
+        let endpoint_volume: IAudioEndpointVolume = device
+            .Activate(CLSCTX_ALL, None)
+            .map_err(|e| e.to_string())?;
+        let vol = endpoint_volume
+            .GetMasterVolumeLevelScalar()
+            .map_err(|e| e.to_string())?;
+        Ok(vol)
+    }
+}
+
+#[command]
+pub async fn set_microphone_volume(volume: f32) -> Result<(), String> {
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        let enumerator: IMMDeviceEnumerator =
+            CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).map_err(|e| e.to_string())?;
+        let device: IMMDevice = enumerator
+            .GetDefaultAudioEndpoint(eCapture, eConsole)
+            .map_err(|e| e.to_string())?;
+        let endpoint_volume: IAudioEndpointVolume = device
+            .Activate(CLSCTX_ALL, None)
+            .map_err(|e| e.to_string())?;
+        endpoint_volume
+            .SetMasterVolumeLevelScalar(volume, std::ptr::null())
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+}
+
+#[command]
+pub async fn get_microphone_mute() -> Result<bool, String> {
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        let enumerator: IMMDeviceEnumerator =
+            CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).map_err(|e| e.to_string())?;
+        let device: IMMDevice = enumerator
+            .GetDefaultAudioEndpoint(eCapture, eConsole)
+            .map_err(|e| e.to_string())?;
+        let endpoint_volume: IAudioEndpointVolume = device
+            .Activate(CLSCTX_ALL, None)
+            .map_err(|e| e.to_string())?;
+        let muted = endpoint_volume.GetMute().map_err(|e| e.to_string())?;
+        Ok(muted == BOOL::from(true))
+    }
+}
+
+#[command]
+pub async fn set_microphone_mute(muted: bool) -> Result<(), String> {
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        let enumerator: IMMDeviceEnumerator =
+            CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).map_err(|e| e.to_string())?;
+        let device: IMMDevice = enumerator
+            .GetDefaultAudioEndpoint(eCapture, eConsole)
+            .map_err(|e| e.to_string())?;
+        let endpoint_volume: IAudioEndpointVolume = device
+            .Activate(CLSCTX_ALL, None)
+            .map_err(|e| e.to_string())?;
+        endpoint_volume
+            .SetMute(BOOL::from(muted), std::ptr::null())
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+}
+
+#[command]
+pub async fn get_audio_peak_levels() -> Result<(f32, f32), String> {
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        let enumerator: IMMDeviceEnumerator =
+            CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).map_err(|e| e.to_string())?;
+
+        let mut play_peak = 0.0f32;
+        let mut record_peak = 0.0f32;
+
+        if let Ok(play_dev) = enumerator.GetDefaultAudioEndpoint(eRender, eConsole) {
+            if let Ok(meter) = play_dev.Activate::<IAudioMeterInformation>(CLSCTX_ALL, None) {
+                if let Ok(peak) = meter.GetPeakValue() {
+                    play_peak = peak;
+                }
+            }
+        }
+
+        if let Ok(rec_dev) = enumerator.GetDefaultAudioEndpoint(eCapture, eConsole) {
+            if let Ok(meter) = rec_dev.Activate::<IAudioMeterInformation>(CLSCTX_ALL, None) {
+                if let Ok(peak) = meter.GetPeakValue() {
+                    record_peak = peak;
+                }
+            }
+        }
+
+        Ok((play_peak, record_peak))
+    }
 }

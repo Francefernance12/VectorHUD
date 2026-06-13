@@ -64,17 +64,26 @@ pub fn encode_wav(samples: &[i16], sample_rate: u32, channels: u16) -> Result<Ve
 }
 
 impl VoiceRecorder {
-    pub fn start() -> Result<Self, String> {
+    pub fn start(device_name: Option<String>) -> Result<Self, String> {
         let host = cpal::default_host();
-        let device = host
-            .default_input_device()
-            .ok_or_else(|| "No default input device available".to_string())?;
+        let device = if let Some(ref name) = device_name {
+            if name == "Default" || name.is_empty() {
+                host.default_input_device()
+            } else {
+                match host.input_devices() {
+                    Ok(mut devices) => devices
+                        .find(|d| d.to_string() == *name)
+                        .or_else(|| host.default_input_device()),
+                    Err(_) => host.default_input_device(),
+                }
+            }
+        } else {
+            host.default_input_device()
+        };
+        let device = device.ok_or_else(|| "No input device available".to_string())?;
 
-        let device_name = format!("{}", device);
-        info!(
-            "Using default input device for voice assistant: {}",
-            device_name
-        );
+        let resolved_name = device.to_string();
+        info!("Using input device for voice assistant: {}", resolved_name);
 
         let config = device
             .default_input_config()

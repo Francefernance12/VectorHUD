@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Volume2, VolumeX, Music, Play, Pause, SkipForward, SkipBack, Star } from 'lucide-react';
+import { Volume2, VolumeX, Music, Play, Pause, SkipForward, SkipBack, Star, Mic } from 'lucide-react';
 import { logger } from '../../utils/logger';
 import { useAudioStore } from '../../store/audioStore';
+import { useSettingsStore } from '../../store/settingsStore';
 
 interface AudioSession {
   process_id: number;
@@ -28,6 +29,21 @@ export function AudioHubWidget() {
   const [audioState, setAudioState] = useState<SystemAudio | null>(null);
   const { favoriteApps, toggleFavoriteApp, currentMedia, setCurrentMedia } = useAudioStore();
 
+  const {
+    selectedAudioInput,
+    selectedAudioOutput,
+    microphoneVolume,
+    microphoneMuted,
+    setSelectedAudioInput,
+    setSelectedAudioOutput,
+    setMicrophoneVolume,
+    setMicrophoneMuted
+  } = useSettingsStore();
+
+  const [devicesList, setDevicesList] = useState<{ inputs: any[], outputs: any[] }>({ inputs: [], outputs: [] });
+  const [playPeakLevel, setPlayPeakLevel] = useState(0);
+  const [recPeakLevel, setRecPeakLevel] = useState(0);
+
   const fetchAudioState = async () => {
     try {
       const state = await invoke<SystemAudio>('get_audio_mixer_state');
@@ -46,10 +62,51 @@ export function AudioHubWidget() {
     }
   };
 
+  const fetchDevices = async () => {
+    try {
+      const dev = await invoke<any>('get_audio_devices');
+      setDevicesList(dev);
+    } catch (err) {
+      // logger.error(`Failed to fetch audio devices: ${err}`);
+    }
+  };
+
+  const playTestSound = () => {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      // Try to route sound output to the chosen speaker
+      if (selectedAudioOutput !== 'Default' && typeof (ctx.destination as any).setSinkId === 'function') {
+        const match = devicesList.outputs.find(d => d.name === selectedAudioOutput);
+        if (match) {
+          (ctx.destination as any).setSinkId(match.id).catch(() => {});
+        }
+      }
+      
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(440, ctx.currentTime); // 440Hz tone
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+      
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      
+      osc.start();
+      osc.stop(ctx.currentTime + 0.5);
+    } catch (err) {
+      logger.warn(`Failed to play test sound: ${err}`);
+    }
+  };
+
   useEffect(() => {
     let isActive = true;
     let pollInterval = 1000;
     let timeoutId: ReturnType<typeof setTimeout>;
+
+    fetchDevices();
 
     const poll = async () => {
       if (!isActive) return;
@@ -70,6 +127,7 @@ export function AudioHubWidget() {
     const handleRefresh = () => {
       fetchAudioState();
       fetchMediaState();
+      fetchDevices();
       pollInterval = 1000;
     };
 
@@ -82,6 +140,21 @@ export function AudioHubWidget() {
       window.removeEventListener('mousemove', resetPoll);
       window.removeEventListener('refresh-audio-state', handleRefresh);
     };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const pollPeak = async () => {
+      if (!active) return;
+      try {
+        const [playPeak, recPeak] = await invoke<[number, number]>('get_audio_peak_levels');
+        setPlayPeakLevel(playPeak);
+        setRecPeakLevel(recPeak);
+      } catch {}
+      setTimeout(pollPeak, 100);
+    };
+    pollPeak();
+    return () => { active = false; };
   }, []);
 
   const handleAppVolumeChange = async (pid: number, volume: number) => {
@@ -170,6 +243,95 @@ export function AudioHubWidget() {
           </div>
         </div>
       )}
+
+      {/* Hardware Interface Selectors & VU Meters */}
+      <div className="flex flex-col space-y-4 bg-black/45 border border-white/5 p-3 rounded-lg">
+        <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Hardware Interfaces</div>
+        
+        {/* Output Selector & Test */}
+        <div className="flex flex-col space-y-2">
+          <label className="text-xs text-zinc-400">Speaker / Output Device</label>
+          <div className="flex items-center gap-2">
+            <select
+              value={selectedAudioOutput}
+              onChange={(e) => setSelectedAudioOutput(e.target.value)}
+              className="flex-1 bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 px-3 py-2 outline-none rounded-sm font-mono cursor-pointer hover:border-zinc-700 transition-colors"
+            >
+              <option value="Default">Default System Device</option>
+              {devicesList.outputs?.map(dev => (
+                <option key={dev.id} value={dev.name}>{dev.name}</option>
+              ))}
+            </select>
+            <button
+              onClick={playTestSound}
+              className="px-3 py-2 bg-zinc-900 border border-zinc-800 hover:border-accent-green hover:text-accent-green text-xs font-bold uppercase transition-colors shrink-0 rounded-sm"
+              title="Play test tone"
+            >
+              Test
+            </button>
+          </div>
+          {/* Playback Peak Visualizer */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-zinc-500 w-8">OUT</span>
+            <div className="flex-grow h-1.5 bg-zinc-800 rounded-sm overflow-hidden relative">
+              <div 
+                className="h-full bg-accent-green transition-all duration-75 ease-out"
+                style={{ width: `${Math.min(100, playPeakLevel * 100)}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Input Selector & Volume */}
+        <div className="flex flex-col space-y-2">
+          <label className="text-xs text-zinc-400">Microphone / Input Device</label>
+          <select
+            value={selectedAudioInput}
+            onChange={(e) => setSelectedAudioInput(e.target.value)}
+            className="w-full bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 px-3 py-2 outline-none rounded-sm font-mono cursor-pointer hover:border-zinc-700 transition-colors"
+          >
+            <option value="Default">Default System Device</option>
+            {devicesList.inputs?.map(dev => (
+              <option key={dev.id} value={dev.name}>{dev.name}</option>
+            ))}
+          </select>
+
+          {/* Mic Volume Slider & Mute */}
+          <div className="flex items-center gap-3 pt-1">
+            <button 
+              onClick={() => setMicrophoneMuted(!microphoneMuted)} 
+              className="transition-colors hover:opacity-80"
+              title={microphoneMuted ? "Unmute Mic" : "Mute Mic"}
+            >
+              {microphoneMuted || microphoneVolume === 0 ? (
+                <VolumeX size={15} className="text-red-400 animate-pulse" />
+              ) : (
+                <Mic size={15} className="text-accent-green" />
+              )}
+            </button>
+            <input 
+              type="range" 
+              min="0" 
+              max="100" 
+              value={microphoneVolume}
+              onChange={(e) => setMicrophoneVolume(parseInt(e.target.value))}
+              className="flex-grow h-1.5 bg-zinc-800 rounded-full appearance-none cursor-pointer accent-accent-green"
+            />
+            <span className="text-xs text-zinc-400 w-8 text-right shrink-0">{microphoneVolume}%</span>
+          </div>
+
+          {/* Record Peak Visualizer */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-zinc-500 w-8">IN</span>
+            <div className="flex-grow h-1.5 bg-zinc-800 rounded-sm overflow-hidden relative">
+              <div 
+                className="h-full bg-accent-green transition-all duration-75 ease-out"
+                style={{ width: `${Math.min(100, recPeakLevel * 100)}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Master Volume Section */}
       <div className="flex flex-col space-y-2">

@@ -12,6 +12,7 @@ interface TimerState {
   startSw: () => void;
   pauseSw: () => void;
   resetSw: () => void;
+  setSwTime: (time: number) => void;
   
   // Countdown
   cdInput: number;
@@ -53,6 +54,7 @@ export const useTimerStore = create<TimerState>()(
         swInterval = null;
         set({ swTime: 0, swIsRunning: false });
       },
+      setSwTime: (time) => set({ swTime: time }),
 
       cdInput: 60,
       cdTime: 60,

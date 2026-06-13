@@ -3,8 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   X, Key, Zap, Palette, Save, Settings, Edit3, Download, RefreshCw, 
   CheckCircle2, Search, Terminal, Sliders, Volume2, Cpu, Monitor, 
-  Trash2, RotateCcw, HelpCircle, Shield, AlertTriangle
+  Trash2, RotateCcw, HelpCircle, Shield, AlertTriangle, VolumeX, Mic
 } from 'lucide-react';
+import { getSettingsStore } from '../utils/store';
 import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { getVersion } from '@tauri-apps/api/app';
@@ -88,6 +89,24 @@ export function SettingsModal() {
     setBackdropOpacity,
     launchOnStartup,
     setLaunchOnStartup,
+    widgetBorderRadius,
+    setWidgetBorderRadius,
+    widgetBorderWidth,
+    setWidgetBorderWidth,
+    widgetBorderOpacity,
+    setWidgetBorderOpacity,
+    widgetGlowSize,
+    setWidgetGlowSize,
+    widgetGlowOpacity,
+    setWidgetGlowOpacity,
+    selectedAudioInput,
+    setSelectedAudioInput,
+    selectedAudioOutput,
+    setSelectedAudioOutput,
+    microphoneVolume,
+    setMicrophoneVolume,
+    microphoneMuted,
+    setMicrophoneMuted,
     syncHotkeys
   } = useSettingsStore(
     useShallow((state) => ({
@@ -163,11 +182,29 @@ export function SettingsModal() {
       setBackdropOpacity: state.setBackdropOpacity,
       launchOnStartup: state.launchOnStartup,
       setLaunchOnStartup: state.setLaunchOnStartup,
+      widgetBorderRadius: state.widgetBorderRadius,
+      setWidgetBorderRadius: state.setWidgetBorderRadius,
+      widgetBorderWidth: state.widgetBorderWidth,
+      setWidgetBorderWidth: state.setWidgetBorderWidth,
+      widgetBorderOpacity: state.widgetBorderOpacity,
+      setWidgetBorderOpacity: state.setWidgetBorderOpacity,
+      widgetGlowSize: state.widgetGlowSize,
+      setWidgetGlowSize: state.setWidgetGlowSize,
+      widgetGlowOpacity: state.widgetGlowOpacity,
+      setWidgetGlowOpacity: state.setWidgetGlowOpacity,
+      selectedAudioInput: state.selectedAudioInput,
+      setSelectedAudioInput: state.setSelectedAudioInput,
+      selectedAudioOutput: state.selectedAudioOutput,
+      setSelectedAudioOutput: state.setSelectedAudioOutput,
+      microphoneVolume: state.microphoneVolume,
+      setMicrophoneVolume: state.setMicrophoneVolume,
+      microphoneMuted: state.microphoneMuted,
+      setMicrophoneMuted: state.setMicrophoneMuted,
       syncHotkeys: state.syncHotkeys,
     }))
   );
 
-  const [activeTab, setActiveTab] = useState<'integrations' | 'widgets' | 'hotkeys' | 'general' | 'logs' | 'updates'>('integrations');
+  const [activeTab, setActiveTab] = useState<'integrations' | 'widgets' | 'hotkeys' | 'audio' | 'general' | 'logs' | 'updates'>('integrations');
   const [searchQuery, setSearchQuery] = useState('');
   
   // Credentials loaded from SQLite
@@ -180,6 +217,11 @@ export function SettingsModal() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
   const [hotkeyError, setHotkeyError] = useState('');
+  
+  // Audio devices list state inside SettingsModal
+  const [audioDevices, setAudioDevices] = useState<{ inputs: any[], outputs: any[] }>({ inputs: [], outputs: [] });
+  const [playPeakLevel, setPlayPeakLevel] = useState(0);
+  const [recPeakLevel, setRecPeakLevel] = useState(0);
   
   // Updater state
   const [currentVersion, setCurrentVersion] = useState<string>('0.0.0');
@@ -235,7 +277,16 @@ export function SettingsModal() {
     systemPromptOverride,
     backgroundBlur,
     backdropOpacity,
-    launchOnStartup
+    launchOnStartup,
+    widgetBorderRadius,
+    widgetBorderWidth,
+    widgetBorderOpacity,
+    widgetGlowSize,
+    widgetGlowOpacity,
+    selectedAudioInput,
+    selectedAudioOutput,
+    microphoneVolume,
+    microphoneMuted
   });
 
   // Diagnostics logs state
@@ -294,8 +345,27 @@ export function SettingsModal() {
       systemPromptOverride,
       backgroundBlur,
       backdropOpacity,
-      launchOnStartup
+      launchOnStartup,
+      widgetBorderRadius,
+      widgetBorderWidth,
+      widgetBorderOpacity,
+      widgetGlowSize,
+      widgetGlowOpacity,
+      selectedAudioInput,
+      selectedAudioOutput,
+      microphoneVolume,
+      microphoneMuted
     });
+
+    async function loadAudioDevices() {
+      try {
+        const dev = await invoke<any>('get_audio_devices');
+        setAudioDevices(dev);
+      } catch (err) {
+        console.warn("Failed to retrieve audio devices in SettingsModal useEffect:", err);
+      }
+    }
+    loadAudioDevices();
     
     async function loadCredentials() {
       try {
@@ -460,6 +530,49 @@ export function SettingsModal() {
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [recordingField]);
 
+  // Play test sound on output device
+  const playTestSound = () => {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      if (localPreferences.selectedAudioOutput !== 'Default' && typeof (ctx.destination as any).setSinkId === 'function') {
+        const match = audioDevices.outputs.find(d => d.name === localPreferences.selectedAudioOutput);
+        if (match) {
+          (ctx.destination as any).setSinkId(match.id).catch(() => {});
+        }
+      }
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(440, ctx.currentTime);
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.5);
+    } catch (err) {
+      console.warn(`Failed to play test sound: ${err}`);
+    }
+  };
+
+  // Poll audio peak levels when Audio tab is active
+  useEffect(() => {
+    if (!isSettingsOpen || activeTab !== 'audio') return;
+    
+    let active = true;
+    const pollPeak = async () => {
+      if (!active) return;
+      try {
+        const [playPeak, recPeak] = await invoke<[number, number]>('get_audio_peak_levels');
+        setPlayPeakLevel(playPeak);
+        setRecPeakLevel(recPeak);
+      } catch {}
+      setTimeout(pollPeak, 100);
+    };
+    pollPeak();
+    return () => { active = false; };
+  }, [isSettingsOpen, activeTab]);
+
   // Save modified configurations to store and credentials DB
   const handleSave = async () => {
     setIsSaving(true);
@@ -538,6 +651,17 @@ export function SettingsModal() {
       await setBackgroundBlur(localPreferences.backgroundBlur);
       await setBackdropOpacity(localPreferences.backdropOpacity);
       await setLaunchOnStartup(localPreferences.launchOnStartup);
+
+      // Save visual customization and audio preferences
+      await setWidgetBorderRadius(localPreferences.widgetBorderRadius);
+      await setWidgetBorderWidth(localPreferences.widgetBorderWidth);
+      await setWidgetBorderOpacity(localPreferences.widgetBorderOpacity);
+      await setWidgetGlowSize(localPreferences.widgetGlowSize);
+      await setWidgetGlowOpacity(localPreferences.widgetGlowOpacity);
+      await setSelectedAudioInput(localPreferences.selectedAudioInput);
+      await setSelectedAudioOutput(localPreferences.selectedAudioOutput);
+      await setMicrophoneVolume(localPreferences.microphoneVolume);
+      await setMicrophoneMuted(localPreferences.microphoneMuted);
 
       // Sync and bind hotkeys
       try {
@@ -622,7 +746,16 @@ export function SettingsModal() {
       localPreferences.systemPromptOverride !== systemPromptOverride ||
       localPreferences.backgroundBlur !== backgroundBlur ||
       localPreferences.backdropOpacity !== backdropOpacity ||
-      localPreferences.launchOnStartup !== launchOnStartup
+      localPreferences.launchOnStartup !== launchOnStartup ||
+      localPreferences.widgetBorderRadius !== widgetBorderRadius ||
+      localPreferences.widgetBorderWidth !== widgetBorderWidth ||
+      localPreferences.widgetBorderOpacity !== widgetBorderOpacity ||
+      localPreferences.widgetGlowSize !== widgetGlowSize ||
+      localPreferences.widgetGlowOpacity !== widgetGlowOpacity ||
+      localPreferences.selectedAudioInput !== selectedAudioInput ||
+      localPreferences.selectedAudioOutput !== selectedAudioOutput ||
+      localPreferences.microphoneVolume !== microphoneVolume ||
+      localPreferences.microphoneMuted !== microphoneMuted
     );
   };
 
@@ -634,7 +767,7 @@ export function SettingsModal() {
     toggleSettings();
   };
 
-  const handleConfirmDiscard = () => {
+  const handleConfirmDiscard = async () => {
     // Revert local values
     setOpenRouterKey(initialOpenRouterKey);
     setOpenaiKey(initialOpenaiKey);
@@ -681,8 +814,20 @@ export function SettingsModal() {
       systemPromptOverride,
       backgroundBlur,
       backdropOpacity,
-      launchOnStartup
+      launchOnStartup,
+      widgetBorderRadius,
+      widgetBorderWidth,
+      widgetBorderOpacity,
+      widgetGlowSize,
+      widgetGlowOpacity,
+      selectedAudioInput,
+      selectedAudioOutput,
+      microphoneVolume,
+      microphoneMuted
     });
+    
+    // Restore CSS variables from saved settings
+    await useSettingsStore.getState().loadPreferences();
     
     setShowConfirmClose(false);
     toggleSettings();
@@ -727,7 +872,16 @@ export function SettingsModal() {
       systemPromptOverride: '',
       backgroundBlur: 8,
       backdropOpacity: 60,
-      launchOnStartup: false
+      launchOnStartup: false,
+      widgetBorderRadius: 12,
+      widgetBorderWidth: 1,
+      widgetBorderOpacity: 15,
+      widgetGlowSize: 15,
+      widgetGlowOpacity: 15,
+      selectedAudioInput: 'Default',
+      selectedAudioOutput: 'Default',
+      microphoneVolume: 100,
+      microphoneMuted: false
     });
 
     setShowConfirmReset(false);
@@ -1334,6 +1488,20 @@ export function SettingsModal() {
 
                 <button
                   disabled={!!searchQuery}
+                  onClick={() => setActiveTab('audio')}
+                  className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold tracking-wider uppercase transition-all border ${
+                    searchQuery 
+                      ? 'opacity-40 border-transparent text-zinc-600'
+                      : activeTab === 'audio' 
+                        ? 'bg-primary/15 border-primary/35 text-primary shadow-[inset_0_0_10px_rgba(var(--accent-green-rgb,74,246,38),0.08)]' 
+                        : 'border-transparent text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
+                  }`}
+                >
+                  <Volume2 size={14} /> Audio Settings
+                </button>
+
+                <button
+                  disabled={!!searchQuery}
                   onClick={() => setActiveTab('general')}
                   className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold tracking-wider uppercase transition-all border ${
                     searchQuery 
@@ -1399,7 +1567,7 @@ export function SettingsModal() {
                           key={idx} 
                           className="p-4 rounded-xl bg-zinc-950 border border-white/5 space-y-2 relative overflow-hidden"
                         >
-                          <div className="absolute right-3 top-3 px-2 py-0.5 rounded bg-zinc-800 text-[10px] text-zinc-400 font-mono font-semibold uppercase">
+                          <div className="absolute right-3 top-3 px-2 py-0.5 rounded bg-zinc-800 text-xs text-zinc-400 font-mono font-semibold uppercase">
                             {sr.category}
                           </div>
                           <h4 className="text-xs font-bold text-white uppercase tracking-wide pr-20">
@@ -1430,7 +1598,7 @@ export function SettingsModal() {
                         </h3>
 
                         <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Active AI Interface Provider</label>
+                          <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Active AI Interface Provider</label>
                           <select
                             value={localPreferences.aiProvider}
                             onChange={(e) => setLocalPreferences(s => ({ ...s, aiProvider: e.target.value }))}
@@ -1447,7 +1615,7 @@ export function SettingsModal() {
                         {localPreferences.aiProvider === 'openrouter' && (
                           <div className="space-y-4 pt-2">
                             <div className="space-y-1">
-                              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">OpenRouter API Key</label>
+                              <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">OpenRouter API Key</label>
                               <input 
                                 type="password"
                                 value={openRouterKey}
@@ -1472,7 +1640,7 @@ export function SettingsModal() {
 
                             {localPreferences.useCustomOpenRouterModel ? (
                               <div className="space-y-1">
-                                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Custom Model ID</label>
+                                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Custom Model ID</label>
                                 <input 
                                   type="text"
                                   value={localPreferences.customOpenRouterModel}
@@ -1483,7 +1651,7 @@ export function SettingsModal() {
                               </div>
                             ) : (
                               <div className="space-y-1">
-                                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Model Selection</label>
+                                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Model Selection</label>
                                 <select
                                   value={localPreferences.openRouterModel}
                                   onChange={(e) => setLocalPreferences(s => ({ ...s, openRouterModel: e.target.value }))}
@@ -1506,7 +1674,7 @@ export function SettingsModal() {
                         {localPreferences.aiProvider === 'openai' && (
                           <div className="space-y-4 pt-2">
                             <div className="space-y-1">
-                              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">OpenAI API Key</label>
+                              <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">OpenAI API Key</label>
                               <input 
                                 type="password"
                                 value={openaiKey}
@@ -1516,7 +1684,7 @@ export function SettingsModal() {
                               />
                             </div>
                             <div className="space-y-1">
-                              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">OpenAI Model</label>
+                              <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">OpenAI Model</label>
                               <select
                                 value={localPreferences.openaiModel}
                                 onChange={(e) => setLocalPreferences(s => ({ ...s, openaiModel: e.target.value }))}
@@ -1533,7 +1701,7 @@ export function SettingsModal() {
                         {localPreferences.aiProvider === 'anthropic' && (
                           <div className="space-y-4 pt-2">
                             <div className="space-y-1">
-                              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Anthropic API Key</label>
+                              <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Anthropic API Key</label>
                               <input 
                                 type="password"
                                 value={anthropicKey}
@@ -1543,7 +1711,7 @@ export function SettingsModal() {
                               />
                             </div>
                             <div className="space-y-1">
-                              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Anthropic Model</label>
+                              <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Anthropic Model</label>
                               <select
                                 value={localPreferences.anthropicModel}
                                 onChange={(e) => setLocalPreferences(s => ({ ...s, anthropicModel: e.target.value }))}
@@ -1560,7 +1728,7 @@ export function SettingsModal() {
                         {localPreferences.aiProvider === 'groq' && (
                           <div className="space-y-4 pt-2">
                             <div className="space-y-1">
-                              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Groq API Key</label>
+                              <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Groq API Key</label>
                               <input 
                                 type="password"
                                 value={groqKey}
@@ -1570,7 +1738,7 @@ export function SettingsModal() {
                               />
                             </div>
                             <div className="space-y-1">
-                              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Groq Model</label>
+                              <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Groq Model</label>
                               <select
                                 value={localPreferences.groqModel}
                                 onChange={(e) => setLocalPreferences(s => ({ ...s, groqModel: e.target.value }))}
@@ -1591,7 +1759,7 @@ export function SettingsModal() {
                         </h3>
                         
                         <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Internal Integration Secret</label>
+                          <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Internal Integration Secret</label>
                           <input 
                             type="password"
                             value={notionKey}
@@ -1602,7 +1770,7 @@ export function SettingsModal() {
                         </div>
                         
                         <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Database ID or Page Link</label>
+                          <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Database ID or Page Link</label>
                           <input 
                             type="text"
                             value={notionDbId}
@@ -1652,7 +1820,7 @@ export function SettingsModal() {
                               onChange={(e) => setLocalPreferences(s => ({ ...s, metricsPollInterval: parseInt(e.target.value) }))}
                               className="w-full accent-primary"
                             />
-                            <p className="text-[10px] text-zinc-500">How frequently the overlay requests CPU, GPU, VRAM and RAM performance data. Lower rates hit accuracy but use slightly more resources.</p>
+                            <p className="text-xs text-zinc-500">How frequently the overlay requests CPU, GPU, VRAM and RAM performance data. Lower rates hit accuracy but use slightly more resources.</p>
                           </div>
 
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-2">
@@ -1701,7 +1869,7 @@ export function SettingsModal() {
                               onChange={(e) => setLocalPreferences(s => ({ ...s, replayDuration: parseInt(e.target.value) }))}
                               className="w-full accent-primary"
                             />
-                            <p className="text-[10px] text-zinc-500">Duration of rolling buffer clips written to disk when the replay hotkey is triggered.</p>
+                            <p className="text-xs text-zinc-500">Duration of rolling buffer clips written to disk when the replay hotkey is triggered.</p>
                           </div>
 
                           <div className="flex justify-between items-center bg-black/40 p-3.5 rounded-lg border border-white/5 text-xs">
@@ -1738,11 +1906,11 @@ export function SettingsModal() {
                               onChange={(e) => setLocalPreferences(s => ({ ...s, volumeStep: parseInt(e.target.value) }))}
                               className="w-full accent-primary"
                             />
-                            <p className="text-[10px] text-zinc-500">Volume increments when adjust steps are triggered via hotkeys or mouse wheel over the mixer widgets.</p>
+                            <p className="text-xs text-zinc-500">Volume increments when adjust steps are triggered via hotkeys or mouse wheel over the mixer widgets.</p>
                           </div>
 
                           <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Favorite Applications (Always Pinned)</label>
+                            <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Favorite Applications (Always Pinned)</label>
                             <input 
                               type="text"
                               value={localPreferences.favoriteMixerApps}
@@ -1750,7 +1918,7 @@ export function SettingsModal() {
                               placeholder="e.g. chrome.exe, discord.exe, spotify.exe"
                               className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-primary"
                             />
-                            <p className="text-[10px] text-zinc-500">Comma-separated process names that should stay at the top of the Audio Mixer list even when idle.</p>
+                            <p className="text-xs text-zinc-500">Comma-separated process names that should stay at the top of the Audio Mixer list even when idle.</p>
                           </div>
                         </div>
                       </div>
@@ -1772,11 +1940,11 @@ export function SettingsModal() {
                               onChange={(e) => setLocalPreferences(s => ({ ...s, pttBrevityLimit: parseInt(e.target.value) }))}
                               className="w-full accent-primary"
                             />
-                            <p className="text-[10px] text-zinc-500">Restricts voice response cards length to ensure UI readability while in-game.</p>
+                            <p className="text-xs text-zinc-500">Restricts voice response cards length to ensure UI readability while in-game.</p>
                           </div>
 
                           <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Custom System Prompt Override</label>
+                            <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Custom System Prompt Override</label>
                             <textarea 
                               value={localPreferences.systemPromptOverride}
                               onChange={(e) => setLocalPreferences(s => ({ ...s, systemPromptOverride: e.target.value }))}
@@ -1784,7 +1952,7 @@ export function SettingsModal() {
                               rows={3}
                               className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-primary resize-none"
                             />
-                            <p className="text-[10px] text-zinc-500">Overrides the default agent prompt template. Useful for roleplays, brevity constraints or custom integrations.</p>
+                            <p className="text-xs text-zinc-500">Overrides the default agent prompt template. Useful for roleplays, brevity constraints or custom integrations.</p>
                           </div>
                         </div>
                       </div>
@@ -1831,7 +1999,7 @@ export function SettingsModal() {
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">HUD Theme Preset</label>
+                            <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">HUD Theme Preset</label>
                             <select
                               value={localPreferences.theme}
                               onChange={(e) => setLocalPreferences(s => ({ ...s, theme: e.target.value }))}
@@ -1862,7 +2030,7 @@ export function SettingsModal() {
 
                         {localPreferences.theme === 'custom' && (
                           <div className="space-y-2 pt-2 animate-fadeIn">
-                            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Custom Accent Color</label>
+                            <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Custom Accent Color</label>
                             <div className="flex gap-2.5 items-center">
                               <input 
                                 type="color" 
@@ -1923,6 +2091,99 @@ export function SettingsModal() {
                         </div>
                       </div>
 
+                      {/* Widget Borders and Glow */}
+                      <div className="space-y-4 bg-zinc-950/40 p-5 rounded-xl border border-white/5">
+                        <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-2 border-b border-white/10 pb-2 font-mono">
+                          <Sliders size={14} className="text-accent-green" /> Widget Borders & Glow Effects
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-zinc-300 font-medium">Border Radius</span>
+                              <span className="text-primary font-mono font-bold">{localPreferences.widgetBorderRadius}px</span>
+                            </div>
+                            <input 
+                              type="range" min="0" max="24" step="1"
+                              value={localPreferences.widgetBorderRadius}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value);
+                                setLocalPreferences(s => ({ ...s, widgetBorderRadius: val }));
+                                document.documentElement.style.setProperty('--widget-border-radius', `${val}px`);
+                              }}
+                              className="w-full accent-primary cursor-pointer"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-zinc-300 font-medium">Border Line Width</span>
+                              <span className="text-primary font-mono font-bold">{localPreferences.widgetBorderWidth}px</span>
+                            </div>
+                            <input 
+                              type="range" min="0" max="6" step="1"
+                              value={localPreferences.widgetBorderWidth}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value);
+                                setLocalPreferences(s => ({ ...s, widgetBorderWidth: val }));
+                                document.documentElement.style.setProperty('--widget-border-width', `${val}px`);
+                              }}
+                              className="w-full accent-primary cursor-pointer"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-zinc-300 font-medium">Border Opacity</span>
+                              <span className="text-primary font-mono font-bold">{localPreferences.widgetBorderOpacity}%</span>
+                            </div>
+                            <input 
+                              type="range" min="0" max="100" step="5"
+                              value={localPreferences.widgetBorderOpacity}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value);
+                                setLocalPreferences(s => ({ ...s, widgetBorderOpacity: val }));
+                                document.documentElement.style.setProperty('--widget-border-opacity', `${val / 100}`);
+                              }}
+                              className="w-full accent-primary cursor-pointer"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-zinc-300 font-medium">Accent Glow Spread</span>
+                              <span className="text-primary font-mono font-bold">{localPreferences.widgetGlowSize}px</span>
+                            </div>
+                            <input 
+                              type="range" min="0" max="30" step="1"
+                              value={localPreferences.widgetGlowSize}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value);
+                                setLocalPreferences(s => ({ ...s, widgetGlowSize: val }));
+                                document.documentElement.style.setProperty('--widget-glow-size', `${val}px`);
+                              }}
+                              className="w-full accent-primary cursor-pointer"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5 md:col-span-2">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-zinc-300 font-medium">Accent Glow Intensity</span>
+                              <span className="text-primary font-mono font-bold">{localPreferences.widgetGlowOpacity}%</span>
+                            </div>
+                            <input 
+                              type="range" min="0" max="100" step="5"
+                              value={localPreferences.widgetGlowOpacity}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value);
+                                setLocalPreferences(s => ({ ...s, widgetGlowOpacity: val }));
+                                document.documentElement.style.setProperty('--widget-glow-opacity', `${val / 100}`);
+                              }}
+                              className="w-full accent-primary cursor-pointer"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
                       {/* System and startup settings */}
                       <div className="space-y-4 bg-zinc-950/40 p-5 rounded-xl border border-white/5">
                         <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-2 border-b border-white/10 pb-2">
@@ -1966,6 +2227,121 @@ export function SettingsModal() {
                     </div>
                   )}
 
+                  {/* Audio settings tab */}
+                  {activeTab === 'audio' && (
+                    <div className="space-y-6">
+                      
+                      {/* Speaker Output Card */}
+                      <div className="space-y-4 bg-zinc-950/40 p-5 rounded-xl border border-white/5">
+                        <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-2 border-b border-white/10 pb-2 font-mono">
+                          <Volume2 size={14} className="text-accent-green" /> Speaker / Playback Output
+                        </h3>
+                        
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider block">Speaker / Output Device</label>
+                          <div className="flex items-center gap-3">
+                            <select
+                              value={localPreferences.selectedAudioOutput}
+                              onChange={(e) => setLocalPreferences(s => ({ ...s, selectedAudioOutput: e.target.value }))}
+                              className="flex-grow bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 px-4 py-2 outline-none rounded-lg font-mono cursor-pointer hover:border-zinc-700 focus:border-primary transition-colors appearance-none"
+                            >
+                              <option value="Default">Default System Device</option>
+                              {audioDevices.outputs?.map(dev => (
+                                <option key={dev.id} value={dev.name}>{dev.name}</option>
+                              ))}
+                            </select>
+                            <button
+                              onClick={playTestSound}
+                              className="px-4 py-2 bg-zinc-900 border border-zinc-800 hover:border-accent-green hover:text-accent-green text-xs font-bold uppercase transition-colors shrink-0 rounded-lg cursor-pointer animate-pulse-subtle"
+                              title="Play test tone"
+                            >
+                              Play Test Sound
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Playback Peak Visualizer */}
+                        <div className="space-y-1.5 pt-2">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-zinc-455 font-semibold uppercase tracking-wider">Playback Output Peak Level</span>
+                            <span className="text-zinc-555 font-mono text-[11px]">{Math.round(playPeakLevel * 100)}%</span>
+                          </div>
+                          <div className="h-2 bg-zinc-900 rounded-sm overflow-hidden relative border border-white/5">
+                            <div 
+                              className="h-full bg-accent-green transition-all duration-75 ease-out shadow-[0_0_8px_rgba(74,246,38,0.4)]"
+                              style={{ width: `${Math.min(100, playPeakLevel * 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Microphone Input Card */}
+                      <div className="space-y-4 bg-zinc-950/40 p-5 rounded-xl border border-white/5">
+                        <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-2 border-b border-white/10 pb-2 font-mono">
+                          <Mic size={14} className="text-accent-green" /> Microphone / Capture Input
+                        </h3>
+
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider block">Microphone / Input Device</label>
+                          <select
+                            value={localPreferences.selectedAudioInput}
+                            onChange={(e) => setLocalPreferences(s => ({ ...s, selectedAudioInput: e.target.value }))}
+                            className="w-full bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 px-4 py-2 outline-none rounded-lg font-mono cursor-pointer hover:border-zinc-700 focus:border-primary transition-colors appearance-none"
+                          >
+                            <option value="Default">Default System Device</option>
+                            {audioDevices.inputs?.map(dev => (
+                              <option key={dev.id} value={dev.name}>{dev.name}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Mic Volume Slider & Mute Toggle */}
+                        <div className="space-y-3 pt-2">
+                          <div className="flex justify-between items-center text-xs">
+                            <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider font-mono">Microphone Volume & Mute</label>
+                            <span className="text-primary font-mono font-bold">{localPreferences.microphoneVolume}%</span>
+                          </div>
+                          <div className="flex items-center gap-3 bg-black/40 p-3.5 rounded-lg border border-white/5">
+                            <button 
+                              onClick={() => setLocalPreferences(s => ({ ...s, microphoneMuted: !s.microphoneMuted }))} 
+                              className="transition-colors hover:opacity-80 p-1 bg-zinc-900 border border-zinc-800 rounded hover:border-zinc-700 shrink-0 cursor-pointer"
+                              title={localPreferences.microphoneMuted ? "Unmute Mic" : "Mute Mic"}
+                            >
+                              {localPreferences.microphoneMuted || localPreferences.microphoneVolume === 0 ? (
+                                <VolumeX size={16} className="text-red-400 animate-pulse" />
+                              ) : (
+                                <Mic size={16} className="text-accent-green" />
+                              )}
+                            </button>
+                            <input 
+                              type="range" 
+                              min="0" 
+                              max="100" 
+                              value={localPreferences.microphoneVolume}
+                              onChange={(e) => setLocalPreferences(s => ({ ...s, microphoneVolume: parseInt(e.target.value) }))}
+                              className="flex-grow h-1.5 bg-zinc-800 rounded-full appearance-none cursor-pointer accent-accent-green"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Recording Peak Visualizer */}
+                        <div className="space-y-1.5 pt-2">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-zinc-455 font-semibold uppercase tracking-wider">Live Input VU Meter</span>
+                            <span className="text-zinc-555 font-mono text-[11px]">{Math.round(recPeakLevel * 100)}%</span>
+                          </div>
+                          <div className="h-2 bg-zinc-900 rounded-sm overflow-hidden relative border border-white/5">
+                            <div 
+                              className="h-full bg-accent-green transition-all duration-75 ease-out shadow-[0_0_8px_rgba(74,246,38,0.4)]"
+                              style={{ width: `${Math.min(100, recPeakLevel * 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                    </div>
+                  )}
+
                   {/* Diagnostics trace logs tab */}
                   {activeTab === 'logs' && (
                     <div className="flex flex-col h-full space-y-4">
@@ -1974,7 +2350,7 @@ export function SettingsModal() {
                           <h3 className="text-xs font-bold text-white font-mono uppercase tracking-wider flex items-center gap-2">
                             <Terminal size={14} className="text-primary" /> Rolling Diagnostics Trace Output
                           </h3>
-                          <p className="text-[10px] text-zinc-500 mt-0.5">
+                          <p className="text-xs text-zinc-500 mt-0.5">
                             Reading the last 200 trace and console lines from local daily logs.
                           </p>
                         </div>
@@ -2000,7 +2376,7 @@ export function SettingsModal() {
                       {/* Rolling Monospaced Log Viewer */}
                       <pre 
                         ref={logsContainerRef}
-                        className="flex-1 p-4 bg-[#050505] border border-white/5 rounded-xl font-mono text-[10px] text-zinc-400 overflow-y-auto leading-relaxed custom-scrollbar max-h-[360px] whitespace-pre-wrap select-text"
+                        className="flex-1 p-4 bg-[#050505] border border-white/5 rounded-xl font-mono text-xs text-zinc-400 overflow-y-auto leading-relaxed custom-scrollbar max-h-[360px] whitespace-pre-wrap select-text"
                       >
                         {logsContent || 'Log stream is currently empty.'}
                       </pre>
@@ -2059,7 +2435,7 @@ export function SettingsModal() {
                               <CheckCircle2 size={20} className="text-zinc-405" />
                             </div>
                             <p className="text-zinc-350 text-xs font-semibold uppercase tracking-wider">VectorHUD is fully updated</p>
-                            <p className="text-[10px] text-zinc-650">The app checks registry distributions automatically at startup.</p>
+                            <p className="text-xs text-zinc-650">The app checks registry distributions automatically at startup.</p>
                             
                             <button
                               onClick={async () => {

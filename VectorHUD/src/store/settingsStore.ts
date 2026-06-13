@@ -40,6 +40,19 @@ interface SettingsState {
   backgroundBlur: number;
   backdropOpacity: number;
   launchOnStartup: boolean;
+
+  // Visual customizations
+  widgetBorderRadius: number;
+  widgetBorderWidth: number;
+  widgetBorderOpacity: number;
+  widgetGlowSize: number;
+  widgetGlowOpacity: number;
+
+  // Audio settings
+  selectedAudioInput: string;
+  selectedAudioOutput: string;
+  microphoneVolume: number;
+  microphoneMuted: boolean;
   
   toggleSettings: () => void;
   setOpenRouterModel: (model: string) => Promise<void>;
@@ -79,6 +92,16 @@ interface SettingsState {
   setBackgroundBlur: (val: number) => Promise<void>;
   setBackdropOpacity: (val: number) => Promise<void>;
   setLaunchOnStartup: (val: boolean) => Promise<void>;
+
+  setWidgetBorderRadius: (val: number) => Promise<void>;
+  setWidgetBorderWidth: (val: number) => Promise<void>;
+  setWidgetBorderOpacity: (val: number) => Promise<void>;
+  setWidgetGlowSize: (val: number) => Promise<void>;
+  setWidgetGlowOpacity: (val: number) => Promise<void>;
+  setSelectedAudioInput: (val: string) => Promise<void>;
+  setSelectedAudioOutput: (val: string) => Promise<void>;
+  setMicrophoneVolume: (val: number) => Promise<void>;
+  setMicrophoneMuted: (val: boolean) => Promise<void>;
   
   loadPreferences: () => Promise<void>;
   syncHotkeys: () => Promise<void>;
@@ -155,6 +178,16 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   backgroundBlur: 8,
   backdropOpacity: 60,
   launchOnStartup: false,
+
+  widgetBorderRadius: 12,
+  widgetBorderWidth: 1,
+  widgetBorderOpacity: 15,
+  widgetGlowSize: 15,
+  widgetGlowOpacity: 15,
+  selectedAudioInput: 'Default',
+  selectedAudioOutput: 'Default',
+  microphoneVolume: 100,
+  microphoneMuted: false,
 
   toggleSettings: () => set((state) => ({ isSettingsOpen: !state.isSettingsOpen })),
 
@@ -419,6 +452,78 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     set({ launchOnStartup: val });
   },
 
+  setWidgetBorderRadius: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('widgetBorderRadius', val);
+    await store.save();
+    set({ widgetBorderRadius: val });
+    document.documentElement.style.setProperty('--widget-border-radius', `${val}px`);
+  },
+
+  setWidgetBorderWidth: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('widgetBorderWidth', val);
+    await store.save();
+    set({ widgetBorderWidth: val });
+    document.documentElement.style.setProperty('--widget-border-width', `${val}px`);
+  },
+
+  setWidgetBorderOpacity: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('widgetBorderOpacity', val);
+    await store.save();
+    set({ widgetBorderOpacity: val });
+    document.documentElement.style.setProperty('--widget-border-opacity', `${val / 100}`);
+  },
+
+  setWidgetGlowSize: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('widgetGlowSize', val);
+    await store.save();
+    set({ widgetGlowSize: val });
+    document.documentElement.style.setProperty('--widget-glow-size', `${val}px`);
+  },
+
+  setWidgetGlowOpacity: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('widgetGlowOpacity', val);
+    await store.save();
+    set({ widgetGlowOpacity: val });
+    document.documentElement.style.setProperty('--widget-glow-opacity', `${val / 100}`);
+  },
+
+  setSelectedAudioInput: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('selectedAudioInput', val);
+    await store.save();
+    set({ selectedAudioInput: val });
+  },
+
+  setSelectedAudioOutput: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('selectedAudioOutput', val);
+    await store.save();
+    set({ selectedAudioOutput: val });
+  },
+
+  setMicrophoneVolume: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('microphoneVolume', val);
+    await store.save();
+    set({ microphoneVolume: val });
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('set_microphone_volume', { volume: val / 100 });
+  },
+
+  setMicrophoneMuted: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('microphoneMuted', val);
+    await store.save();
+    set({ microphoneMuted: val });
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('set_microphone_mute', { muted: val });
+  },
+
   loadPreferences: async () => {
     const store = await getSettingsStore();
     const model = await store.get<string>('openRouterModel');
@@ -458,6 +563,16 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const bgBlur = await store.get<number>('backgroundBlur');
     const bdOpacity = await store.get<number>('backdropOpacity');
     const startStartup = await store.get<boolean>('launchOnStartup');
+
+    const wRadius = await store.get<number>('widgetBorderRadius');
+    const wWidth = await store.get<number>('widgetBorderWidth');
+    const wBorderOpacity = await store.get<number>('widgetBorderOpacity');
+    const wGlowSize = await store.get<number>('widgetGlowSize');
+    const wGlowOpacity = await store.get<number>('widgetGlowOpacity');
+    const audioInput = await store.get<string>('selectedAudioInput');
+    const audioOutput = await store.get<string>('selectedAudioOutput');
+    const micVol = await store.get<number>('microphoneVolume');
+    const micMuted = await store.get<boolean>('microphoneMuted');
 
     const finalTheme = theme || 'default';
     const finalColor = customColor || '#FF0000';
@@ -507,6 +622,16 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       backgroundBlur: bgBlur !== undefined ? bgBlur : 8,
       backdropOpacity: bdOpacity !== undefined ? bdOpacity : 60,
       launchOnStartup: finalLaunchOnStartup,
+
+      widgetBorderRadius: wRadius !== undefined ? wRadius : 12,
+      widgetBorderWidth: wWidth !== undefined ? wWidth : 1,
+      widgetBorderOpacity: wBorderOpacity !== undefined ? wBorderOpacity : 15,
+      widgetGlowSize: wGlowSize !== undefined ? wGlowSize : 15,
+      widgetGlowOpacity: wGlowOpacity !== undefined ? wGlowOpacity : 15,
+      selectedAudioInput: audioInput || 'Default',
+      selectedAudioOutput: audioOutput || 'Default',
+      microphoneVolume: micVol !== undefined ? micVol : 100,
+      microphoneMuted: micMuted !== undefined ? micMuted : false,
     });
 
     applyThemeColors(finalTheme, finalColor);
@@ -525,6 +650,28 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const finalOpacity = bdOpacity !== undefined ? bdOpacity : 60;
     document.documentElement.style.setProperty('--bg-blur-amount', `${finalBlur}px`);
     document.documentElement.style.setProperty('--bg-opacity-amount', `${finalOpacity / 100}`);
+
+    const finalRadius = wRadius !== undefined ? wRadius : 12;
+    const finalWidth = wWidth !== undefined ? wWidth : 1;
+    const finalBorderOpacity = wBorderOpacity !== undefined ? wBorderOpacity : 15;
+    const finalGlowSize = wGlowSize !== undefined ? wGlowSize : 15;
+    const finalGlowOpacity = wGlowOpacity !== undefined ? wGlowOpacity : 15;
+
+    document.documentElement.style.setProperty('--widget-border-radius', `${finalRadius}px`);
+    document.documentElement.style.setProperty('--widget-border-width', `${finalWidth}px`);
+    document.documentElement.style.setProperty('--widget-border-opacity', `${finalBorderOpacity / 100}`);
+    document.documentElement.style.setProperty('--widget-glow-size', `${finalGlowSize}px`);
+    document.documentElement.style.setProperty('--widget-glow-opacity', `${finalGlowOpacity / 100}`);
+
+    // Try to sync with hardware states for mic on boot
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const mVol = await invoke<number>('get_microphone_volume');
+      const mMuted = await invoke<boolean>('get_microphone_mute');
+      set({ microphoneVolume: Math.round(mVol * 100), microphoneMuted: mMuted });
+    } catch (e) {
+      console.warn("Failed to load microphone hardware states:", e);
+    }
   },
 
   syncHotkeys: async () => {

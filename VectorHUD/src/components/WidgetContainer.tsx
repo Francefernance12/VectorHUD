@@ -57,8 +57,11 @@ export function WidgetContainer({ id, children }: WidgetContainerProps) {
         height: instance.height,
         left: Math.round(safeX),
         top: Math.round(safeY),
+        borderRadius: 'var(--widget-border-radius, 12px)',
+        borderWidth: 'var(--widget-border-width, 1px)',
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 var(--widget-glow-size, 15px) rgba(var(--accent-green-rgb, 74, 246, 38), var(--widget-glow-opacity, 0.15))',
       }}
-      className="flex flex-col border rounded-xl overflow-hidden transition-colors bg-surface border-border-wire shadow-2xl"
+      className="flex flex-col border overflow-hidden transition-all bg-surface border-border-wire"
     >
       {/* Draggable Header (Only show if interactive) */}
       {isInteractive && (

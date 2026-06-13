@@ -74,12 +74,13 @@ fn parse_hotkey_to_vk(hotkey_str: &str) -> (bool, bool, bool, i32) {
 #[tauri::command]
 fn start_voice_recording(
     state: tauri::State<'_, core::voice_recorder::VoiceRecorderState>,
+    device_name: Option<String>,
 ) -> Result<(), String> {
     let mut lock = state.0.lock().unwrap();
     if lock.is_some() {
         return Err("Voice recording is already in progress".to_string());
     }
-    let recorder = core::voice_recorder::VoiceRecorder::start()?;
+    let recorder = core::voice_recorder::VoiceRecorder::start(device_name)?;
     *lock = Some(recorder);
     Ok(())
 }
@@ -220,7 +221,20 @@ fn update_hotkeys(
                     let state = app.state::<core::voice_recorder::VoiceRecorderState>();
                     let mut lock = state.0.lock().unwrap();
                     if lock.is_none() {
-                        match core::voice_recorder::VoiceRecorder::start() {
+                        let mut device_name = None;
+                        let path = std::path::PathBuf::from("settings.json");
+                        if let Ok(store) = tauri_plugin_store::StoreBuilder::new(app, path).build() {
+                            let _ = store.reload();
+                            if let Some(val) = store.get("selectedAudioInput") {
+                                if let Some(name_str) = val.as_str() {
+                                    if name_str != "Default" && !name_str.is_empty() {
+                                        device_name = Some(name_str.to_string());
+                                    }
+                                }
+                            }
+                        }
+
+                        match core::voice_recorder::VoiceRecorder::start(device_name) {
                             Ok(recorder) => {
                                 *lock = Some(recorder);
                                 let _ = app.emit("voice-recording-started", ());
@@ -650,6 +664,12 @@ pub fn run() {
             core::audio_mixer::set_master_volume,
             core::audio_mixer::toggle_master_mute,
             core::audio_mixer::toggle_app_mute,
+            core::audio_mixer::get_audio_devices,
+            core::audio_mixer::get_microphone_volume,
+            core::audio_mixer::set_microphone_volume,
+            core::audio_mixer::get_microphone_mute,
+            core::audio_mixer::set_microphone_mute,
+            core::audio_mixer::get_audio_peak_levels,
             core::media_control::get_current_media,
             core::media_control::media_play_pause,
             core::media_control::media_next,

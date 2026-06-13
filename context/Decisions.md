@@ -121,3 +121,22 @@ This document tracks all important decisions made throughout the lifecycle of th
 - **Decision:** Implemented a custom lexical tokenizer for syntax highlighting instead of sequential regex string replacements.
 - **Reasoning:** Sequential regex replacements on already-escaped HTML text are prone to collisions (e.g. matching operators inside HTML entities like `&lt;` or `&gt;`). A structured lexical tokenizer scans the code from left to right using anchored regexes first, producing a token stream. This allows for safe, collision-free syntax highlighting of operators and keywords across multiple languages (JS, TS, Python, C#, Rust, JSON, HTML, CSS, SQL, Bash).
 - **Decision:** Custom-styled Markdown components (strong, em, blockquote, lists, tables) to act as visual elements of a tactical HUD, adding pulsing status dots, terminal brackets, and dashed borders.
+
+## Session 20: Settings Customization & Accessibility Expansion
+
+- **Decision:** Sized up the System Settings modal container to a spacious widescreen grid (`w-[920px] h-[680px]`) to accommodate an expanding suite of accessibility and customization parameters.
+- **Decision:** Integrated a live, monospaced diagnostics logs panel inside the Settings modal. It invokes the Rust backend to read the tail end of the daily rolling trace file (`vectorhud.log`), keeping debugging completely local and transparent.
+- **Decision:** Implemented an interactive search bar at the top of the sidebar. When active, it filters and aggregates matching options across all tabs into a unified, interactive search results list, allowing quick adjustments without navigating submenus.
+- **Decision:** Built an interactive keyboard shortcut recorder. It captures `keydown` events, validates that the combo contains at least one modifier key (Ctrl, Alt, Shift, Win) or is a function key (F1-F12), and formats standard Tauri-compatible strings, protecting the user from disabling standard keys.
+- **Decision:** Bound the startup toggle directly to `@tauri-apps/plugin-autostart` on the frontend, dynamically managing the Windows startup registry entries to boot VectorHUD silently on user login.
+
+## Session 20.2: Typography, Visual Customizations & Audio Devices
+
+- **Decision:** Implemented five granular visual appearance sliders (Border Width, Corner Radius, Border Opacity, Glow Size, and Glow Opacity) and bound them to live document CSS root variables (`document.documentElement.style.setProperty`).
+- **Reasoning:** Inlining styling settings directly into CSS custom properties allows all widget frames to update dynamically in real-time as the user adjusts sliders, avoiding complex multi-component re-renders.
+- **Decision:** Exposed physical audio input/output hardware device selectors, microphone volume, and muting adjustments with real-time VU meter peak signal visualizers.
+- **Reasoning:** Integrating volume/mute commands directly into Tauri's backend enables high-precision controls of the system's hardware audio capture and render endpoints.
+- **Decision:** Scaled up all sub-12px text labels, secondary descriptions, helper tips, and telemetry readings (previously `text-[9px]` or `text-[10px]`) to `text-xs` (12px) or `text-[11px]`.
+- **Reasoning:** Extremely small font sizes degrade visual accessibility under different screen resolutions. Aligning to a minimum `text-xs` baseline ensures the Tactical Gamer's HUD remains highly readable while preserving its technical, clean appearance.
+
+

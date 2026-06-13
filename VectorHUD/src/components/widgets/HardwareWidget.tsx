@@ -120,7 +120,7 @@ export function HardwareWidget() {
       </div>
 
       {/* Overlay Perf Section */}
-      <div className="pt-2 border-t border-border-wire text-[10px] opacity-70 flex justify-between items-center bg-black/30 px-2 py-1 rounded">
+      <div className="pt-2 border-t border-border-wire text-xs opacity-70 flex justify-between items-center bg-black/30 px-2 py-1 rounded">
         <span>HUD CPU: {hudCpuUsage.toFixed(1)}%</span>
         <span>HUD RAM: {hudRamUsageMb.toFixed(0)} MB</span>
       </div>

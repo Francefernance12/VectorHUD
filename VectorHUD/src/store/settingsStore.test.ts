@@ -46,6 +46,15 @@ describe('settingsStore', () => {
     expect(state.backgroundBlur).toBe(8);
     expect(state.backdropOpacity).toBe(60);
     expect(state.launchOnStartup).toBe(false);
+    expect(state.widgetBorderRadius).toBe(12);
+    expect(state.widgetBorderWidth).toBe(1);
+    expect(state.widgetBorderOpacity).toBe(15);
+    expect(state.widgetGlowSize).toBe(15);
+    expect(state.widgetGlowOpacity).toBe(15);
+    expect(state.selectedAudioInput).toBe('Default');
+    expect(state.selectedAudioOutput).toBe('Default');
+    expect(state.microphoneVolume).toBe(100);
+    expect(state.microphoneMuted).toBe(false);
   });
 
   it('should call set and save on setMetricsPollInterval', async () => {
@@ -130,5 +139,68 @@ describe('settingsStore', () => {
     expect(mockSet).toHaveBeenCalledWith('launchOnStartup', true);
     expect(mockSave).toHaveBeenCalled();
     expect(useSettingsStore.getState().launchOnStartup).toBe(true);
+  });
+
+  it('should call set and save on setWidgetBorderRadius', async () => {
+    await useSettingsStore.getState().setWidgetBorderRadius(16);
+    expect(mockSet).toHaveBeenCalledWith('widgetBorderRadius', 16);
+    expect(mockSave).toHaveBeenCalled();
+    expect(useSettingsStore.getState().widgetBorderRadius).toBe(16);
+  });
+
+  it('should call set and save on setWidgetBorderWidth', async () => {
+    await useSettingsStore.getState().setWidgetBorderWidth(2);
+    expect(mockSet).toHaveBeenCalledWith('widgetBorderWidth', 2);
+    expect(mockSave).toHaveBeenCalled();
+    expect(useSettingsStore.getState().widgetBorderWidth).toBe(2);
+  });
+
+  it('should call set and save on setWidgetBorderOpacity', async () => {
+    await useSettingsStore.getState().setWidgetBorderOpacity(30);
+    expect(mockSet).toHaveBeenCalledWith('widgetBorderOpacity', 30);
+    expect(mockSave).toHaveBeenCalled();
+    expect(useSettingsStore.getState().widgetBorderOpacity).toBe(30);
+  });
+
+  it('should call set and save on setWidgetGlowSize', async () => {
+    await useSettingsStore.getState().setWidgetGlowSize(20);
+    expect(mockSet).toHaveBeenCalledWith('widgetGlowSize', 20);
+    expect(mockSave).toHaveBeenCalled();
+    expect(useSettingsStore.getState().widgetGlowSize).toBe(20);
+  });
+
+  it('should call set and save on setWidgetGlowOpacity', async () => {
+    await useSettingsStore.getState().setWidgetGlowOpacity(25);
+    expect(mockSet).toHaveBeenCalledWith('widgetGlowOpacity', 25);
+    expect(mockSave).toHaveBeenCalled();
+    expect(useSettingsStore.getState().widgetGlowOpacity).toBe(25);
+  });
+
+  it('should call set and save on setSelectedAudioInput', async () => {
+    await useSettingsStore.getState().setSelectedAudioInput('Mic 1');
+    expect(mockSet).toHaveBeenCalledWith('selectedAudioInput', 'Mic 1');
+    expect(mockSave).toHaveBeenCalled();
+    expect(useSettingsStore.getState().selectedAudioInput).toBe('Mic 1');
+  });
+
+  it('should call set and save on setSelectedAudioOutput', async () => {
+    await useSettingsStore.getState().setSelectedAudioOutput('Speakers 1');
+    expect(mockSet).toHaveBeenCalledWith('selectedAudioOutput', 'Speakers 1');
+    expect(mockSave).toHaveBeenCalled();
+    expect(useSettingsStore.getState().selectedAudioOutput).toBe('Speakers 1');
+  });
+
+  it('should call set, save and invoke on setMicrophoneVolume', async () => {
+    await useSettingsStore.getState().setMicrophoneVolume(80);
+    expect(mockSet).toHaveBeenCalledWith('microphoneVolume', 80);
+    expect(mockSave).toHaveBeenCalled();
+    expect(useSettingsStore.getState().microphoneVolume).toBe(80);
+  });
+
+  it('should call set, save and invoke on setMicrophoneMuted', async () => {
+    await useSettingsStore.getState().setMicrophoneMuted(true);
+    expect(mockSet).toHaveBeenCalledWith('microphoneMuted', true);
+    expect(mockSave).toHaveBeenCalled();
+    expect(useSettingsStore.getState().microphoneMuted).toBe(true);
   });
 });
