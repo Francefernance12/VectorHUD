@@ -1,0 +1,11 @@
+{
+  "version": "1.2.0",
+  "notes": "VectorHUD v1.2.0. Major UI/UX improvements, hotkey categorization, a comprehensive manual/guide, draggable AI chat sessions sidebar, full-stack optimizations, and security updates.",
+  "pub_date": "2026-06-13T21:43:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTVTRjWmZWTDJBcitoSkJ3RHlxa0VzU0FGU1drVGtwTkdaOE1NQkp4Q3laSldKR2lKZTFBQkFtcnFnYzEvM1VMeTBwT04rRG1rOUh5L3YveGdDQ3pYQWkweEp0S2tJS0FRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgxMzg1MTYxCWZpbGU6dmVjdG9yaHVkXzEuMi4wX3g2NC1zZXR1cC5leGUKMHU1eGo4VFdEWUVpeDFSanVoRklreHlTTGowYTkvQS8yNzgzbno2ZTRueTJEY2J4WHNJamlqSzFZbWhJdkIyNXlYaTlxVXJ4bGdnQnRENmZCMitZQnc9PQo=",
+      "url": "https://github.com/Francefernance12/VectorHUD/releases/download/v1.2.0/vectorhud_1.2.0_x64-setup.exe"
+    }
+  }
+}
