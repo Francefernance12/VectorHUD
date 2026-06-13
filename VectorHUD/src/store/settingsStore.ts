@@ -55,6 +55,8 @@ interface SettingsState {
   microphoneMuted: boolean;
 
   syncBorderGlowWithTheme: boolean;
+  syncBorderWithTheme: boolean;
+  syncGlowWithTheme: boolean;
   customBorderColor: string;
   customGlowColor: string;
   
@@ -108,6 +110,8 @@ interface SettingsState {
   setMicrophoneMuted: (val: boolean) => Promise<void>;
 
   setSyncBorderGlowWithTheme: (val: boolean) => Promise<void>;
+  setSyncBorderWithTheme: (val: boolean) => Promise<void>;
+  setSyncGlowWithTheme: (val: boolean) => Promise<void>;
   setCustomBorderColor: (val: string) => Promise<void>;
   setCustomGlowColor: (val: string) => Promise<void>;
   
@@ -150,15 +154,20 @@ const applyThemeColors = (theme: string, customColor: string) => {
 
   // Border & Glow customizations
   const state = useSettingsStore.getState();
-  const sync = state.syncBorderGlowWithTheme !== undefined ? state.syncBorderGlowWithTheme : true;
+  const syncBorder = state.syncBorderWithTheme !== undefined ? state.syncBorderWithTheme : (state.syncBorderGlowWithTheme !== undefined ? state.syncBorderGlowWithTheme : true);
+  const syncGlow = state.syncGlowWithTheme !== undefined ? state.syncGlowWithTheme : (state.syncBorderGlowWithTheme !== undefined ? state.syncBorderGlowWithTheme : true);
   const customBorder = state.customBorderColor || '#ffffff';
   const customGlow = state.customGlowColor || '#4af626';
 
-  if (sync) {
+  if (syncBorder) {
     root.style.removeProperty('--widget-border-color');
-    root.style.removeProperty('--widget-glow-color-rgb');
   } else {
     root.style.setProperty('--widget-border-color', customBorder);
+  }
+
+  if (syncGlow) {
+    root.style.removeProperty('--widget-glow-color-rgb');
+  } else {
     root.style.setProperty('--widget-glow-color-rgb', hexToRgb(customGlow));
   }
 };
@@ -213,6 +222,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   microphoneMuted: false,
 
   syncBorderGlowWithTheme: true,
+  syncBorderWithTheme: true,
+  syncGlowWithTheme: true,
   customBorderColor: '#ffffff',
   customGlowColor: '#4af626',
 
@@ -554,8 +565,26 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setSyncBorderGlowWithTheme: async (val) => {
     const store = await getSettingsStore();
     await store.set('syncBorderGlowWithTheme', val);
+    await store.set('syncBorderWithTheme', val);
+    await store.set('syncGlowWithTheme', val);
     await store.save();
-    set({ syncBorderGlowWithTheme: val });
+    set({ syncBorderGlowWithTheme: val, syncBorderWithTheme: val, syncGlowWithTheme: val });
+    applyThemeColors(useSettingsStore.getState().theme, useSettingsStore.getState().customColor);
+  },
+
+  setSyncBorderWithTheme: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('syncBorderWithTheme', val);
+    await store.save();
+    set({ syncBorderWithTheme: val });
+    applyThemeColors(useSettingsStore.getState().theme, useSettingsStore.getState().customColor);
+  },
+
+  setSyncGlowWithTheme: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('syncGlowWithTheme', val);
+    await store.save();
+    set({ syncGlowWithTheme: val });
     applyThemeColors(useSettingsStore.getState().theme, useSettingsStore.getState().customColor);
   },
 
@@ -626,6 +655,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const micMuted = await store.get<boolean>('microphoneMuted');
 
     const syncBorderGlow = await store.get<boolean>('syncBorderGlowWithTheme');
+    const syncBorder = await store.get<boolean>('syncBorderWithTheme');
+    const syncGlow = await store.get<boolean>('syncGlowWithTheme');
     const customBorder = await store.get<string>('customBorderColor');
     const customGlow = await store.get<string>('customGlowColor');
 
@@ -689,6 +720,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       microphoneMuted: micMuted !== undefined ? micMuted : false,
 
       syncBorderGlowWithTheme: syncBorderGlow !== undefined ? syncBorderGlow : true,
+      syncBorderWithTheme: syncBorder !== undefined ? syncBorder : (syncBorderGlow !== undefined ? syncBorderGlow : true),
+      syncGlowWithTheme: syncGlow !== undefined ? syncGlow : (syncBorderGlow !== undefined ? syncBorderGlow : true),
       customBorderColor: customBorder || '#ffffff',
       customGlowColor: customGlow || '#4af626',
     });

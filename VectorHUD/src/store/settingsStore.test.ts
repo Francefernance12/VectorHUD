@@ -207,8 +207,26 @@ describe('settingsStore', () => {
   it('should call set and save on setSyncBorderGlowWithTheme', async () => {
     await useSettingsStore.getState().setSyncBorderGlowWithTheme(false);
     expect(mockSet).toHaveBeenCalledWith('syncBorderGlowWithTheme', false);
+    expect(mockSet).toHaveBeenCalledWith('syncBorderWithTheme', false);
+    expect(mockSet).toHaveBeenCalledWith('syncGlowWithTheme', false);
     expect(mockSave).toHaveBeenCalled();
     expect(useSettingsStore.getState().syncBorderGlowWithTheme).toBe(false);
+    expect(useSettingsStore.getState().syncBorderWithTheme).toBe(false);
+    expect(useSettingsStore.getState().syncGlowWithTheme).toBe(false);
+  });
+
+  it('should call set and save on setSyncBorderWithTheme', async () => {
+    await useSettingsStore.getState().setSyncBorderWithTheme(false);
+    expect(mockSet).toHaveBeenCalledWith('syncBorderWithTheme', false);
+    expect(mockSave).toHaveBeenCalled();
+    expect(useSettingsStore.getState().syncBorderWithTheme).toBe(false);
+  });
+
+  it('should call set and save on setSyncGlowWithTheme', async () => {
+    await useSettingsStore.getState().setSyncGlowWithTheme(false);
+    expect(mockSet).toHaveBeenCalledWith('syncGlowWithTheme', false);
+    expect(mockSave).toHaveBeenCalled();
+    expect(useSettingsStore.getState().syncGlowWithTheme).toBe(false);
   });
 
   it('should call set and save on setCustomBorderColor', async () => {

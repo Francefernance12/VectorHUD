@@ -108,6 +108,10 @@ export function SettingsModal() {
     setMicrophoneMuted,
     syncBorderGlowWithTheme,
     setSyncBorderGlowWithTheme,
+    syncBorderWithTheme,
+    setSyncBorderWithTheme,
+    syncGlowWithTheme,
+    setSyncGlowWithTheme,
     customBorderColor,
     setCustomBorderColor,
     customGlowColor,
@@ -206,6 +210,10 @@ export function SettingsModal() {
       setMicrophoneMuted: state.setMicrophoneMuted,
       syncBorderGlowWithTheme: state.syncBorderGlowWithTheme,
       setSyncBorderGlowWithTheme: state.setSyncBorderGlowWithTheme,
+      syncBorderWithTheme: state.syncBorderWithTheme,
+      setSyncBorderWithTheme: state.setSyncBorderWithTheme,
+      syncGlowWithTheme: state.syncGlowWithTheme,
+      setSyncGlowWithTheme: state.setSyncGlowWithTheme,
       customBorderColor: state.customBorderColor,
       setCustomBorderColor: state.setCustomBorderColor,
       customGlowColor: state.customGlowColor,
@@ -297,6 +305,8 @@ export function SettingsModal() {
     microphoneVolume,
     microphoneMuted,
     syncBorderGlowWithTheme,
+    syncBorderWithTheme,
+    syncGlowWithTheme,
     customBorderColor,
     customGlowColor
   });
@@ -368,6 +378,8 @@ export function SettingsModal() {
       microphoneVolume,
       microphoneMuted,
       syncBorderGlowWithTheme,
+      syncBorderWithTheme,
+      syncGlowWithTheme,
       customBorderColor,
       customGlowColor
     });
@@ -583,11 +595,13 @@ export function SettingsModal() {
     }
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
-      const match = devices.find(d => d.kind === 'audioinput' && (
-        localPreferences.selectedAudioInput === 'Default' || d.label.includes(localPreferences.selectedAudioInput) || localPreferences.selectedAudioInput.includes(d.label)
-      ));
+      const match = (localPreferences.selectedAudioInput !== 'Default' && localPreferences.selectedAudioInput !== '')
+        ? devices.find(d => d.kind === 'audioinput' && d.label && d.deviceId && (
+            d.label.includes(localPreferences.selectedAudioInput) || localPreferences.selectedAudioInput.includes(d.label)
+          ))
+        : null;
       const constraints = {
-        audio: match ? { deviceId: { exact: match.deviceId } } : true
+        audio: (match && match.deviceId) ? { deviceId: { exact: match.deviceId } } : true
       };
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       micStreamRef.current = stream;
@@ -770,6 +784,8 @@ export function SettingsModal() {
       await setMicrophoneVolume(localPreferences.microphoneVolume);
       await setMicrophoneMuted(localPreferences.microphoneMuted);
       await setSyncBorderGlowWithTheme(localPreferences.syncBorderGlowWithTheme);
+      await setSyncBorderWithTheme(localPreferences.syncBorderWithTheme);
+      await setSyncGlowWithTheme(localPreferences.syncGlowWithTheme);
       await setCustomBorderColor(localPreferences.customBorderColor);
       await setCustomGlowColor(localPreferences.customGlowColor);
 
@@ -868,6 +884,8 @@ export function SettingsModal() {
       localPreferences.microphoneVolume !== microphoneVolume ||
       localPreferences.microphoneMuted !== microphoneMuted ||
       localPreferences.syncBorderGlowWithTheme !== syncBorderGlowWithTheme ||
+      localPreferences.syncBorderWithTheme !== syncBorderWithTheme ||
+      localPreferences.syncGlowWithTheme !== syncGlowWithTheme ||
       localPreferences.customBorderColor !== customBorderColor ||
       localPreferences.customGlowColor !== customGlowColor
     );
@@ -939,6 +957,8 @@ export function SettingsModal() {
       microphoneVolume,
       microphoneMuted,
       syncBorderGlowWithTheme,
+      syncBorderWithTheme,
+      syncGlowWithTheme,
       customBorderColor,
       customGlowColor
     });
@@ -1000,6 +1020,8 @@ export function SettingsModal() {
       microphoneVolume: 100,
       microphoneMuted: false,
       syncBorderGlowWithTheme: true,
+      syncBorderWithTheme: true,
+      syncGlowWithTheme: true,
       customBorderColor: '#ffffff',
       customGlowColor: '#4af626'
     });
@@ -2308,21 +2330,82 @@ export function SettingsModal() {
                           <div className="space-y-1.5 md:col-span-2 border-t border-white/5 pt-4">
                             <div className="flex justify-between items-center bg-black/40 p-3 rounded-lg border border-white/5 text-xs">
                               <div>
-                                <span className="text-zinc-200 font-bold block">Sync Border & Glow with Theme</span>
-                                <span className="text-zinc-500 block">Enable to automatically match widget border and glow colors with the active HUD theme.</span>
+                                <span className="text-zinc-200 font-bold block">Sync Border with Theme</span>
+                                <span className="text-zinc-500 block">Enable to automatically match widget border colors with the active HUD theme.</span>
                               </div>
                               <label className="relative inline-flex items-center cursor-pointer">
                                 <input 
                                   type="checkbox" className="sr-only peer" 
-                                  checked={localPreferences.syncBorderGlowWithTheme}
+                                  checked={localPreferences.syncBorderWithTheme}
                                   onChange={(e) => {
                                     const val = e.target.checked;
-                                    setLocalPreferences(s => ({ ...s, syncBorderGlowWithTheme: val }));
+                                    setLocalPreferences(s => ({ 
+                                      ...s, 
+                                      syncBorderWithTheme: val,
+                                      syncBorderGlowWithTheme: val && s.syncGlowWithTheme
+                                    }));
                                     if (val) {
                                       document.documentElement.style.removeProperty('--widget-border-color');
-                                      document.documentElement.style.removeProperty('--widget-glow-color-rgb');
                                     } else {
                                       document.documentElement.style.setProperty('--widget-border-color', localPreferences.customBorderColor);
+                                    }
+                                  }}
+                                />
+                                <div className="w-11 h-6 bg-zinc-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent-green"></div>
+                              </label>
+                            </div>
+                          </div>
+
+                          {!localPreferences.syncBorderWithTheme && (
+                            <div className="space-y-4 md:col-span-2 bg-black/30 p-4 rounded-lg border border-white/5 animate-fadeIn">
+                              <div className="space-y-2">
+                                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider block">Custom Border Color</label>
+                                <div className="flex gap-2.5 items-center">
+                                  <input 
+                                    type="color" 
+                                    value={localPreferences.customBorderColor}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setLocalPreferences(s => ({ ...s, customBorderColor: val }));
+                                      document.documentElement.style.setProperty('--widget-border-color', val);
+                                    }}
+                                    className="w-8 h-8 rounded bg-transparent border border-white/10 cursor-pointer"
+                                  />
+                                  <input 
+                                    type="text" 
+                                    value={localPreferences.customBorderColor}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setLocalPreferences(s => ({ ...s, customBorderColor: val }));
+                                      document.documentElement.style.setProperty('--widget-border-color', val);
+                                    }}
+                                    className="flex-grow bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs font-mono text-zinc-200 focus:outline-none focus:border-primary"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="space-y-1.5 md:col-span-2 border-t border-white/5 pt-4">
+                            <div className="flex justify-between items-center bg-black/40 p-3 rounded-lg border border-white/5 text-xs">
+                              <div>
+                                <span className="text-zinc-200 font-bold block">Sync Glow with Theme</span>
+                                <span className="text-zinc-500 block">Enable to automatically match widget glow colors with the active HUD theme.</span>
+                              </div>
+                              <label className="relative inline-flex items-center cursor-pointer">
+                                <input 
+                                  type="checkbox" className="sr-only peer" 
+                                  checked={localPreferences.syncGlowWithTheme}
+                                  onChange={(e) => {
+                                    const val = e.target.checked;
+                                    setLocalPreferences(s => ({ 
+                                      ...s, 
+                                      syncGlowWithTheme: val,
+                                      syncBorderGlowWithTheme: s.syncBorderWithTheme && val
+                                    }));
+                                    if (val) {
+                                      document.documentElement.style.removeProperty('--widget-glow-color-rgb');
+                                    } else {
                                       const hexToRgbStr = (hex: string) => {
                                         let c = hex.substring(1);
                                         if (c.length === 3) c = c.split('').map(x => x + x).join('');
@@ -2337,69 +2420,41 @@ export function SettingsModal() {
                             </div>
                           </div>
 
-                          {!localPreferences.syncBorderGlowWithTheme && (
+                          {!localPreferences.syncGlowWithTheme && (
                             <div className="space-y-4 md:col-span-2 bg-black/30 p-4 rounded-lg border border-white/5 animate-fadeIn">
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider block">Custom Border Color</label>
-                                  <div className="flex gap-2.5 items-center">
-                                    <input 
-                                      type="color" 
-                                      value={localPreferences.customBorderColor}
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        setLocalPreferences(s => ({ ...s, customBorderColor: val }));
-                                        document.documentElement.style.setProperty('--widget-border-color', val);
-                                      }}
-                                      className="w-8 h-8 rounded bg-transparent border border-white/10 cursor-pointer"
-                                    />
-                                    <input 
-                                      type="text" 
-                                      value={localPreferences.customBorderColor}
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        setLocalPreferences(s => ({ ...s, customBorderColor: val }));
-                                        document.documentElement.style.setProperty('--widget-border-color', val);
-                                      }}
-                                      className="flex-grow bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs font-mono text-zinc-200 focus:outline-none focus:border-primary"
-                                    />
-                                  </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider block">Custom Glow Color</label>
-                                  <div className="flex gap-2.5 items-center">
-                                    <input 
-                                      type="color" 
-                                      value={localPreferences.customGlowColor}
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        setLocalPreferences(s => ({ ...s, customGlowColor: val }));
-                                        const hexToRgbStr = (hex: string) => {
-                                          let c = hex.substring(1);
-                                          if (c.length === 3) c = c.split('').map(x => x + x).join('');
-                                          return `${parseInt(c.slice(0, 2), 16)}, ${parseInt(c.slice(2, 4), 16)}, ${parseInt(c.slice(4, 6), 16)}`;
-                                        };
-                                        document.documentElement.style.setProperty('--widget-glow-color-rgb', hexToRgbStr(val));
-                                      }}
-                                      className="w-8 h-8 rounded bg-transparent border border-white/10 cursor-pointer"
-                                    />
-                                    <input 
-                                      type="text" 
-                                      value={localPreferences.customGlowColor}
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        setLocalPreferences(s => ({ ...s, customGlowColor: val }));
-                                        const hexToRgbStr = (hex: string) => {
-                                          let c = hex.substring(1);
-                                          if (c.length === 3) c = c.split('').map(x => x + x).join('');
-                                          return `${parseInt(c.slice(0, 2), 16)}, ${parseInt(c.slice(2, 4), 16)}, ${parseInt(c.slice(4, 6), 16)}`;
-                                        };
-                                        document.documentElement.style.setProperty('--widget-glow-color-rgb', hexToRgbStr(val));
-                                      }}
-                                      className="flex-grow bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs font-mono text-zinc-200 focus:outline-none focus:border-primary"
-                                    />
-                                  </div>
+                              <div className="space-y-2">
+                                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider block">Custom Glow Color</label>
+                                <div className="flex gap-2.5 items-center">
+                                  <input 
+                                    type="color" 
+                                    value={localPreferences.customGlowColor}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setLocalPreferences(s => ({ ...s, customGlowColor: val }));
+                                      const hexToRgbStr = (hex: string) => {
+                                        let c = hex.substring(1);
+                                        if (c.length === 3) c = c.split('').map(x => x + x).join('');
+                                        return `${parseInt(c.slice(0, 2), 16)}, ${parseInt(c.slice(2, 4), 16)}, ${parseInt(c.slice(4, 6), 16)}`;
+                                      };
+                                      document.documentElement.style.setProperty('--widget-glow-color-rgb', hexToRgbStr(val));
+                                    }}
+                                    className="w-8 h-8 rounded bg-transparent border border-white/10 cursor-pointer"
+                                  />
+                                  <input 
+                                    type="text" 
+                                    value={localPreferences.customGlowColor}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setLocalPreferences(s => ({ ...s, customGlowColor: val }));
+                                      const hexToRgbStr = (hex: string) => {
+                                        let c = hex.substring(1);
+                                        if (c.length === 3) c = c.split('').map(x => x + x).join('');
+                                        return `${parseInt(c.slice(0, 2), 16)}, ${parseInt(c.slice(2, 4), 16)}, ${parseInt(c.slice(4, 6), 16)}`;
+                                      };
+                                      document.documentElement.style.setProperty('--widget-glow-color-rgb', hexToRgbStr(val));
+                                    }}
+                                    className="flex-grow bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs font-mono text-zinc-200 focus:outline-none focus:border-primary"
+                                  />
                                 </div>
                               </div>
                             </div>

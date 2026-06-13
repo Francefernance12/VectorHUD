@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useToastStore } from '../../store/toastStore';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, HelpCircle } from 'lucide-react';
 
 interface HardwareMetrics {
   cpu_usage: number;
@@ -101,7 +101,15 @@ export function HardwareWidget() {
       <div className="flex flex-col space-y-1">
         <div className="flex justify-between items-center text-xs">
           <span className={`font-bold tracking-widest flex items-center gap-1.5 ${cpuOverheated ? 'text-red-500 animate-pulse' : 'text-accent-green'}`}>
-            CPU {cpuTemp !== null ? `(${cpuTemp}°C)` : '(--°C)'}
+            CPU {cpuTemp !== null ? `(${cpuTemp}°C)` : (
+              <span className="flex items-center gap-1 group relative">
+                (--°C)
+                <HelpCircle size={11} className="text-zinc-500 hover:text-zinc-300 cursor-help transition-colors" />
+                <span className="absolute left-0 bottom-full mb-1.5 hidden group-hover:block w-48 bg-zinc-950 border border-border-wire text-[10px] text-zinc-400 font-sans p-2 rounded shadow-xl leading-relaxed z-[9999] normal-case tracking-normal">
+                  CPU temperature monitoring on Windows requires Administrator privileges. Run VectorHUD as Administrator to enable.
+                </span>
+              </span>
+            )}
             {cpuOverheated && <AlertTriangle size={12} className="text-red-500 animate-bounce" />}
           </span>
           <span className={`font-bold ${cpuOverheated ? 'text-red-500' : 'text-accent-green'}`}>{cpuUsage}%</span>

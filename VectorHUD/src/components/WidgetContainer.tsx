@@ -136,7 +136,7 @@ export function WidgetContainer({ id, children }: WidgetContainerProps) {
       )}
 
       {/* Widget Content */}
-      <div className="flex-1 relative overflow-hidden pointer-events-auto">
+      <div className="flex-1 min-h-0 relative overflow-hidden pointer-events-auto flex flex-col">
         {children}
       </div>
 
