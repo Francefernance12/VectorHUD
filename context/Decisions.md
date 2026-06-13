@@ -148,3 +148,12 @@ This document tracks all important decisions made throughout the lifecycle of th
 - **Decision:** Standardized on strict types instead of `any`, including typing all caught errors as `unknown` and using a central sanitizing error utility.
 - **Decision:** Implemented client-side API key redaction in logging/toasts via `sanitizeError`.
 - **Decision:** Clamped Hardware Metrics Polling Rate to a safe `1000`–`10000` ms range.
+
+## Session 21B: UI/UX Enhancements
+
+- **Decision:** Categorized the global keyboard shortcut recorder inputs into logical, border-bounded HUD cards (Overlay System, Media Capture, Timers & Utility, Voice Assistant PTT).
+- **Reasoning:** Listing 9 raw inputs in a single list cluttered the Settings tab; grouping them improves cognitive load and visual structure.
+- **Decision:** Built a scrolling monospaced Operational Manual tab directly into the Settings modal displaying summon keybinds, widget mechanics, and AMD/Intel CPU temperature administrative workarounds.
+- **Reasoning:** Provides new users with built-in onboarding instructions without leaving the offline HUD context.
+- **Decision:** Implemented custom mouse-dragging event listeners on `mousemove` and `mouseup` to calculate sidebar resize deltas, binding width directly to styling properties within a strict 160px-400px threshold.
+- **Reasoning:** Replacing the fixed 256px class with a dynamic styling property allows custom viewport customization while preserving the main chat flexbox container bounds.
