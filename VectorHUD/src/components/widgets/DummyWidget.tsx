@@ -14,7 +14,7 @@ export function DummyWidget() {
         <p className="text-accent-green animate-pulse">&gt; waiting for telemetry...</p>
       </div>
       
-      <p className="text-[9px] mt-auto opacity-40 text-center uppercase tracking-widest">
+      <p className="text-[11px] mt-auto opacity-40 text-center uppercase tracking-widest">
         Drag bottom-right corner to resize
       </p>
     </div>

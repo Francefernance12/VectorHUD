@@ -289,7 +289,7 @@ export function NotionCaptureWidget() {
         
         <div className="flex items-center gap-3">
            {statusMsg && (
-            <span className={`text-[9px] px-2 py-0.5 border font-bold uppercase tracking-widest animate-pulse ${statusMsg.includes('FAIL') || statusMsg.includes('Err') ? 'text-red-400 border-red-500/30 bg-red-500/10' : 'text-accent-green border-accent-green/30 bg-accent-green/10'}`}>
+            <span className={`text-[11px] px-2 py-0.5 border font-bold uppercase tracking-widest animate-pulse ${statusMsg.includes('FAIL') || statusMsg.includes('Err') ? 'text-red-400 border-red-500/30 bg-red-500/10' : 'text-accent-green border-accent-green/30 bg-accent-green/10'}`}>
               {statusMsg}
             </span>
           )}
@@ -318,7 +318,7 @@ export function NotionCaptureWidget() {
             
             {/* Title Input */}
             <div className="flex flex-col gap-1.5 group/field">
-              <label className="text-[9px] text-zinc-600 font-bold tracking-widest uppercase group-focus-within/field:text-accent-amber transition-colors">
+              <label className="text-xs text-zinc-600 font-bold tracking-widest uppercase group-focus-within/field:text-accent-amber transition-colors">
                 DOCUMENT_TITLE
               </label>
               <input
@@ -332,7 +332,7 @@ export function NotionCaptureWidget() {
 
             {/* Description Input */}
             <div className="flex flex-col gap-1.5 group/field">
-              <label className="text-[9px] text-zinc-600 font-bold tracking-widest uppercase group-focus-within/field:text-accent-amber transition-colors">
+              <label className="text-xs text-zinc-600 font-bold tracking-widest uppercase group-focus-within/field:text-accent-amber transition-colors">
                 DESCRIPTION_PAYLOAD
               </label>
               <input
@@ -346,7 +346,7 @@ export function NotionCaptureWidget() {
 
             {/* Content / Notes Input */}
             <div className="flex flex-col gap-1.5 group/field flex-1">
-              <label className="text-[9px] text-zinc-600 font-bold tracking-widest uppercase group-focus-within/field:text-accent-amber transition-colors">
+              <label className="text-xs text-zinc-600 font-bold tracking-widest uppercase group-focus-within/field:text-accent-amber transition-colors">
                 CONTENT_NOTES
               </label>
               <textarea
@@ -360,12 +360,12 @@ export function NotionCaptureWidget() {
             {/* Tasks Array */}
             <div className="flex flex-col gap-2">
               <div className="flex justify-between items-center">
-                <label className="text-[9px] text-zinc-600 font-bold tracking-widest uppercase">
+                <label className="text-xs text-zinc-600 font-bold tracking-widest uppercase">
                   SUB_ROUTINES (TASKS)
                 </label>
                 <button 
                   onClick={addTask}
-                  className="text-[9px] font-bold tracking-widest text-zinc-400 hover:text-accent-green flex items-center gap-1 uppercase"
+                  className="text-xs font-bold tracking-widest text-zinc-400 hover:text-accent-green flex items-center gap-1 uppercase"
                 >
                   <Plus size={10} /> Add_Routine
                 </button>
@@ -425,10 +425,10 @@ export function NotionCaptureWidget() {
             {isLoadingNotes ? (
               <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 opacity-50 space-y-3">
                 <Loader2 className="animate-spin" size={24} />
-                <span className="text-[10px] tracking-widest uppercase font-bold">Querying Database...</span>
+                <span className="text-xs tracking-widest uppercase font-bold">Querying Database...</span>
               </div>
             ) : notes.length === 0 ? (
-              <div className="flex-1 flex items-center justify-center text-zinc-600 text-[10px] uppercase tracking-widest font-bold border border-dashed border-zinc-800 m-2">
+              <div className="flex-1 flex items-center justify-center text-zinc-600 text-xs uppercase tracking-widest font-bold border border-dashed border-zinc-800 m-2">
                 NO_RECORDS_FOUND
               </div>
             ) : (
@@ -469,7 +469,7 @@ export function NotionCaptureWidget() {
                               <span className="text-sm text-zinc-400 line-clamp-2 mt-0.5">{note.description}</span>
                             )}
                             {note.date && (
-                              <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold mt-2">
+                              <span className="text-xs text-zinc-500 uppercase tracking-widest font-bold mt-2">
                                 {new Date(note.date).toLocaleDateString()}
                               </span>
                             )}
@@ -492,7 +492,7 @@ export function NotionCaptureWidget() {
                         value={note.status}
                         onChange={(e) => handleStatusChange(note.id, e.target.value, e)}
                         onClick={e => e.stopPropagation()}
-                        className={`text-[9px] px-1.5 py-1 rounded font-bold uppercase tracking-wider border outline-none cursor-pointer appearance-none ${
+                        className={`text-[11px] px-1.5 py-1 rounded font-bold uppercase tracking-wider border outline-none cursor-pointer appearance-none ${
                           note.status === 'Done' ? 'bg-accent-green/10 text-accent-green border-accent-green/30' :
                           note.status === 'In progress' ? 'bg-blue-500/10 text-blue-400 border-blue-500/30' :
                           'bg-zinc-800 text-zinc-400 border-zinc-700'
@@ -515,7 +515,7 @@ export function NotionCaptureWidget() {
                   {/* Expanded Area for Tasks */}
                   {expandedNoteId === note.id && (
                     <div className="border-t border-zinc-800 p-4 bg-black/40">
-                      <div className="text-[10px] text-zinc-500 font-bold tracking-widest uppercase mb-3">PAGE CONTENTS</div>
+                      <div className="text-xs text-zinc-500 font-bold tracking-widest uppercase mb-3">PAGE CONTENTS</div>
                       
                       {editingNoteId === note.id ? (
                         <div className="flex flex-col gap-3 w-full" onClick={e => e.stopPropagation()}>
@@ -530,7 +530,7 @@ export function NotionCaptureWidget() {
                                   placeholder="Content (paragraphs)"
                                />
                                <div className="flex flex-col gap-2 mt-2">
-                                  <div className="text-[10px] text-zinc-500 font-bold tracking-widest uppercase">Tasks</div>
+                                  <div className="text-xs text-zinc-500 font-bold tracking-widest uppercase">Tasks</div>
                                   {editTasks.map((t, idx) => (
                                     <div key={idx} className="flex items-center gap-3">
                                       <input
@@ -553,7 +553,7 @@ export function NotionCaptureWidget() {
                                   ))}
                                   <button 
                                     onClick={() => setEditTasks([...editTasks, ''])}
-                                    className="text-[10px] px-3 py-1.5 bg-white/5 text-zinc-400 border border-white/10 uppercase tracking-widest font-bold self-start mt-1 hover:bg-white/10 hover:text-white transition-colors"
+                                    className="text-xs px-3 py-1.5 bg-white/5 text-zinc-400 border border-white/10 uppercase tracking-widest font-bold self-start mt-1 hover:bg-white/10 hover:text-white transition-colors"
                                   >
                                     + Add Task
                                   </button>
@@ -599,7 +599,7 @@ export function NotionCaptureWidget() {
                           })}
                         </div>
                       ) : (
-                        <div className="text-[10px] text-zinc-600 italic">No tasks found in this document.</div>
+                        <div className="text-xs text-zinc-600 italic">No tasks found in this document.</div>
                       )}
                     </div>
                   )}

@@ -20,7 +20,7 @@
   --accent-amber: #FFB000;
   --accent-green-rgb: 74, 246, 38;
   --accent-amber-rgb: 255, 176, 0;
-  --border-wire: rgba(255, 255, 255, 0.15);
+  --border-wire: rgba(255, 255, 255, var(--widget-border-opacity, 0.15));
 }
 
 /* Ensure the absolute root of the document is completely transparent */

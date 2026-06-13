@@ -15,7 +15,7 @@ mod recorder;
 mod types;
 
 pub use capture::dxgi::capture_raw_frame;
-pub use device::audio::{enumerate_audio_input_devices, AudioInputDevice};
+pub use device::audio::{enumerate_audio_input_devices, AudioInputDevice, enumerate_audio_output_devices, AudioOutputDevice};
 pub use device::video::{enumerate_video_encoders, VideoEncoder, VideoEncoderType};
 pub use error::{RecorderError, Result};
 pub use recorder::{AudioSource, Recorder, RecorderConfig, RecorderConfigBuilder};

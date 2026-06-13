@@ -95,7 +95,8 @@ export function OpenRouterWidget() {
   const handleMicClick = async () => {
     if (!isRecordingMic) {
       try {
-        await invoke('start_voice_recording');
+        const selectedAudioInput = useSettingsStore.getState().selectedAudioInput;
+        await invoke('start_voice_recording', { deviceName: selectedAudioInput });
         setIsRecordingMic(true);
         setMicSeconds(30);
       } catch (err: any) {
@@ -611,7 +612,7 @@ export function OpenRouterWidget() {
       {sidebarOpen && (
         <div className="w-64 border-r border-zinc-800 bg-black flex flex-col shrink-0 overflow-hidden">
           <div className="p-3 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50">
-                <h3 className="text-[10px] font-bold tracking-widest text-zinc-500 uppercase">Chat Sessions</h3>
+                <h3 className="text-xs font-bold tracking-widest text-zinc-500 uppercase">Chat Sessions</h3>
                 <button onClick={createNewSession} className="text-zinc-400 hover:text-accent-amber transition-colors" title="New Session">
                   <Plus size={14} />
                 </button>
@@ -639,7 +640,7 @@ export function OpenRouterWidget() {
                 ) : (
                   <div className="flex flex-col overflow-hidden mr-2">
                     <span className="text-xs text-zinc-300 truncate font-semibold">{s.title}</span>
-                    <span className="text-[9px] text-zinc-600 font-mono mt-1 uppercase">{new Date(s.timestamp).toLocaleDateString()}</span>
+                    <span className="text-[11px] text-zinc-650 font-mono mt-1 uppercase">{new Date(s.timestamp).toLocaleDateString()}</span>
                   </div>
                 )}
                 
@@ -664,7 +665,7 @@ export function OpenRouterWidget() {
               </div>
             ))}
             {sessions.length === 0 && (
-              <div className="text-[10px] text-zinc-600 text-center mt-4 italic">No chat history</div>
+              <div className="text-xs text-zinc-600 text-center mt-4 italic">No chat history</div>
             )}
           </div>
         </div>
@@ -682,7 +683,7 @@ export function OpenRouterWidget() {
             </button>
             <span className="text-xs font-bold text-zinc-200 tracking-wider">TACTICAL_AI_LINK</span>
           </div>
-          <span className="text-[10px] text-zinc-600 bg-white/5 px-2 py-0.5 rounded-full border border-white/10 uppercase tracking-widest">{getActiveModelName()}</span>
+          <span className="text-xs text-zinc-600 bg-white/5 px-2 py-0.5 rounded-full border border-white/10 uppercase tracking-widest">{getActiveModelName()}</span>
         </div>
 
         <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-6 custom-scrollbar scroll-smooth w-full">
@@ -699,16 +700,16 @@ export function OpenRouterWidget() {
             return true;
           }).map((msg, idx) => (
             <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} group animate-in fade-in slide-in-from-bottom-2 duration-300 w-full`}>
-              <span className="text-[9px] text-zinc-600 mb-1.5 uppercase tracking-widest px-1 font-bold">
+              <span className="text-[11px] text-zinc-600 mb-1.5 uppercase tracking-widest px-1 font-bold">
                 {msg.role === 'user' ? 'OPERATOR' : 'VECTOR_AI'}
               </span>
-              <div className={`p-3.5 rounded-sm text-sm w-fit max-w-[90%] min-w-0 shadow-lg relative select-text break-words overflow-hidden ${
+              <div className={`p-3.5 rounded-sm text-xs font-mono w-fit max-w-[90%] min-w-0 shadow-lg relative select-text break-words overflow-hidden ${
                 msg.role === 'user' 
                   ? 'bg-zinc-800/80 border-r-2 border-accent-amber text-zinc-100' 
                   : 'bg-black/60 border-l-2 border-accent-green text-zinc-300 shadow-[0_0_15px_rgba(74,246,38,0.05)]'
               }`}>
                 {msg.image_path && (
-                  <div className="mb-3 p-2 bg-black/50 border border-white/5 rounded-sm flex items-center gap-2 text-[10px] text-accent-green/80 italic w-fit">
+                  <div className="mb-3 p-2 bg-black/50 border border-white/5 rounded-sm flex items-center gap-2 text-xs text-accent-green/80 italic w-fit">
                     <Camera size={12} />
                     <span>[ VISION_BUFFER_ATTACHED ]</span>
                   </div>
@@ -728,7 +729,7 @@ export function OpenRouterWidget() {
                           },
                           h2({ children }) {
                             return (
-                              <h2 className="text-[11px] font-bold text-zinc-200 tracking-wider uppercase border-b border-zinc-900 pb-1 mb-2.5 mt-4 flex items-center gap-1.5 font-mono">
+                              <h2 className="text-xs font-bold text-zinc-200 tracking-wider uppercase border-b border-zinc-900 pb-1 mb-2.5 mt-4 flex items-center gap-1.5 font-mono">
                                 <span className="w-1.5 h-2 bg-accent-amber inline-block"></span>
                                 {children}
                               </h2>
@@ -736,7 +737,7 @@ export function OpenRouterWidget() {
                           },
                           h3({ children }) {
                             return (
-                              <h3 className="text-[10px] font-bold text-zinc-400 tracking-wide uppercase mb-2 mt-3 flex items-center gap-1 font-mono">
+                              <h3 className="text-xs font-bold text-zinc-400 tracking-wide uppercase mb-2 mt-3 flex items-center gap-1 font-mono">
                                 <span className="text-accent-green select-none font-bold">//</span>
                                 {children}
                               </h3>
@@ -777,7 +778,7 @@ export function OpenRouterWidget() {
                             }
                             return (
                               <div className="my-3.5 rounded border border-zinc-800 bg-[#070707] shadow-xl max-w-full overflow-hidden">
-                                <div className="flex items-center justify-between px-4 py-2 bg-zinc-950 border-b border-zinc-900 text-[10px] text-zinc-500 font-mono tracking-widest select-none">
+                                <div className="flex items-center justify-between px-4 py-2 bg-zinc-950 border-b border-zinc-900 text-xs text-zinc-500 font-mono tracking-widest select-none">
                                   <div className="flex items-center gap-2">
                                     <span className="w-1.5 h-1.5 rounded-full bg-accent-amber animate-pulse"></span>
                                     <span>{lang}</span>
@@ -788,7 +789,7 @@ export function OpenRouterWidget() {
                                       navigator.clipboard.writeText(codeText.trim());
                                       showToast("📋 Code Copied");
                                     }}
-                                    className="hover:text-accent-green transition-colors flex items-center gap-1.5 font-bold uppercase tracking-wider text-[9px]"
+                                    className="hover:text-accent-green transition-colors flex items-center gap-1.5 font-bold uppercase tracking-wider text-xs"
                                   >
                                     <Copy size={10} /> Copy
                                   </button>
@@ -835,7 +836,7 @@ export function OpenRouterWidget() {
                           },
                           th({ children }) {
                             return (
-                              <th className="px-3 py-2 bg-zinc-950 text-left text-[10px] font-bold text-zinc-400 uppercase tracking-widest border-b border-zinc-800 font-mono">
+                              <th className="px-3 py-2 bg-zinc-950 text-left text-xs font-bold text-zinc-400 uppercase tracking-widest border-b border-zinc-800 font-mono">
                                 {children}
                               </th>
                             );
@@ -849,8 +850,8 @@ export function OpenRouterWidget() {
                           },
                           blockquote({ children }) {
                             return (
-                              <blockquote className="border-l-2 border-accent-amber/70 pl-3.5 py-2 my-4 italic text-zinc-300 bg-accent-amber/5 rounded-r-md text-xs relative overflow-hidden font-mono shadow-[inset_0_0_10px_rgba(255,176,0,0.02)]">
-                                <span className="absolute top-1 right-2 text-[8px] font-bold text-accent-amber/30 select-none tracking-widest uppercase font-mono">QUOTE</span>
+                              <blockquote className="border-l-2 border-accent-amber/70 pl-3.5 py-2 my-4 italic text-zinc-350 bg-accent-amber/5 rounded-r-md text-xs relative overflow-hidden font-mono shadow-[inset_0_0_10px_rgba(255,176,0,0.02)]">
+                                <span className="absolute top-1 right-2 text-xs font-bold text-accent-amber/30 select-none tracking-widest uppercase font-mono">QUOTE</span>
                                 {children}
                               </blockquote>
                             );
@@ -897,7 +898,7 @@ export function OpenRouterWidget() {
                   <div className="whitespace-pre-wrap leading-relaxed select-text break-words">{msg.content}</div>
                 )}
                 {msg.tokens && (
-                  <div className="mt-2 text-[9px] text-zinc-500 font-mono italic flex justify-end">
+                  <div className="mt-2 text-xs text-zinc-500 font-mono italic flex justify-end">
                     [{msg.tokens} TOKENS USED]
                   </div>
                 )}
@@ -906,8 +907,8 @@ export function OpenRouterWidget() {
           ))}
           {isTyping && (
             <div className="flex flex-col items-start animate-in fade-in duration-300">
-              <span className="text-[9px] text-zinc-600 mb-1.5 uppercase tracking-widest px-1 font-bold">VECTOR_AI</span>
-              <div className="p-3 rounded-sm text-sm bg-black/60 border-l-2 border-accent-green/50 text-accent-green/70 flex items-center gap-2">
+              <span className="text-[11px] text-zinc-600 mb-1.5 uppercase tracking-widest px-1 font-bold">VECTOR_AI</span>
+              <div className="p-3 rounded-sm text-xs font-mono bg-black/60 border-l-2 border-accent-green/50 text-accent-green/70 flex items-center gap-2">
                 <span className="w-1.5 h-1.5 bg-accent-green rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                 <span className="w-1.5 h-1.5 bg-accent-green rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                 <span className="w-1.5 h-1.5 bg-accent-green rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
@@ -964,7 +965,7 @@ export function OpenRouterWidget() {
             type="button"
             onClick={handleAnalyzeScreen}
             disabled={isTyping}
-            className="w-full bg-zinc-900/50 border border-zinc-800 rounded-sm py-2 text-[10px] font-bold uppercase tracking-widest hover:bg-white/10 hover:border-zinc-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed text-zinc-400 flex items-center justify-center gap-2"
+            className="w-full bg-zinc-900/50 border border-zinc-800 rounded-sm py-2 text-xs font-bold uppercase tracking-widest hover:bg-white/10 hover:border-zinc-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed text-zinc-400 flex items-center justify-center gap-2"
           >
             <Camera size={12} />
             <span>Engage Vision Buffer</span>
