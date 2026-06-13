@@ -20,6 +20,7 @@ export function WidgetContainer({ id, children }: WidgetContainerProps) {
   const togglePin = useWidgetStore(state => state.togglePin);
 
   const isInteractive = useShellStore(state => state.isInteractive);
+  const isOverlayOpen = useShellStore(state => state.isOverlayOpen);
   
   const [winBounds, setWinBounds] = useState({ 
     w: typeof window !== 'undefined' ? window.innerWidth : 1920, 
@@ -37,7 +38,7 @@ export function WidgetContainer({ id, children }: WidgetContainerProps) {
   if (!widgetDef || !instance) return null;
 
   // Fix: Unpinned widgets do not persist when overlay is dismissed.
-  if (!isInteractive && !instance.isPinned) return null;
+  if (!isOverlayOpen && !instance.isPinned) return null;
 
   // Clamp coordinates to prevent widgets getting lost off-screen on smaller monitors
   const safeX = Math.max(0, Math.min(instance.x, Math.max(0, winBounds.w - instance.width)));

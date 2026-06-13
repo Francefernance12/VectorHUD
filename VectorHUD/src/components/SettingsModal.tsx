@@ -56,6 +56,10 @@ export function SettingsModal() {
     setStopwatchHotkey,
     timerResetHotkey,
     setTimerResetHotkey,
+    voicePttHotkey,
+    setVoicePttHotkey,
+    interactHotkey,
+    setInteractHotkey,
     syncHotkeys
   } = useSettingsStore(
     useShallow((state) => ({
@@ -103,6 +107,10 @@ export function SettingsModal() {
       setStopwatchHotkey: state.setStopwatchHotkey,
       timerResetHotkey: state.timerResetHotkey,
       setTimerResetHotkey: state.setTimerResetHotkey,
+      voicePttHotkey: state.voicePttHotkey,
+      setVoicePttHotkey: state.setVoicePttHotkey,
+      interactHotkey: state.interactHotkey,
+      setInteractHotkey: state.setInteractHotkey,
       syncHotkeys: state.syncHotkeys,
     }))
   );
@@ -140,7 +148,9 @@ export function SettingsModal() {
     replay: replayHotkey,
     timer: timerHotkey,
     stopwatch: stopwatchHotkey,
-    timerReset: timerResetHotkey
+    timerReset: timerResetHotkey,
+    voicePtt: voicePttHotkey,
+    interact: interactHotkey
   });
 
   const [localPreferences, setLocalPreferences] = useState({
@@ -171,7 +181,9 @@ export function SettingsModal() {
       replay: replayHotkey,
       timer: timerHotkey,
       stopwatch: stopwatchHotkey,
-      timerReset: timerResetHotkey
+      timerReset: timerResetHotkey,
+      voicePtt: voicePttHotkey,
+      interact: interactHotkey
     });
 
     setLocalPreferences({
@@ -349,6 +361,8 @@ export function SettingsModal() {
         await setTimerHotkey(localHotkeys.timer);
         await setStopwatchHotkey(localHotkeys.stopwatch);
         await setTimerResetHotkey(localHotkeys.timerReset);
+        await setVoicePttHotkey(localHotkeys.voicePtt);
+        await setInteractHotkey(localHotkeys.interact);
 
         await syncHotkeys();
         setSaveMessage('Saved successfully!');
@@ -395,6 +409,8 @@ export function SettingsModal() {
       localHotkeys.timer !== timerHotkey ||
       localHotkeys.stopwatch !== stopwatchHotkey ||
       localHotkeys.timerReset !== timerResetHotkey ||
+      localHotkeys.voicePtt !== voicePttHotkey ||
+      localHotkeys.interact !== interactHotkey ||
       localPreferences.openRouterModel !== openRouterModel ||
       localPreferences.openaiModel !== openaiModel ||
       localPreferences.anthropicModel !== anthropicModel ||
@@ -437,7 +453,9 @@ export function SettingsModal() {
       replay: replayHotkey,
       timer: timerHotkey,
       stopwatch: stopwatchHotkey,
-      timerReset: timerResetHotkey
+      timerReset: timerResetHotkey,
+      voicePtt: voicePttHotkey,
+      interact: interactHotkey
     });
     setLocalPreferences({
       openRouterModel,
@@ -926,6 +944,26 @@ export function SettingsModal() {
                       value={localHotkeys.stopwatch}
                       onChange={(e) => setLocalHotkeys(s => ({ ...s, stopwatch: e.target.value }))}
                       placeholder="ctrl+alt+w"
+                      className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-primary transition-colors uppercase"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Voice PTT Assistant</label>
+                    <input 
+                      type="text"
+                      value={localHotkeys.voicePtt}
+                      onChange={(e) => setLocalHotkeys(s => ({ ...s, voicePtt: e.target.value }))}
+                      placeholder="ctrl+alt+v"
+                      className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-primary transition-colors uppercase"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Toggle Interactivity</label>
+                    <input 
+                      type="text"
+                      value={localHotkeys.interact}
+                      onChange={(e) => setLocalHotkeys(s => ({ ...s, interact: e.target.value }))}
+                      placeholder="ctrl+alt+i"
                       className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-zinc-200 font-mono focus:outline-none focus:border-primary transition-colors uppercase"
                     />
                   </div>

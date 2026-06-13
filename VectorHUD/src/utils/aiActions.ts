@@ -605,3 +605,83 @@ async function ensureNotionNotesLoaded(): Promise<any[]> {
   }
   return [];
 }
+
+export async function transcribeAudio(base64Wav: string): Promise<string> {
+  if (!base64Wav) {
+    throw new Error("No audio data provided");
+  }
+
+  const db = await getDb();
+  const groqKeyRes = await db.select<{ encrypted_value: string }[]>(
+    "SELECT encrypted_value FROM user_credentials WHERE id = 'groq_key'"
+  );
+  const openaiKeyRes = await db.select<{ encrypted_value: string }[]>(
+    "SELECT encrypted_value FROM user_credentials WHERE id = 'openai_key'"
+  );
+
+  let apiKey = '';
+  let provider = '';
+  let model = '';
+  let url = '';
+
+  if (groqKeyRes.length > 0) {
+    const rawKey = await invoke<string>('decrypt_data', { encoded: groqKeyRes[0].encrypted_value });
+    if (rawKey && rawKey.trim() !== '') {
+      apiKey = rawKey.trim();
+      provider = 'groq';
+      model = 'whisper-large-v3';
+      url = 'https://api.groq.com/openai/v1/audio/transcriptions';
+    }
+  }
+
+  if (!apiKey && openaiKeyRes.length > 0) {
+    const rawKey = await invoke<string>('decrypt_data', { encoded: openaiKeyRes[0].encrypted_value });
+    if (rawKey && rawKey.trim() !== '') {
+      apiKey = rawKey.trim();
+      provider = 'openai';
+      model = 'whisper-1';
+      url = 'https://api.openai.com/v1/audio/transcriptions';
+    }
+  }
+
+  if (!apiKey) {
+    throw new Error("Neither Groq nor OpenAI API key is configured. Please add one in Settings.");
+  }
+
+  logger.info(`Transcribing audio using ${provider} with model ${model}...`);
+
+  // Decode base64 to blob
+  const parts = base64Wav.split(',');
+  const base64Data = parts.length > 1 ? parts[1] : parts[0];
+  const binaryString = atob(base64Data);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  const audioBlob = new Blob([bytes], { type: 'audio/wav' });
+
+  const formData = new FormData();
+  formData.append('file', audioBlob, 'speech.wav');
+  formData.append('model', model);
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: formData
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Transcription API request failed (${response.status}): ${errText}`);
+  }
+
+  const result = await response.json();
+  if (!result.text) {
+    throw new Error("Transcription API returned empty response");
+  }
+
+  return result.text;
+}

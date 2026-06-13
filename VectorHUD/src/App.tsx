@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { check } from '@tauri-apps/plugin-updater';
 import { AnimatePresence, motion } from "framer-motion";
@@ -27,12 +27,26 @@ import { RecordingStatusBar } from "./components/RecordingStatusBar";
 import { TimerStatusBar } from "./components/TimerStatusBar";
 import { useRecordingStore } from "./store/recordingStore";
 import { invoke } from "@tauri-apps/api/core";
+import { useOpenRouterStore } from "./store/openRouterStore";
+import { transcribeAudio, executeTool, AI_TOOLS, getAnthropicTools } from "./utils/aiActions";
+import { UI_CONSTANTS } from "./config/constants";
 import "./App.css";
+
+interface Message {
+  id?: number;
+  session_id: string;
+  role: 'user' | 'assistant' | 'tool';
+  content: string;
+  image_path?: string;
+  timestamp?: string;
+  tokens?: number;
+  tool_calls?: any;
+  tool_call_id?: string;
+}
 
 function App() {
   const isInteractive = useShellStore((state) => state.isInteractive);
-  const toggleInteractive = useShellStore((state) => state.toggleInteractive);
-  const setInteractive = useShellStore((state) => state.setInteractive);
+  const isOverlayOpen = useShellStore((state) => state.isOverlayOpen);
   
   const activeWidgetIds = useWidgetStore(useShallow((state) => Object.keys(state.activeWidgets)));
   
@@ -42,12 +56,337 @@ function App() {
   const toasts = useToastStore((state) => state.toasts);
   const showToast = useToastStore((state) => state.showToast);
 
+  // Voice PTT Assistant states
+  const [pttState, setPttState] = useState<'idle' | 'recording' | 'transcribing' | 'thinking' | 'response'>('idle');
+  const [pttCountdown, setPttCountdown] = useState(30.0);
+  const [pttTranscript, setPttTranscript] = useState('');
+  const [pttResponseText, setPttResponseText] = useState('');
+  const [showPttResponse, setShowPttResponse] = useState(false);
+
+  // Refs to avoid stale closures in listeners
+  const pttStateRef = useRef(pttState);
+  useEffect(() => {
+    pttStateRef.current = pttState;
+  }, [pttState]);
+
+  // PTT countdown timer effect
+  useEffect(() => {
+    if (pttState !== 'recording') return;
+
+    const interval = setInterval(() => {
+      setPttCountdown(prev => {
+        if (prev <= 0.1) {
+          clearInterval(interval);
+          invoke<string>('stop_voice_recording')
+            .then(base64Wav => {
+              handleVoiceStop(base64Wav);
+            })
+            .catch(err => {
+              logger.error(`Auto-stop PTT voice recording failed: ${err}`);
+              setPttState('idle');
+            });
+          return 0;
+        }
+        return Number((prev - 0.1).toFixed(1));
+      });
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [pttState]);
+
+  // PTT Response auto-dismiss effect (8 seconds)
+  useEffect(() => {
+    if (!showPttResponse) return;
+    const timer = setTimeout(() => {
+      setShowPttResponse(false);
+      setPttState('idle');
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, [showPttResponse]);
+
+  const handleVoiceStop = async (base64Wav: string) => {
+    setPttState('transcribing');
+    try {
+      const text = await transcribeAudio(base64Wav);
+      setPttTranscript(text);
+      if (text.trim()) {
+        await handlePttSubmission(text);
+      } else {
+        showToast("🎙️ Voice Assistant: No speech detected");
+        setPttState('idle');
+      }
+    } catch (err: any) {
+      logger.error(`PTT transcription failed: ${err?.message || String(err)}`);
+      showToast(`🎙️ Transcription failed: ${err?.message || String(err)}`);
+      setPttState('idle');
+    }
+  };
+
+  const handleVoiceStopRef = useRef(handleVoiceStop);
+  useEffect(() => {
+    handleVoiceStopRef.current = handleVoiceStop;
+  }, [handleVoiceStop]);
+
+  const handlePttSubmission = async (transcript: string) => {
+    if (!transcript.trim()) {
+      setPttState('idle');
+      return;
+    }
+
+    setPttState('thinking');
+    
+    try {
+      const db = await getDb();
+      
+      // 1. Get or create active session ID
+      let sessionId = useOpenRouterStore.getState().currentSessionId;
+      if (!sessionId) {
+        sessionId = Math.random().toString(36).substring(2, 15);
+        useOpenRouterStore.getState().setCurrentSessionId(sessionId);
+      }
+
+      // 2. Load existing messages to keep context
+      const existingRows = await db.select<any[]>(
+        'SELECT * FROM ai_chat_history WHERE session_id = ? ORDER BY id ASC',
+        [sessionId]
+      );
+      const existingMessages: Message[] = existingRows.map(row => ({
+        session_id: row.session_id,
+        role: row.role as 'user' | 'assistant' | 'tool',
+        content: row.content,
+        image_path: row.image_path || undefined,
+        tokens: row.tokens || undefined,
+        tool_calls: row.tool_calls ? JSON.parse(row.tool_calls) : undefined,
+        tool_call_id: row.tool_call_id || undefined
+      }));
+
+      // 3. Save user message to database
+      const userMsg: Message = {
+        session_id: sessionId,
+        role: 'user',
+        content: transcript
+      };
+      await db.execute(
+        'INSERT INTO ai_chat_history (session_id, role, content, image_path, tokens, tool_calls, tool_call_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)',
+        [userMsg.session_id, userMsg.role, userMsg.content, null, null, null, null]
+      );
+
+      // Trigger frontend widgets to refresh if open
+      window.dispatchEvent(new Event('refresh-chat-messages'));
+
+      // 4. Construct current messages array for API
+      const updatedMessages = [...existingMessages, userMsg];
+
+      // 5. Retrieve API Key
+      const settings = useSettingsStore.getState();
+      const aiProvider = settings.aiProvider || 'openrouter';
+      
+      let keyId = 'openrouter_key';
+      let selectedModel = settings.openRouterModel;
+      let providerName = 'OpenRouter';
+
+      switch (aiProvider) {
+        case 'openai':
+          keyId = 'openai_key';
+          selectedModel = settings.openaiModel;
+          providerName = 'OpenAI';
+          break;
+        case 'anthropic':
+          keyId = 'anthropic_key';
+          selectedModel = settings.anthropicModel;
+          providerName = 'Anthropic';
+          break;
+        case 'groq':
+          keyId = 'groq_key';
+          selectedModel = settings.groqModel;
+          providerName = 'Groq';
+          break;
+        case 'openrouter':
+        default:
+          keyId = 'openrouter_key';
+          selectedModel = (settings.useCustomOpenRouterModel && settings.customOpenRouterModel) 
+            ? settings.customOpenRouterModel 
+            : settings.openRouterModel;
+          providerName = 'OpenRouter';
+          break;
+      }
+
+      const keyResult = await db.select<{ encrypted_value: string }[]>(
+        "SELECT encrypted_value FROM user_credentials WHERE id = ?",
+        [keyId]
+      );
+      if (keyResult.length === 0) {
+        throw new Error(`${providerName} API key is not configured. Please add it in Settings.`);
+      }
+
+      const apiKey = await invoke<string>('decrypt_data', { encoded: keyResult[0].encrypted_value });
+      if (!apiKey) {
+        throw new Error(`${providerName} API key is invalid or empty.`);
+      }
+
+      // 6. Execute AI Call (Looping for tools)
+      let currentMessages: Message[] = [...updatedMessages];
+      let depth = 0;
+      let finalContent = '';
+
+      const pttSystemPrompt = UI_CONSTANTS.CHAT_SYSTEM_PROMPT + 
+        "\n\n[PTT SYSTEM INSTRUCTION]: The user is speaking via Push-to-Talk (voice). Keep your final response extremely brief, concise, and direct (2-3 sentences max) unless they explicitly ask for an in-depth analysis, an essay, research, or a formatted list. Focus on answering their question directly.";
+
+      while (depth < 5) {
+        const apiMessages = currentMessages.map(msg => {
+          if (msg.role === 'tool') {
+            return { role: 'tool', tool_call_id: msg.tool_call_id, content: msg.content };
+          }
+          if (msg.role === 'assistant' && msg.tool_calls) {
+            return { role: 'assistant', content: msg.content || "", tool_calls: msg.tool_calls };
+          }
+          return { role: msg.role, content: msg.content };
+        });
+
+        const supportsTools = 
+          aiProvider === 'openai' ||
+          aiProvider === 'anthropic' ||
+          aiProvider === 'groq' ||
+          (aiProvider === 'openrouter' && (!settings.useCustomOpenRouterModel || (settings.customOpenRouterModel && (
+            settings.customOpenRouterModel.includes('gpt') ||
+            settings.customOpenRouterModel.includes('claude') ||
+            settings.customOpenRouterModel.includes('gemini') ||
+            settings.customOpenRouterModel.includes('llama-3.3') ||
+            settings.customOpenRouterModel.includes('llama3')
+          ))));
+
+        const toolsPayload = supportsTools 
+          ? (aiProvider === 'anthropic' ? getAnthropicTools() : AI_TOOLS)
+          : undefined;
+
+        interface UnifiedLlmResponse {
+          content: string;
+          total_tokens: number;
+          tool_calls?: any;
+        }
+
+        const result = await invoke<UnifiedLlmResponse>('call_ai_api', {
+          provider: aiProvider,
+          model: selectedModel,
+          messages: apiMessages,
+          systemPrompt: pttSystemPrompt,
+          apiKey: apiKey,
+          tools: toolsPayload
+        });
+
+        if (result.tool_calls && result.tool_calls.length > 0) {
+          const assistantMsg: Message = {
+            session_id: sessionId,
+            role: 'assistant',
+            content: result.content || "",
+            tokens: result.total_tokens,
+            tool_calls: result.tool_calls
+          };
+          await db.execute(
+            'INSERT INTO ai_chat_history (session_id, role, content, image_path, tokens, tool_calls, tool_call_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)',
+            [assistantMsg.session_id, assistantMsg.role, assistantMsg.content, null, assistantMsg.tokens, JSON.stringify(assistantMsg.tool_calls), null]
+          );
+
+          currentMessages.push(assistantMsg);
+          window.dispatchEvent(new Event('refresh-chat-messages'));
+
+          const toolResults: Message[] = [];
+          for (const tc of result.tool_calls) {
+            const name = tc.function.name;
+            let args = {};
+            try {
+              args = typeof tc.function.arguments === 'string' 
+                ? JSON.parse(tc.function.arguments) 
+                : tc.function.arguments;
+            } catch (e) {
+              logger.error(`Failed to parse arguments for tool ${name}: ${tc.function.arguments}`);
+            }
+
+            showToast(`🔧 Tool Executed: ${name}`);
+            const output = await executeTool(name, args);
+
+            const toolMsg: Message = {
+              session_id: sessionId,
+              role: 'tool',
+              content: output,
+              tool_call_id: tc.id
+            };
+            await db.execute(
+              'INSERT INTO ai_chat_history (session_id, role, content, image_path, tokens, tool_calls, tool_call_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)',
+              [toolMsg.session_id, toolMsg.role, toolMsg.content, null, null, null, toolMsg.tool_call_id]
+            );
+
+            toolResults.push(toolMsg);
+          }
+
+          currentMessages.push(...toolResults);
+          window.dispatchEvent(new Event('refresh-chat-messages'));
+          depth++;
+        } else {
+          finalContent = result.content;
+          const assistantMsg: Message = {
+            session_id: sessionId,
+            role: 'assistant',
+            content: finalContent,
+            tokens: result.total_tokens
+          };
+          await db.execute(
+            'INSERT INTO ai_chat_history (session_id, role, content, image_path, tokens, tool_calls, tool_call_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)',
+            [assistantMsg.session_id, assistantMsg.role, assistantMsg.content, null, assistantMsg.tokens, null, null]
+          );
+          
+          window.dispatchEvent(new Event('refresh-chat-messages'));
+          break;
+        }
+      }
+
+      setPttResponseText(finalContent);
+      setPttState('response');
+      setShowPttResponse(true);
+
+    } catch (err: any) {
+      logger.error(`PTT AI assistant error: ${err?.message || String(err)}`);
+      showToast(`🎙️ Voice Assistant error: ${err?.message || String(err)}`);
+      setPttState('idle');
+    }
+  };
+
   // Force settings to close in state when exiting interactive mode
   useEffect(() => {
     if (!isInteractive && useSettingsStore.getState().isSettingsOpen) {
       useSettingsStore.getState().toggleSettings();
     }
   }, [isInteractive]);
+
+  // Inactivity timeout for temporary interactive mode (when overlay is closed)
+  useEffect(() => {
+    if (!isInteractive || isOverlayOpen) return;
+
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    const resetTimeout = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        useShellStore.getState().setInteractive(false);
+        showToast("🎙️ Interactivity: Disabled (Inactivity)");
+      }, 5000); // 5 seconds of inactivity
+    };
+
+    // Initialize timeout
+    resetTimeout();
+
+    // Listen to mouse movement, clicks, and keys to reset timeout
+    window.addEventListener('mousemove', resetTimeout);
+    window.addEventListener('mousedown', resetTimeout);
+    window.addEventListener('keydown', resetTimeout);
+
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('mousemove', resetTimeout);
+      window.removeEventListener('mousedown', resetTimeout);
+      window.removeEventListener('keydown', resetTimeout);
+    };
+  }, [isInteractive, isOverlayOpen, showToast]);
 
   useEffect(() => {
     logger.info("VectorHUD UI Booted");
@@ -116,7 +455,7 @@ function App() {
     });
 
     // Start in Ghost Mode by explicitly telling Rust to ignore cursor events
-    setInteractive(false);
+    useShellStore.getState().setInteractive(false);
 
 
     let isMounted = true;
@@ -133,10 +472,26 @@ function App() {
     const initListeners = async () => {
       try {
         if (!isMounted) return;
-        const unlistenShortcut = await listen("hotkey-overlay", () => {
-          toggleInteractive();
+        const unlistenShortcut = await listen<string>("hotkey-overlay", (event) => {
+          logger.info(`Frontend: hotkey-overlay event received, payload: ${event.payload}`).catch(console.error);
+          if (event.payload === "pressed") {
+            useShellStore.getState().toggleInteractive();
+          }
         });
         safePush(unlistenShortcut);
+
+        if (!isMounted) return;
+        const unlistenInteract = await listen("hotkey-interact", () => {
+          if (useShellStore.getState().isOverlayOpen) {
+            logger.info("Frontend: ignoring hotkey-interact because overlay is open").catch(console.error);
+            return;
+          }
+          const current = useShellStore.getState().isInteractive;
+          const next = !current;
+          useShellStore.getState().setInteractive(next);
+          showToast(`🎙️ Interactivity: ${next ? "Enabled" : "Disabled"}`);
+        });
+        safePush(unlistenInteract);
 
         if (!isMounted) return;
         const unlistenHardware = await useHardwareStore.getState().initialize();
@@ -150,17 +505,19 @@ function App() {
 
         if (!isMounted) return;
         const unlistenFocusLoss = await listen("window-lost-focus", () => {
+          logger.info(`Frontend: window-lost-focus event received. ignoreFocusLoss: ${useShellStore.getState().ignoreFocusLoss}`).catch(console.error);
           if (useShellStore.getState().ignoreFocusLoss) {
             logger.info("Ignoring window-lost-focus event during active capture window hide.");
             return;
           }
-          setInteractive(false);
+          useShellStore.getState().setOverlayOpen(false);
+          useShellStore.getState().setInteractive(false);
         });
         safePush(unlistenFocusLoss);
 
         if (!isMounted) return;
         const unlistenForceInteractive = await listen("force-interactive", () => {
-          setInteractive(true);
+          useShellStore.getState().setInteractive(true);
         });
         safePush(unlistenForceInteractive);
 
@@ -268,6 +625,34 @@ function App() {
           useTimerStore.getState().resetSw();
         });
         safePush(unlistenTimerReset);
+
+        if (!isMounted) return;
+        const unlistenVoiceStart = await listen("voice-recording-started", () => {
+          logger.info("PTT Voice Recording started");
+          setPttState('recording');
+          setPttCountdown(30.0);
+          setPttTranscript('');
+          setPttResponseText('');
+          setShowPttResponse(false);
+        });
+        safePush(unlistenVoiceStart);
+
+        if (!isMounted) return;
+        const unlistenVoiceStop = await listen<string>("voice-recording-stopped", (event) => {
+          logger.info("PTT Voice Recording stopped");
+          if (handleVoiceStopRef.current) {
+            handleVoiceStopRef.current(event.payload);
+          }
+        });
+        safePush(unlistenVoiceStop);
+
+        if (!isMounted) return;
+        const unlistenVoiceError = await listen<string>("voice-recording-stopped-error", (event) => {
+          logger.error(`PTT Voice Recording error: ${event.payload}`);
+          showToast(`🎙️ Voice assistant error: ${event.payload}`);
+          setPttState('idle');
+        });
+        safePush(unlistenVoiceError);
       } catch (err) {
         logger.error(`Failed to initialize listeners: ${err}`).catch(console.error);
       }
@@ -275,8 +660,14 @@ function App() {
     initListeners();
 
     const handleBlur = () => {
+      logger.info(`Frontend: window blur event received. isInteractive: ${useShellStore.getState().isInteractive}`).catch(console.error);
+      if (useShellStore.getState().ignoreFocusLoss) {
+        logger.info("Ignoring window blur event because ignoreFocusLoss is true.").catch(console.error);
+        return;
+      }
       if (useShellStore.getState().isInteractive) {
-        setInteractive(false);
+        useShellStore.getState().setOverlayOpen(false);
+        useShellStore.getState().setInteractive(false);
       }
     };
     window.addEventListener('blur', handleBlur);
@@ -305,7 +696,7 @@ function App() {
       unsubscribeStore();
       clearTimeout(saveTimeout);
     };
-  }, [setInteractive, toggleInteractive, showToast]);
+  }, [showToast]);
 
   return (
     <>
@@ -326,6 +717,140 @@ function App() {
         </AnimatePresence>
       </div>
 
+      {/* PTT Recording / Processing Overlay */}
+      <AnimatePresence>
+        {pttState !== 'idle' && pttState !== 'response' && (
+          <motion.div
+            initial={{ opacity: 0, y: -50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -50 }}
+            className="fixed top-6 left-1/2 -translate-x-1/2 z-[9990] bg-black/90 backdrop-blur-md border border-accent-amber/50 px-6 py-3 rounded-sm shadow-[0_0_30px_rgba(255,176,0,0.15)] flex items-center gap-4 font-mono pointer-events-none"
+          >
+            {pttState === 'recording' && (
+              <>
+                <div className="relative flex items-center justify-center w-3 h-3">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75 animate-ping" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-600" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-bold text-accent-amber tracking-widest uppercase">Voice Assistant: Listening</span>
+                  <span className="text-[9px] text-zinc-500 font-semibold uppercase">Hold PTT shortcut to record</span>
+                </div>
+                {/* Waveform animation */}
+                <div className="flex items-end gap-0.5 h-4 px-2">
+                  {[...Array(5)].map((_, i) => (
+                    <motion.div
+                      key={i}
+                      className="w-0.5 bg-accent-amber rounded-full"
+                      animate={{ height: [4, 16, 4] }}
+                      transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.15 }}
+                    />
+                  ))}
+                </div>
+                <div className="text-xs font-bold text-red-500 tracking-wider">
+                  {pttCountdown.toFixed(1)}s
+                </div>
+              </>
+            )}
+
+            {pttState === 'transcribing' && (
+              <>
+                <div className="w-3 h-3 rounded-full border border-accent-amber border-t-transparent animate-spin" />
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-bold text-accent-amber tracking-widest uppercase">Transcribing voice stream...</span>
+                  <span className="text-[9px] text-zinc-500 uppercase font-semibold">Processing speech-to-text</span>
+                </div>
+              </>
+            )}
+
+            {pttState === 'thinking' && (
+              <>
+                <div className="w-3 h-3 rounded-full border border-accent-amber border-t-transparent animate-spin" />
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-bold text-accent-amber tracking-widest uppercase">Vector HUD: Thinking...</span>
+                  <span className="text-[9px] text-zinc-500 uppercase font-semibold">Querying AI Provider</span>
+                </div>
+              </>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Floating Voice Response HUD Window */}
+      <AnimatePresence>
+        {showPttResponse && pttResponseText && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            className="fixed top-24 left-1/2 -translate-x-1/2 z-[9990] w-full max-w-xl bg-black/90 backdrop-blur-md border border-accent-amber rounded-sm shadow-[0_0_40px_rgba(255,176,0,0.2)] font-mono pointer-events-auto overflow-hidden"
+          >
+            {/* Header bar */}
+            <div className="bg-accent-amber/10 border-b border-accent-amber/30 px-4 py-2 flex items-center justify-between">
+              <span className="text-xs font-bold text-accent-amber tracking-widest uppercase">
+                [ VECTOR HUD VOICE LINK ]
+              </span>
+              <button
+                onClick={() => {
+                  setShowPttResponse(false);
+                  setPttState('idle');
+                }}
+                className="text-zinc-500 hover:text-white transition-colors text-xs font-bold uppercase tracking-widest"
+              >
+                Close
+              </button>
+            </div>
+            
+            {/* Body */}
+            <div className="p-4 space-y-3">
+              {pttTranscript && (
+                <div className="text-[10px] text-zinc-500 border-l border-zinc-700 pl-2 italic font-semibold">
+                  &ldquo;{pttTranscript}&rdquo;
+                </div>
+              )}
+              <div className="text-sm text-zinc-200 leading-relaxed font-semibold">
+                {pttResponseText.length > 320 
+                  ? pttResponseText.substring(0, 320) + '...'
+                  : pttResponseText
+                }
+              </div>
+            </div>
+
+            {/* Footer action bar */}
+            <div className="bg-zinc-900/50 border-t border-zinc-800/80 px-4 py-2.5 flex items-center justify-between text-[10px]">
+              <span className="text-zinc-500 uppercase tracking-widest font-semibold">
+                Auto-dismissing in 8s
+              </span>
+              <button
+                onClick={() => {
+                  setShowPttResponse(false);
+                  setPttState('idle');
+                  
+                  // Ensure AI chat is open
+                  const active = useWidgetStore.getState().activeWidgets['ai-chat'];
+                  if (!active) {
+                    useWidgetStore.getState().toggleWidget('ai-chat');
+                  }
+                  useShellStore.getState().setOverlayOpen(true);
+                  useShellStore.getState().setInteractive(true);
+                }}
+                className="px-3 py-1 bg-accent-amber/10 border border-accent-amber/30 text-accent-amber rounded-sm font-bold uppercase tracking-widest hover:bg-accent-amber hover:text-black transition-all"
+              >
+                Open Full Chat
+              </button>
+            </div>
+
+            {/* Loading/Dismiss Progress Bar */}
+            <motion.div
+              initial={{ width: "100%" }}
+              animate={{ width: "0%" }}
+              transition={{ duration: 8, ease: "linear" }}
+              className="h-0.5 bg-accent-amber"
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Floating persistent recording status bar */}
       {isRecording && (
         <div className={isInteractive ? 'pointer-events-auto' : 'pointer-events-none'}>
@@ -338,7 +863,7 @@ function App() {
 
       {/* Interactive Overlay UI Backdrop */}
       <AnimatePresence>
-        {isInteractive && (
+        {isOverlayOpen && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -347,12 +872,24 @@ function App() {
             onClick={(e) => {
               // Only dismiss if they clicked directly on the backdrop, not on the widgets inside
               if (e.target === e.currentTarget) {
-                setInteractive(false);
+                useShellStore.getState().setOverlayOpen(false);
+                useShellStore.getState().setInteractive(false);
               }
             }}
           />
         )}
       </AnimatePresence>
+
+      {/* Invisible backdrop to capture click-outside when interactive but overlay is closed */}
+      {!isOverlayOpen && isInteractive && (
+        <div 
+          className="fixed inset-0 z-[40] pointer-events-auto bg-transparent"
+          onClick={() => {
+            useShellStore.getState().setInteractive(false);
+            showToast("🎙️ Interactivity: Disabled");
+          }}
+        />
+      )}
 
       {/* Widget Layer (Rendered at z-50 so it is above the backdrop but below the settings modal) */}
       <div className="fixed inset-0 z-50 pointer-events-none overflow-hidden" id="widget-bounds">
@@ -377,7 +914,7 @@ function App() {
 
       {/* Dock and Settings Modal Layer (Rendered at z-[60] so they are above everything) */}
       <AnimatePresence>
-        {isInteractive && (
+        {isOverlayOpen && (
           <div className="fixed inset-0 pointer-events-none z-[60]">
             <Dock />
             <SettingsModal />

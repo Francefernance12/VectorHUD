@@ -27,6 +27,8 @@ jobs:
 
   backend-checks:
     runs-on: windows-latest
+    env:
+      CARGO_HTTP_MULTIPLEXING: false
     steps:
       - uses: actions/checkout@v4
       
