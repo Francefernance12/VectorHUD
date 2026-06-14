@@ -315,7 +315,7 @@ pub async fn start_video_recording(
         "-b:a".to_string(),
         "192k".to_string(),
         "-movflags".to_string(),
-        "frag_keyframe+empty_moov".to_string(),
+        "+faststart".to_string(),
         file_path.to_string_lossy().to_string(),
     ]);
 
@@ -391,8 +391,19 @@ pub async fn stop_video_recording(state: State<'_, RecorderState>) -> Result<Str
         recorder
             .stop_recording()
             .map_err(|e| format!("Failed to stop recording: {}", e))?;
-    } else if let Some(child) = manager.ffmpeg_recording_process.take() {
-        let _ = child.kill();
+    } else if let Some(mut child) = manager.ffmpeg_recording_process.take() {
+        // Send 'q' to FFmpeg's stdin to request clean termination and finalization of MP4 metadata
+        if let Err(e) = child.write(b"q") {
+            tracing::warn!(
+                "Failed to send stop command to FFmpeg stdin: {:?}. Force killing...",
+                e
+            );
+            let _ = child.kill();
+        } else {
+            // Give FFmpeg a moment to flush buffers and write metadata trailer
+            std::thread::sleep(std::time::Duration::from_millis(600));
+            let _ = child.kill(); // Ensure it is fully terminated
+        }
     }
 
     manager.audio_capture = None;
