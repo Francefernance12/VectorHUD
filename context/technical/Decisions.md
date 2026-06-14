@@ -170,3 +170,5 @@ This document tracks all important decisions made throughout the lifecycle of th
 - **Reasoning:** Establishes professional open-source standards and provides clear paths for users to seek help or report issues.
 - **Decision:** Updated developer documentation to accurately reflect the hybrid capture engine (FFmpeg HLS for replays, `windows-record` for manual recordings/screenshots) and backend API mediation (`call_ai_api`).
 - **Reasoning:** Ensures that documentation aligns with actual implementations, preventing developer confusion.
+- **Decision:** Pinned `alloc-stdlib = "=0.2.2"` and `brotli-decompressor = "=5.0.1"` in `VectorHUD/src-tauri/Cargo.toml`.
+- **Reasoning:** Upstream updates to `alloc-stdlib v0.2.3` and `brotli-decompressor v5.0.2` shifted their dependency to `alloc-no-stdlib v3.0.0`. This introduced a type mismatch compilation conflict in `brotli v8.0.3` (used by Tauri for asset compression) which expects the traits from `alloc-no-stdlib v2`. Forcing these transitive dependencies to use the v2-compatible versions resolves the collision and stabilizes builds.
