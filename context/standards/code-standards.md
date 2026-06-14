@@ -21,7 +21,7 @@
   - If spawning multiple windows, you must meticulously whitelist the window label (e.g. `"*"`) in `src-tauri/capabilities/default.json` and manually assign every required plugin capability.
   - **SQL Plugins**: Simply adding `sql:default` is NOT enough to execute queries. You must explicitly whitelist `"sql:allow-execute"`, `"sql:allow-select"`, and `"sql:allow-load"` if your frontend needs to insert or read from the DB.
   - **Filesystem & Assets**: If you want the frontend to read files from the local disk (e.g., using `convertFileSrc`), you MUST explicitly enable `assetProtocol` in `tauri.conf.json` and define a strict `scope` (like `["$PICTUREDIR/VectorHUD/**"]`). Missing scopes will cause images to render broken without throwing obvious frontend errors.
-  - **Content Security Policy (CSP)**: To make external API calls (e.g. OpenRouter, Notion) from the frontend, you must explicitly whitelist the target domains in `tauri.conf.json` under `security.csp` using the `connect-src` directive (e.g., `connect-src 'self' https://openrouter.ai https://api.notion.com`).
+  - **Content Security Policy (CSP)**: While external API endpoints are whitelisted in `tauri.conf.json`'s CSP `connect-src` as a legacy setup/secondary defense, frontend components must NEVER make direct network requests. All API operations must run through backend commands (e.g., `call_ai_api`) to keep credentials secure.
 
 ## Styling (Tactical / HUD)
 - Primary fonts: Monospace (JetBrains Mono or Fira Code).

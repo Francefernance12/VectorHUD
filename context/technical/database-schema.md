@@ -52,6 +52,8 @@ Stores messages from the OpenRouter widget so chats persist between sessions.
 | `image_path` | TEXT | Optional: Base64 or file path to an attached image |
 | `session_id` | TEXT | Optional: Unique chat session ID for thread separation |
 | `tokens` | INTEGER | Optional: Token count of the generated message |
+| `tool_calls` | TEXT | Optional: JSON array string of tool calls requested by the assistant |
+| `tool_call_id` | TEXT | Optional: Tool execution call ID matching the tool result response |
 | `timestamp` | DATETIME DEFAULT CURRENT_TIMESTAMP | When the message was sent |
 
 ## Table: `session_titles`
