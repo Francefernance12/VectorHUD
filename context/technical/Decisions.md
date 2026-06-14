@@ -157,3 +157,16 @@ This document tracks all important decisions made throughout the lifecycle of th
 - **Reasoning:** Provides new users with built-in onboarding instructions without leaving the offline HUD context.
 - **Decision:** Implemented custom mouse-dragging event listeners on `mousemove` and `mouseup` to calculate sidebar resize deltas, binding width directly to styling properties within a strict 160px-400px threshold.
 - **Reasoning:** Replacing the fixed 256px class with a dynamic styling property allows custom viewport customization while preserving the main chat flexbox container bounds.
+
+## Session 22: Documentation Refactoring & Community Onboarding
+
+- **Decision:** Consolidated duplicate `README.md` files by merging the `VectorHUD/README.md` detailing developer setup, auto-updater flows, and keybinds into a single root `README.md`.
+- **Reasoning:** Maintaining two README files in a single-application repository creates high risk of documentation drift. A single root README simplifies user and developer onboarding.
+- **Decision:** Restructured the `docs/` folder by creating `docs/guides/` and `docs/code_reviews/` subdirectories.
+- **Reasoning:** Developers were presented with a cluttered root `docs` directory filled with historical review drafts and core reference guides. Grouping them by concern improves scannability.
+- **Decision:** Restructured the `context/` folder by creating three subdirectories: `context/project/`, `context/technical/`, and `context/standards/` (Option B).
+- **Reasoning:** Grouping the 10 internal context files by category (project planning, technical configuration/decisions, and coding/UI standards) keeps files logically separate and easier to expand, preventing filesystem bloat.
+- **Decision:** Added standard open-source community templates (`CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `LICENSE`, `SUPPORT.md`) at the repository root.
+- **Reasoning:** Establishes professional open-source standards and provides clear paths for users to seek help or report issues.
+- **Decision:** Updated developer documentation to accurately reflect the hybrid capture engine (FFmpeg HLS for replays, `windows-record` for manual recordings/screenshots) and backend API mediation (`call_ai_api`).
+- **Reasoning:** Ensures that documentation aligns with actual implementations, preventing developer confusion.

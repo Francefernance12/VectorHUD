@@ -34,4 +34,6 @@ test.txt
 
 # Sidecar binaries and test files in src-tauri
 /src-tauri/ffmpeg-*.exe
+/src-tauri/ffmpeg-temp/
+/src-tauri/ffmpeg.zip
 /src-tauri/test_*.rs

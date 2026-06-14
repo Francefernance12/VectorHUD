@@ -20,10 +20,12 @@ Tauri uses an asynchronous Inter-Process Communication (IPC) bridge.
 4. Rust receives the payload and writes it to `overlay-daily.log` via the `tracing-appender` crate.
 
 ## External Integration Flow (OpenRouter / Notion)
-1. User interacts with an AI widget (e.g. types a chat message).
-2. The React component sets a loading state and calls the external API directly using `fetch`.
-3. Due to Tauri v2 defaults, this fetch will fail unless the domain is whitelisted in `tauri.conf.json` under the `security.csp` `connect-src` directive.
-4. The response streams back to React, updating the component's state iteratively.
+1. User interacts with an AI or Notion widget (e.g., sends a chat message, syncs notes).
+2. React invokes the corresponding backend command (such as `call_ai_api` or `fetch_notion_notes`) via Tauri's IPC bridge.
+3. The Rust backend receives the request, retrieves secure credentials from SQLite, and forwards the HTTP request to the external API (OpenRouter, OpenAI, Anthropic, Groq, or Notion) using `reqwest`.
+4. Rust receives the response, parses the data (e.g. token usage and text for LLM calls, or block schemas for Notion), and returns it to the React frontend.
+5. The Zustand store in React receives the parsed payload, updates the state, and the widget re-renders.
+
 
 ## Database Flow
 1. At the end of a session, Zustand packages the session analytics.

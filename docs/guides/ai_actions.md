@@ -101,6 +101,8 @@ The AI has access to the following 13 functional tools:
 
 ## 🔒 Security & Privacy
 
-1. **Local Execution**: All tool execution logic resides strictly in the local React app. No external servers or API calls are used to process these functions other than sending the JSON-formatted tool definition to the configured LLM API endpoint (e.g. OpenRouter, OpenAI, Anthropic, or Groq).
-2. **Focus Protection**: Capture operations temporarily flag the overlay to ignore window focus loss to prevent DWM borders or z-index demotion bugs.
-3. **Draft Preservation**: Notion draft functions are built defensively to merge items instead of overwriting, preventing accidental data loss.
+1. **Secure API Mediation**: To protect user privacy and respect strict Content Security Policies (CSP), frontend components never make direct HTTP fetch requests to external LLM providers or database integrations. Instead, they invoke the backend command `call_ai_api`, routing all traffic through a secure Rust layer.
+2. **Credential Redaction**: Errors captured during API requests are processed through `sanitizeError` (in [logger.ts](file:///d:/ProgrammingProjects/FrancisGamebar/VectorHUD/src/utils/logger.ts)) to mask sensitive details (e.g., Bearer tokens, OpenAI/Groq/Anthropic/Notion keys) prior to being saved to files or displayed in user toast alerts.
+3. **Local Action Dispatch**: All actual tool handler executions (such as adjusting master audio levels, capturing screenshots, starting stopwatch intervals, or query updates) are computed locally on the user's host machine.
+4. **Focus Protection**: Capture operations temporarily flag the overlay to ignore window focus loss to prevent DWM borders or z-index demotion bugs.
+5. **Draft Preservation**: Notion draft functions are built defensively to merge items instead of overwriting, preventing accidental data loss.

@@ -4,7 +4,7 @@ Update this file after every meaningful implementation change.
 
 ## Current Goal
 
-- Session 22: Discord Webhook Integration (Implement Discord Webhook configuration and gallery share button to upload screenshots/clips directly to Discord).
+- Session 23: Discord Webhook Integration (Implement Discord Webhook configuration and gallery share button to upload screenshots/clips directly to Discord).
 
 ## Completed
 
@@ -44,6 +44,7 @@ Update this file after every meaningful implementation change.
 - Session 20.6: Tabbed Audio Widget Rework (Reworked the Audio Mixer widget into a tabbed layout, splitting the Mixer controls and App volume list from the Output/Input Hardware Device selection and VU meter tests, constraining App list heights to fit within HUD viewports under 330px; resolved all visual truncation issues; updated SettingsModal local state handlers to avoid stale theme sync saving; verified 100% test pass and successful production builds).
 - Session 21: Code Optimization & Hardening (Backend Mutex safety and WAV encoding error handling; audio transcription backend mediation; strict type safety refactoring of catching unknown errors and tool requests; API key error sanitization; metrics interval clamping; and frontend unit test updates).
 - Session 21B: UI/UX Enhancements (Categorized settings hotkeys into logical groups; added a comprehensive Tutorial & Guide tab to the settings panel; and implemented a smooth mouse-draggable sessions sidebar for the OpenRouter AI chat widget).
+- Session 22: Documentation Refactoring & Community Onboarding (Reorganized directory structure by categorizing context files into subfolders: `context/project/`, `context/technical/`, and `context/standards/` under Option B; reorganized dev guides under `docs/guides/` and `docs/code_reviews/` under Option A; consolidated duplicate README files into a single root `README.md` containing all setup and updater parameters; resolved capture engine and hotkey documentation inconsistencies; created `LICENSE` (MIT), `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, and `SUPPORT.md`; audited documentation to resolve outdated references to direct frontend fetch calls for OpenRouter/Notion; added missing `tool_calls` and `tool_call_id` columns in SQLite database schema documentation; and updated root and subfolder `.gitignore` files to ignore temporary FFmpeg download files and general logs).
 
 
 
@@ -57,11 +58,11 @@ Update this file after every meaningful implementation change.
 
 | Session | Unit Name | Focus | Goal |
 | :--- | :--- | :--- | :--- |
-| **Session 22** | Discord Webhook Integration | API | Implement Discord Webhook configuration and gallery share button to upload screenshots/clips directly to Discord. |
+| **Session 23** | Discord Webhook Integration | API | Implement Discord Webhook configuration and gallery share button to upload screenshots/clips directly to Discord. |
 
 ## Architecture Decisions
 
-- See [Decisions.md](./Decisions.md) for a comprehensive list of architectural and design decisions.
+- See [Decisions.md](../technical/Decisions.md) for a comprehensive list of architectural and design decisions.
 
 ## Session Notes
 
