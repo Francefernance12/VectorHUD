@@ -185,3 +185,12 @@ This document tracks all important decisions made throughout the lifecycle of th
 - **Reasoning:** Minimizes log pollution during periods when no active SMTC media session is transmitting valid metadata.
 - **Decision:** Probe DXGI support on application boot. If unsupported, automatically configure settings to Software/GDI mode & CPU encoder and toast alert the user.
 - **Reasoning:** Ensures immediate out-of-the-box compatibility on non-DXGI-supporting laptops.
+- **Decision:** Removed the nested `max-h-[180px]` scroll area from `AudioHubWidget`'s App Mixer session list in favor of utilizing the parent widget's scrollbar.
+- **Reasoning:** Having dual/nested scrollbars degrades user experience and clips sessions unnecessarily. Allowing layout reflow within the parent container simplifies interaction.
+- **Decision:** Repositioned the `HardwareWidget` CPU temp tooltip to be relative to the outer CPU section wrapper rather than the inline help text span, and expanded its width.
+- **Reasoning:** Inline absolute tooltips get clipped by the parent widget's `overflow-hidden` bounds. Aligning it to the full-width parent row allows the tooltip to float downwards without clipping.
+- **Decision:** Converted `SettingsModal` hotkey display and recording fields to stack vertically (`flex-col`) rather than horizontally.
+- **Reasoning:** Stacking prevents the Record and Clear buttons from squishing the keybind display when global typography is scaled to large sizes.
+- **Decision:** Developed a frontend unit test suite utilizing Vitest and `@testing-library/react` to mock Tauri's IPC triggers (`invoke` and `listen`).
+- **Reasoning:** Allows full UI component testing (Hardware, Audio, Timer, Dummy widgets) in non-Windows environments and CI pipelines without native API dependencies.
+- **Decision:** Bumped version to `1.2.1` to release layout fixes and automated test suite.

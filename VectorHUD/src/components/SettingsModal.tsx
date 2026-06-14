@@ -1101,19 +1101,19 @@ export function SettingsModal() {
     return (
       <div className="space-y-1 bg-black/20 p-3 rounded-lg border border-white/5 flex flex-col justify-between hover:border-white/10 transition-colors">
         <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">{label}</label>
-        <div className="flex items-center gap-2 mt-1">
-          <div className={`flex-1 font-mono text-sm px-3 py-1.5 bg-black/40 rounded-lg border flex items-center justify-between min-h-[38px] ${
+        <div className="flex flex-col gap-2 mt-1">
+          <div className={`w-full font-mono text-sm px-3 py-1.5 bg-black/40 rounded-lg border flex items-center justify-between min-h-[38px] ${
             isRecording 
               ? 'border-amber-500/50 text-amber-400 animate-pulse' 
               : value 
                 ? 'border-white/10 text-zinc-200' 
                 : 'border-dashed border-zinc-700 text-zinc-500'
           }`}>
-            <span>{isRecording ? 'Listening for keys...' : displayVal}</span>
+            <span className="truncate">{isRecording ? 'Listening for keys...' : displayVal}</span>
             {!isRecording && value && (
               <button
                 onClick={() => setLocalHotkeys(s => ({ ...s, [fieldKey]: '' }))}
-                className="text-xs text-zinc-500 hover:text-red-400 transition-colors cursor-pointer"
+                className="text-xs text-zinc-500 hover:text-red-400 transition-colors cursor-pointer shrink-0 ml-2"
                 title="Clear keybind"
               >
                 Clear
@@ -1128,7 +1128,7 @@ export function SettingsModal() {
                 setRecordingField(fieldKey);
               }
             }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border transition-all ${
+            className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border transition-all ${
               isRecording 
                 ? 'bg-amber-500 text-black border-amber-500 hover:bg-amber-400' 
                 : 'bg-white/5 border-white/10 hover:bg-white/10 text-zinc-200 hover:text-white'

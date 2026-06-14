@@ -1,0 +1,11 @@
+{
+  "version": "1.2.1",
+  "notes": "VectorHUD v1.2.1. Layout improvements for the Audio Mixer, Hardware Widget tooltip, Settings Modal hotkey cards, and comprehensive cross-platform unit tests.",
+  "pub_date": "2026-06-14T18:48:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTVTRjWmZWTDJBcjN2cHUxclJDWGxWNVBwTVR4eTdjTHNoSzBjb3ZJbmFFOVRIZ0t1R2ZydzF2ZzJ3ZHdzaWloNFZKd0JJcnZtaHJSODRxa2w5SW9RMnB2aWMvM0k5NWdzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgxNDYzNTI4CWZpbGU6dmVjdG9yaHVkXzEuMi4xX3g2NC1zZXR1cC5leGUKRnUxTW5ZUmZPZi80WjlkRFU4Z0ZBdmJFMFR5bW9TWkxSK2g1R1ZqbnREMVhxdjdQbTAzUGg5R0taWWlyWWVoZUIvWVYzZ2ZlNThTbDdiWGl2eEpkQWc9PQo=",
+      "url": "https://github.com/Francefernance12/VectorHUD/releases/download/v1.2.1/vectorhud_1.2.1_x64-setup.exe"
+    }
+  }
+}
