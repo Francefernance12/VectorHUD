@@ -476,3 +476,179 @@ pub fn tone_map_scrgb_to_bgra(
     }
     bgra
 }
+
+pub unsafe fn capture_raw_frame_gdi() -> Result<(Vec<u8>, u32, u32, bool)> {
+    use windows::Win32::Graphics::Gdi::*;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetForegroundWindow, GetSystemMetrics, DrawIconEx, GetCursorInfo, GetIconInfo,
+        CURSORINFO, CURSOR_SHOWING, DI_NORMAL, ICONINFO, SM_CXSCREEN, SM_CYSCREEN
+    };
+    use windows::Win32::Foundation::HWND;
+
+    // 1. Find the monitor the active window is on
+    let hwnd = GetForegroundWindow();
+    let target_hmonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY);
+
+    let mut minfo = MONITORINFO {
+        cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+        ..Default::default()
+    };
+
+    let (mut left, mut top, mut width, mut height) = (0, 0, 0, 0);
+    if GetMonitorInfoW(target_hmonitor, &mut minfo).as_bool() {
+        left = minfo.rcMonitor.left;
+        top = minfo.rcMonitor.top;
+        width = minfo.rcMonitor.right - minfo.rcMonitor.left;
+        height = minfo.rcMonitor.bottom - minfo.rcMonitor.top;
+    } else {
+        // Fallback to primary screen dimensions
+        width = GetSystemMetrics(SM_CXSCREEN);
+        height = GetSystemMetrics(SM_CYSCREEN);
+    }
+
+    if width <= 0 || height <= 0 {
+        return Err(windows::core::Error::new(
+            windows::core::HRESULT(-2147467259), // E_FAIL
+            windows::core::HSTRING::from("Invalid screen dimensions for GDI capture"),
+        ));
+    }
+
+    let u_width = width as u32;
+    let u_height = height as u32;
+
+    // 2. Get DC and create compatible context
+    let hdc_screen = GetDC(HWND::default());
+    if hdc_screen.is_invalid() {
+        return Err(windows::core::Error::new(
+            windows::core::HRESULT(-2147467259), // E_FAIL
+            windows::core::HSTRING::from("GetDC failed"),
+        ));
+    }
+
+    let hdc_mem = CreateCompatibleDC(hdc_screen);
+    if hdc_mem.is_invalid() {
+        let _ = ReleaseDC(HWND::default(), hdc_screen);
+        return Err(windows::core::Error::new(
+            windows::core::HRESULT(-2147467259), // E_FAIL
+            windows::core::HSTRING::from("CreateCompatibleDC failed"),
+        ));
+    }
+
+    let h_bmp = CreateCompatibleBitmap(hdc_screen, width, height);
+    if h_bmp.is_invalid() {
+        let _ = DeleteDC(hdc_mem);
+        let _ = ReleaseDC(HWND::default(), hdc_screen);
+        return Err(windows::core::Error::new(
+            windows::core::HRESULT(-2147467259), // E_FAIL
+            windows::core::HSTRING::from("CreateCompatibleBitmap failed"),
+        ));
+    }
+
+    let old_obj = SelectObject(hdc_mem, h_bmp);
+
+    // 3. BitBlt the screen content
+    let success = BitBlt(
+        hdc_mem,
+        0,
+        0,
+        width,
+        height,
+        hdc_screen,
+        left,
+        top,
+        SRCCOPY,
+    );
+
+    if !success.as_bool() {
+        let _ = SelectObject(hdc_mem, old_obj);
+        let _ = DeleteObject(h_bmp);
+        let _ = DeleteDC(hdc_mem);
+        let _ = ReleaseDC(HWND::default(), hdc_screen);
+        return Err(windows::core::Error::new(
+            windows::core::HRESULT(-2147467259), // E_FAIL
+            windows::core::HSTRING::from("BitBlt failed"),
+        ));
+    }
+
+    // Draw cursor
+    let mut cursor_info = CURSORINFO {
+        cbSize: std::mem::size_of::<CURSORINFO>() as u32,
+        ..Default::default()
+    };
+
+    if GetCursorInfo(&mut cursor_info).as_bool() && cursor_info.flags.0 == CURSOR_SHOWING.0 {
+        let mut pos = cursor_info.ptScreenPos;
+        pos.x -= left;
+        pos.y -= top;
+
+        let mut ii = ICONINFO::default();
+        if GetIconInfo(cursor_info.hCursor, &mut ii).as_bool() {
+            let h_x = ii.xHotspot as i32;
+            let h_y = ii.yHotspot as i32;
+            let _ = DrawIconEx(
+                hdc_mem,
+                pos.x - h_x,
+                pos.y - h_y,
+                cursor_info.hCursor,
+                0,
+                0,
+                0,
+                None,
+                DI_NORMAL,
+            );
+
+            if !ii.hbmMask.is_invalid() {
+                let _ = DeleteObject(ii.hbmMask);
+            }
+            if !ii.hbmColor.is_invalid() {
+                let _ = DeleteObject(ii.hbmColor);
+            }
+        }
+    }
+
+    // 4. Retrieve bitmap bits using GetDIBits
+    let mut bmi = BITMAPINFO {
+        bmiHeader: BITMAPINFOHEADER {
+            biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+            biWidth: width,
+            biHeight: -height, // top-down bitmap
+            biPlanes: 1,
+            biBitCount: 32,
+            biCompression: BI_RGB.0 as u32,
+            biSizeImage: 0,
+            biXPelsPerMeter: 0,
+            biYPelsPerMeter: 0,
+            biClrUsed: 0,
+            biClrImportant: 0,
+        },
+        bmiColors: [RGBQUAD::default(); 1],
+    };
+
+    let mut bgra_data = vec![0u8; (u_width * u_height * 4) as usize];
+
+    let lines = GetDIBits(
+        hdc_mem,
+        h_bmp,
+        0,
+        u_height,
+        Some(bgra_data.as_mut_ptr() as *mut std::ffi::c_void),
+        &mut bmi,
+        DIB_RGB_COLORS,
+    );
+
+    // Clean up GDI handles
+    let _ = SelectObject(hdc_mem, old_obj);
+    let _ = DeleteObject(h_bmp);
+    let _ = DeleteDC(hdc_mem);
+    let _ = ReleaseDC(HWND::default(), hdc_screen);
+
+    if lines == 0 {
+        return Err(windows::core::Error::new(
+            windows::core::HRESULT(-2147467259), // E_FAIL
+            windows::core::HSTRING::from("GetDIBits failed to retrieve lines"),
+        ));
+    }
+
+    Ok((bgra_data, u_width, u_height, false))
+}
+

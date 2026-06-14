@@ -409,6 +409,22 @@ function App() {
         // Hydrate settings
         await useSettingsStore.getState().loadPreferences();
 
+        // Check DXGI support on boot
+        try {
+          const isDxgiSupported = await invoke<boolean>('check_dxgi_support');
+          if (!isDxgiSupported) {
+            const currentMode = useSettingsStore.getState().captureMode;
+            const currentEncoder = useSettingsStore.getState().videoEncoder;
+            if (currentMode !== 'gdi' || currentEncoder !== 'software') {
+              await useSettingsStore.getState().setCaptureMode('gdi');
+              await useSettingsStore.getState().setVideoEncoder('software');
+              useToastStore.getState().showToast("⚠️ Capture Engine: Configured GDI & Software Encoder (DXGI Unsupported)");
+            }
+          }
+        } catch (dxgiErr) {
+          logger.error(`DXGI support check failed on boot: ${dxgiErr}`);
+        }
+
         // Reset countdown and stopwatch states on boot to clear legacy persisted states
         useTimerStore.getState().resetCd();
         useTimerStore.getState().resetSw();

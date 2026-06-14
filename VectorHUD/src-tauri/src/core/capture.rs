@@ -52,12 +52,22 @@ pub async fn capture_screenshot(window: tauri::Window, app: AppHandle) -> Result
         // Hide the overlay so it doesn't get captured
         let _ = window.hide();
         // Give Windows compositor a split second to remove the window visually
-        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+        let _ = tokio::time::sleep(std::time::Duration::from_millis(150)).await;
     }
 
     // Capture raw frame immediately (extremely fast)
     let capture_result = unsafe {
-        windows_record::capture_raw_frame().map_err(|e| format!("Capture failed: {:?}", e))
+        match windows_record::capture_raw_frame() {
+            Ok(res) => Ok(res),
+            Err(e) => {
+                tracing::warn!(
+                    "DXGI capture failed ({:?}), falling back to GDI capture...",
+                    e
+                );
+                windows_record::capture_raw_frame_gdi()
+                    .map_err(|e2| format!("Capture failed: DXGI: {:?}, GDI: {:?}", e, e2))
+            }
+        }
     };
 
     if was_visible {
@@ -96,12 +106,22 @@ pub async fn capture_screen_base64(
     if was_visible {
         // Hide the overlay
         let _ = window.hide();
-        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+        let _ = tokio::time::sleep(std::time::Duration::from_millis(150)).await;
     }
 
     // Capture raw frame immediately
     let capture_result = unsafe {
-        windows_record::capture_raw_frame().map_err(|e| format!("Capture failed: {:?}", e))
+        match windows_record::capture_raw_frame() {
+            Ok(res) => Ok(res),
+            Err(e) => {
+                tracing::warn!(
+                    "DXGI capture failed ({:?}), falling back to GDI capture...",
+                    e
+                );
+                windows_record::capture_raw_frame_gdi()
+                    .map_err(|e2| format!("Capture failed: DXGI: {:?}, GDI: {:?}", e, e2))
+            }
+        }
     };
 
     if was_visible {

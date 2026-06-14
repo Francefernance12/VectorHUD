@@ -19,7 +19,7 @@ pub async fn get_current_media() -> Result<Option<MediaMetadata>, String> {
     match get_media_impl().await {
         Ok(meta) => Ok(meta),
         Err(e) => {
-            tracing::warn!("Failed to get media info: {}", e);
+            tracing::debug!("Failed to get media info: {}", e);
             Ok(None)
         }
     }

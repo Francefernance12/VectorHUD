@@ -172,3 +172,16 @@ This document tracks all important decisions made throughout the lifecycle of th
 - **Reasoning:** Ensures that documentation aligns with actual implementations, preventing developer confusion.
 - **Decision:** Pinned `alloc-stdlib = "=0.2.2"` and `brotli-decompressor = "=5.0.1"` in `VectorHUD/src-tauri/Cargo.toml`.
 - **Reasoning:** Upstream updates to `alloc-stdlib v0.2.3` and `brotli-decompressor v5.0.2` shifted their dependency to `alloc-no-stdlib v3.0.0`. This introduced a type mismatch compilation conflict in `brotli v8.0.3` (used by Tauri for asset compression) which expects the traits from `alloc-no-stdlib v2`. Forcing these transitive dependencies to use the v2-compatible versions resolves the collision and stabilizes builds.
+
+## Session 23: Media Compatibility
+
+- **Decision:** Implemented a silent GDI-based screen capture fallback (`capture_raw_frame_gdi` using Win32 GDI `BitBlt` and cursor overlay) when DXGI Desktop Duplication fails (e.g. with `DXGI_ERROR_UNSUPPORTED` `0x887A0004` on dual-GPU laptops or virtualized drivers).
+- **Reasoning:** DXGI Desktop Duplication fails on certain laptops or hardware configurations. Providing a GDI fallback ensures screenshots can still be taken seamlessly without crashing the UI.
+- **Decision:** Exposed **Capture Mode** (Auto vs Software/GDI) and **Video Encoder** (NVIDIA NVENC, AMD AMF, Intel QSV, Software libx264) selections in the Media Capture tab inside Settings.
+- **Reasoning:** Standardizing on NVIDIA encoders breaks compatibility on laptops with integrated Intel/AMD GPUs. Exposing these settings gives users direct control over their capture pipeline.
+- **Decision:** Supported standard video recording fallback to FFmpeg `gdigrab` on DXGI/hardware encoder failure, utilizing fragmented MP4 `-movflags frag_keyframe+empty_moov` to prevent file corruption.
+- **Reasoning:** Keeps standard recording robust on hardware where the native Media Foundation pipeline is unsupported.
+- **Decision:** Downgrade the SMTC "success but no data" warnings in `media_control.rs` from `WARN` to `DEBUG`.
+- **Reasoning:** Minimizes log pollution during periods when no active SMTC media session is transmitting valid metadata.
+- **Decision:** Probe DXGI support on application boot. If unsupported, automatically configure settings to Software/GDI mode & CPU encoder and toast alert the user.
+- **Reasoning:** Ensures immediate out-of-the-box compatibility on non-DXGI-supporting laptops.

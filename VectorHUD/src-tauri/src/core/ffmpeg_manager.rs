@@ -35,7 +35,7 @@ unsafe extern "system" fn monitor_enum_proc(
     BOOL(1) // Continue
 }
 
-fn get_active_monitor_index() -> i32 {
+pub fn get_active_monitor_index() -> i32 {
     unsafe {
         let hwnd = GetForegroundWindow();
         if hwnd.0 == 0 {
@@ -94,8 +94,14 @@ pub struct FfmpegManager {
 
 pub struct FfmpegState(pub Mutex<FfmpegManager>);
 
-fn get_best_encoder(_app: &AppHandle) -> &'static str {
-    "h264_nvenc"
+fn select_encoder(encoder_pref: &str) -> &'static str {
+    match encoder_pref {
+        "nvenc" => "h264_nvenc",
+        "amf" => "h264_amf",
+        "qsv" => "h264_qsv",
+        "software" => "libx264",
+        _ => "libx264",
+    }
 }
 
 pub fn get_video_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -108,6 +114,7 @@ pub fn get_video_dir(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(hud_dir)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn start_replay_buffer(
     app: &AppHandle,
     state: &mut FfmpegManager,
@@ -115,6 +122,8 @@ pub async fn start_replay_buffer(
     _audio_enabled: bool,
     resolution: Option<String>,
     fps: Option<u32>,
+    encoder: Option<String>,
+    capture_mode: Option<String>,
 ) -> Result<(), String> {
     if state.is_replay_active {
         return Ok(()); // Already running
@@ -141,13 +150,20 @@ pub async fn start_replay_buffer(
     }
 
     let m3u8_path = temp_dir.join("replay.m3u8");
-    let encoder = get_best_encoder(app);
+    let encoder_pref = encoder.as_deref().unwrap_or("software");
+    let encoder_str = select_encoder(encoder_pref);
     let fps_num = fps.unwrap_or(30);
     let fps_val = fps_num.to_string();
     let gop_size = (fps_num * 2).to_string();
     let active_monitor = get_active_monitor_index();
+    let is_gdi = capture_mode.as_deref() == Some("gdi");
 
-    let mut filter = "hwdownload,format=bgra,format=yuv420p".to_string();
+    let mut filter = if is_gdi {
+        "format=yuv420p".to_string()
+    } else {
+        "hwdownload,format=bgra,format=yuv420p".to_string()
+    };
+
     if let Some(res) = resolution {
         match res.as_str() {
             "720p" => filter.push_str(",scale=1280:720"),
@@ -157,16 +173,30 @@ pub async fn start_replay_buffer(
         }
     }
 
-    let mut args = vec![
-        "-y".to_string(),
-        "-f".to_string(),
-        "lavfi".to_string(),
-        "-i".to_string(),
-        format!(
-            "ddagrab=output_idx={}:framerate={}:output_fmt=8bit",
-            active_monitor, fps_val
-        ),
-    ];
+    let mut args = vec!["-y".to_string()];
+
+    if is_gdi {
+        args.extend(vec![
+            "-thread_queue_size".to_string(),
+            "512".to_string(),
+            "-f".to_string(),
+            "gdigrab".to_string(),
+            "-framerate".to_string(),
+            fps_val.clone(),
+            "-i".to_string(),
+            "desktop".to_string(),
+        ]);
+    } else {
+        args.extend(vec![
+            "-f".to_string(),
+            "lavfi".to_string(),
+            "-i".to_string(),
+            format!(
+                "ddagrab=output_idx={}:framerate={}:output_fmt=8bit",
+                active_monitor, fps_val
+            ),
+        ]);
+    }
 
     let pipe_name = r"\\.\pipe\vectorhud_audio_replay".to_string();
 
@@ -195,17 +225,55 @@ pub async fn start_replay_buffer(
         "-vf".to_string(),
         filter,
         "-c:v".to_string(),
-        encoder.to_string(),
+        encoder_str.to_string(),
+    ]);
+
+    // Apply encoder-specific quality and speed parameters to avoid crashes/incompatibilities
+    match encoder_str {
+        "h264_nvenc" => {
+            args.extend(vec![
+                "-preset".to_string(),
+                "p3".to_string(),
+                "-cq".to_string(),
+                "23".to_string(),
+            ]);
+        }
+        "libx264" => {
+            args.extend(vec![
+                "-preset".to_string(),
+                "ultrafast".to_string(),
+                "-crf".to_string(),
+                "23".to_string(),
+            ]);
+        }
+        "h264_amf" => {
+            args.extend(vec!["-quality".to_string(), "speed".to_string()]);
+        }
+        "h264_qsv" => {
+            args.extend(vec![
+                "-preset".to_string(),
+                "veryfast".to_string(),
+                "-global_quality".to_string(),
+                "23".to_string(),
+            ]);
+        }
+        _ => {
+            args.extend(vec![
+                "-preset".to_string(),
+                "ultrafast".to_string(),
+                "-crf".to_string(),
+                "23".to_string(),
+            ]);
+        }
+    }
+
+    args.extend(vec![
         "-g".to_string(),
         gop_size.clone(),
         "-keyint_min".to_string(),
         gop_size,
         "-sc_threshold".to_string(),
         "0".to_string(),
-        "-preset".to_string(),
-        "p3".to_string(), // Fast preset for buffer
-        "-cq".to_string(),
-        "23".to_string(),
         "-c:a".to_string(),
         "aac".to_string(),
         "-b:a".to_string(),

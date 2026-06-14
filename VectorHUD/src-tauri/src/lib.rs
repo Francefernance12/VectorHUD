@@ -665,6 +665,7 @@ pub fn run() {
             core::capture::delete_capture,
             core::auth::encrypt_data,
             core::auth::decrypt_data,
+            core::record::check_dxgi_support,
             core::record::start_video_recording,
             core::record::stop_video_recording,
             core::record::start_replay_buffer,
