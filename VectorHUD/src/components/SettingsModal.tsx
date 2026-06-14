@@ -48,6 +48,10 @@ export function SettingsModal() {
     setReplayResolution,
     replayFps,
     setReplayFps,
+    captureMode,
+    setCaptureMode,
+    videoEncoder,
+    setVideoEncoder,
     overlayHotkey,
     setOverlayHotkey,
     screenshotHotkey,
@@ -150,6 +154,10 @@ export function SettingsModal() {
       setReplayResolution: state.setReplayResolution,
       replayFps: state.replayFps,
       setReplayFps: state.setReplayFps,
+      captureMode: state.captureMode,
+      setCaptureMode: state.setCaptureMode,
+      videoEncoder: state.videoEncoder,
+      setVideoEncoder: state.setVideoEncoder,
       overlayHotkey: state.overlayHotkey,
       setOverlayHotkey: state.setOverlayHotkey,
       screenshotHotkey: state.screenshotHotkey,
@@ -236,6 +244,7 @@ export function SettingsModal() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
   const [hotkeyError, setHotkeyError] = useState('');
+  const [isDxgiSupported, setIsDxgiSupported] = useState(true);
   
   // Audio devices list state inside SettingsModal
   const [audioDevices, setAudioDevices] = useState<{ inputs: any[], outputs: any[] }>({ inputs: [], outputs: [] });
@@ -285,6 +294,8 @@ export function SettingsModal() {
     recordSystemAudio,
     replayResolution,
     replayFps,
+    captureMode,
+    videoEncoder,
     metricsPollInterval,
     gpuTempAlertThreshold,
     cpuTempAlertThreshold,
@@ -358,6 +369,8 @@ export function SettingsModal() {
       recordSystemAudio,
       replayResolution,
       replayFps,
+      captureMode,
+      videoEncoder,
       metricsPollInterval,
       gpuTempAlertThreshold,
       cpuTempAlertThreshold,
@@ -473,8 +486,18 @@ export function SettingsModal() {
       }
     }
 
+    async function checkDxgi() {
+      try {
+        const supported = await invoke<boolean>('check_dxgi_support');
+        setIsDxgiSupported(supported);
+      } catch (e) {
+        setIsDxgiSupported(false);
+      }
+    }
+
     loadCredentials();
     loadVersion();
+    checkDxgi();
   }, [isSettingsOpen]);
 
   // Load diagnostics logs from file
@@ -760,6 +783,8 @@ export function SettingsModal() {
       await setRecordSystemAudio(localPreferences.recordSystemAudio);
       await setReplayResolution(localPreferences.replayResolution);
       await setReplayFps(localPreferences.replayFps);
+      await setCaptureMode(localPreferences.captureMode);
+      await setVideoEncoder(localPreferences.videoEncoder);
       
       // Save new configurations
       await setMetricsPollInterval(localPreferences.metricsPollInterval);
@@ -864,6 +889,8 @@ export function SettingsModal() {
       localPreferences.recordSystemAudio !== recordSystemAudio ||
       localPreferences.replayResolution !== replayResolution ||
       localPreferences.replayFps !== replayFps ||
+      localPreferences.captureMode !== captureMode ||
+      localPreferences.videoEncoder !== videoEncoder ||
       localPreferences.metricsPollInterval !== metricsPollInterval ||
       localPreferences.gpuTempAlertThreshold !== gpuTempAlertThreshold ||
       localPreferences.cpuTempAlertThreshold !== cpuTempAlertThreshold ||
@@ -937,6 +964,8 @@ export function SettingsModal() {
       recordSystemAudio,
       replayResolution,
       replayFps,
+      captureMode,
+      videoEncoder,
       metricsPollInterval,
       gpuTempAlertThreshold,
       cpuTempAlertThreshold,
@@ -1000,6 +1029,8 @@ export function SettingsModal() {
       recordSystemAudio: true,
       replayResolution: '720p',
       replayFps: 30,
+      captureMode: 'auto',
+      videoEncoder: 'software',
       metricsPollInterval: 1000,
       gpuTempAlertThreshold: 80,
       cpuTempAlertThreshold: 80,
@@ -1070,19 +1101,19 @@ export function SettingsModal() {
     return (
       <div className="space-y-1 bg-black/20 p-3 rounded-lg border border-white/5 flex flex-col justify-between hover:border-white/10 transition-colors">
         <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">{label}</label>
-        <div className="flex items-center gap-2 mt-1">
-          <div className={`flex-1 font-mono text-sm px-3 py-1.5 bg-black/40 rounded-lg border flex items-center justify-between min-h-[38px] ${
+        <div className="flex flex-col gap-2 mt-1">
+          <div className={`w-full font-mono text-sm px-3 py-1.5 bg-black/40 rounded-lg border flex items-center justify-between min-h-[38px] ${
             isRecording 
               ? 'border-amber-500/50 text-amber-400 animate-pulse' 
               : value 
                 ? 'border-white/10 text-zinc-200' 
                 : 'border-dashed border-zinc-700 text-zinc-500'
           }`}>
-            <span>{isRecording ? 'Listening for keys...' : displayVal}</span>
+            <span className="truncate">{isRecording ? 'Listening for keys...' : displayVal}</span>
             {!isRecording && value && (
               <button
                 onClick={() => setLocalHotkeys(s => ({ ...s, [fieldKey]: '' }))}
-                className="text-xs text-zinc-500 hover:text-red-400 transition-colors cursor-pointer"
+                className="text-xs text-zinc-500 hover:text-red-400 transition-colors cursor-pointer shrink-0 ml-2"
                 title="Clear keybind"
               >
                 Clear
@@ -1097,7 +1128,7 @@ export function SettingsModal() {
                 setRecordingField(fieldKey);
               }
             }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border transition-all ${
+            className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border transition-all ${
               isRecording 
                 ? 'bg-amber-500 text-black border-amber-500 hover:bg-amber-400' 
                 : 'bg-white/5 border-white/10 hover:bg-white/10 text-zinc-200 hover:text-white'
@@ -2019,6 +2050,20 @@ export function SettingsModal() {
                           <Monitor size={14} className="text-cyan-400" /> Media Capture & Replays
                         </h3>
                         <div className="space-y-4">
+                          {!isDxgiSupported && (
+                            <div className="bg-amber-500/10 border border-amber-500/30 p-3.5 rounded-lg flex items-start gap-3 text-xs text-amber-400">
+                              <AlertTriangle size={18} className="flex-shrink-0 mt-0.5" />
+                              <div>
+                                <span className="font-bold block uppercase tracking-wider">[ SYSTEM WARNING: DXGI UNSUPPORTED ]</span>
+                                <span className="leading-relaxed">
+                                  Your graphics driver or hardware does not support DXGI Desktop Duplication. 
+                                  Screenshots will automatically fall back to GDI capture. 
+                                  For recordings and replays, please ensure <b>Software (GDI - CPU)</b> capture mode and <b>Software (libx264)</b> encoder are selected.
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
                           <div className="space-y-1.5">
                             <div className="flex justify-between items-center text-xs">
                               <span className="text-zinc-300 font-medium">Replay Clip Duration</span>
@@ -2031,6 +2076,65 @@ export function SettingsModal() {
                               className="w-full accent-primary"
                             />
                             <p className="text-xs text-zinc-500">Duration of rolling buffer clips written to disk when the replay hotkey is triggered.</p>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                              <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Capture Mode</label>
+                              <select
+                                value={localPreferences.captureMode}
+                                onChange={(e) => setLocalPreferences(s => ({ ...s, captureMode: e.target.value }))}
+                                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-primary appearance-none cursor-pointer font-mono pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2374F61A%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_12px_center] bg-no-repeat"
+                              >
+                                <option value="auto">Auto (DXGI - GPU Direct)</option>
+                                <option value="gdi">Software (GDI - CPU Fallback)</option>
+                              </select>
+                              <p className="text-[10px] text-zinc-500">DXGI requires direct hardware rendering support. GDI works on all laptops/systems.</p>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Video Encoder</label>
+                              <select
+                                value={localPreferences.videoEncoder}
+                                onChange={(e) => setLocalPreferences(s => ({ ...s, videoEncoder: e.target.value }))}
+                                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-primary appearance-none cursor-pointer font-mono pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2374F61A%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_12px_center] bg-no-repeat"
+                              >
+                                <option value="software">Software (libx264 - CPU)</option>
+                                <option value="nvenc">NVIDIA (NVENC - GPU)</option>
+                                <option value="amf">AMD (AMF - GPU)</option>
+                                <option value="qsv">Intel (QSV - GPU)</option>
+                              </select>
+                              <p className="text-[10px] text-zinc-500">Select Software if you do not have a discrete NVIDIA/AMD/Intel graphics card.</p>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                              <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Replay Resolution</label>
+                              <select
+                                value={localPreferences.replayResolution}
+                                onChange={(e) => setLocalPreferences(s => ({ ...s, replayResolution: e.target.value }))}
+                                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-primary appearance-none cursor-pointer font-mono pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2374F61A%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_12px_center] bg-no-repeat"
+                              >
+                                <option value="native">Native Resolution</option>
+                                <option value="1080p">1080p (Full HD)</option>
+                                <option value="720p">720p (HD)</option>
+                                <option value="480p">480p (SD)</option>
+                              </select>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Replay Frame Rate</label>
+                              <select
+                                value={localPreferences.replayFps}
+                                onChange={(e) => setLocalPreferences(s => ({ ...s, replayFps: parseInt(e.target.value) }))}
+                                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-primary appearance-none cursor-pointer font-mono pr-8 bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2374F61A%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:8px_8px] bg-[right_12px_center] bg-no-repeat"
+                              >
+                                <option value={60}>60 FPS</option>
+                                <option value={30}>30 FPS</option>
+                                <option value={24}>24 FPS</option>
+                              </select>
+                            </div>
                           </div>
 
                           <div className="flex justify-between items-center bg-black/40 p-3.5 rounded-lg border border-white/5 text-xs">

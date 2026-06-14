@@ -382,7 +382,7 @@ export function AudioHubWidget() {
             <div className="flex flex-col space-y-3 bg-black/30 border border-white/5 p-3 rounded-lg">
               <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">App Mixer</div>
               
-              <div className="flex flex-col space-y-4 max-h-[180px] overflow-y-auto custom-scrollbar pr-1">
+              <div className="flex flex-col space-y-4 pr-1">
                 {audioState?.sessions
                   .filter(s => s.name !== "Unknown")
                   .sort((a, b) => {

@@ -98,14 +98,14 @@ export function HardwareWidget() {
     <div className="flex flex-col h-full text-text-primary font-mono text-sm p-4 space-y-4">
       
       {/* CPU Section */}
-      <div className="flex flex-col space-y-1">
+      <div className="flex flex-col space-y-1 relative">
         <div className="flex justify-between items-center text-xs">
           <span className={`font-bold tracking-widest flex items-center gap-1.5 ${cpuOverheated ? 'text-red-500 animate-pulse' : 'text-accent-green'}`}>
             CPU {cpuTemp !== null ? `(${cpuTemp}°C)` : (
-              <span className="flex items-center gap-1 group relative">
+              <span className="flex items-center gap-1 group">
                 (--°C)
                 <HelpCircle size={11} className="text-zinc-500 hover:text-zinc-300 cursor-help transition-colors" />
-                <span className="absolute left-0 bottom-full mb-1.5 hidden group-hover:block w-48 bg-zinc-950 border border-border-wire text-[10px] text-zinc-400 font-sans p-2 rounded shadow-xl leading-relaxed z-[9999] normal-case tracking-normal">
+                <span className="absolute left-0 top-full mt-1 hidden group-hover:block w-56 bg-zinc-950 border border-border-wire text-[10px] text-zinc-400 font-sans p-2 rounded shadow-xl leading-relaxed z-[9999] normal-case tracking-normal">
                   CPU temperature monitoring on Windows requires Administrator privileges. Run VectorHUD as Administrator to enable.
                 </span>
               </span>

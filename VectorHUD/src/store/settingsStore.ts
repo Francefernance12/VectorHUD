@@ -17,6 +17,8 @@ interface SettingsState {
   recordSystemAudio: boolean;
   replayResolution: string;
   replayFps: number;
+  captureMode: string;
+  videoEncoder: string;
   overlayHotkey: string;
   screenshotHotkey: string;
   recordHotkey: string;
@@ -75,6 +77,8 @@ interface SettingsState {
   setRecordSystemAudio: (enabled: boolean) => Promise<void>;
   setReplayResolution: (res: string) => Promise<void>;
   setReplayFps: (fps: number) => Promise<void>;
+  setCaptureMode: (mode: string) => Promise<void>;
+  setVideoEncoder: (encoder: string) => Promise<void>;
   setOverlayHotkey: (hotkey: string) => Promise<void>;
   setScreenshotHotkey: (hotkey: string) => Promise<void>;
   setRecordHotkey: (hotkey: string) => Promise<void>;
@@ -188,6 +192,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   recordSystemAudio: true,
   replayResolution: '720p',
   replayFps: 30,
+  captureMode: 'auto',
+  videoEncoder: 'software',
   overlayHotkey: 'ctrl+alt+o',
   screenshotHotkey: 'ctrl+alt+s',
   recordHotkey: 'ctrl+alt+r',
@@ -329,6 +335,20 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     await store.set('replayFps', fps);
     await store.save();
     set({ replayFps: fps });
+  },
+
+  setCaptureMode: async (mode) => {
+    const store = await getSettingsStore();
+    await store.set('captureMode', mode);
+    await store.save();
+    set({ captureMode: mode });
+  },
+
+  setVideoEncoder: async (encoder) => {
+    const store = await getSettingsStore();
+    await store.set('videoEncoder', encoder);
+    await store.save();
+    set({ videoEncoder: encoder });
   },
 
   setOverlayHotkey: async (hotkey) => {
@@ -620,6 +640,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const systemAudio = await store.get<boolean>('recordSystemAudio');
     const rRes = await store.get<string>('replayResolution');
     const rFps = await store.get<number>('replayFps');
+    const capMode = await store.get<string>('captureMode');
+    const vidEnc = await store.get<string>('videoEncoder');
     const oHot = await store.get<string>('overlayHotkey');
     const sHot = await store.get<string>('screenshotHotkey');
     const rHot = await store.get<string>('recordHotkey');
@@ -686,6 +708,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       recordSystemAudio: systemAudio !== undefined ? systemAudio : true,
       replayResolution: rRes || '720p',
       replayFps: rFps || 30,
+      captureMode: capMode || 'auto',
+      videoEncoder: vidEnc || 'software',
       overlayHotkey: oHot || 'ctrl+alt+o',
       screenshotHotkey: sHot || 'ctrl+alt+s',
       recordHotkey: rHot || 'ctrl+alt+r',
