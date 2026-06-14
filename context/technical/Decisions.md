@@ -193,4 +193,4 @@ This document tracks all important decisions made throughout the lifecycle of th
 - **Reasoning:** Stacking prevents the Record and Clear buttons from squishing the keybind display when global typography is scaled to large sizes.
 - **Decision:** Developed a frontend unit test suite utilizing Vitest and `@testing-library/react` to mock Tauri's IPC triggers (`invoke` and `listen`).
 - **Reasoning:** Allows full UI component testing (Hardware, Audio, Timer, Dummy widgets) in non-Windows environments and CI pipelines without native API dependencies.
-- **Decision:** Bumped version to `1.2.1` to release layout fixes and automated test suite.
+- **Decision:** Bumped version to `1.2.2` (via v1.2.1 and v1.2.2 test releases) to release layout fixes, automated test suite, and verify key rotation auto-updater compatibility.

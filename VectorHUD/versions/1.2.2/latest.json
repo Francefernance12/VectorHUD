@@ -1,0 +1,11 @@
+{
+  "version": "1.2.2",
+  "notes": "VectorHUD v1.2.2. Testing release with rotated signing keys.",
+  "pub_date": "2026-06-14T20:00:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTVTRjWmZWTDJBcjhnYnhiM3NHdzZDYUo2YUlScUhwU1NCZlJUVGdjVjFOaUNGMzdpZjJpbGVCVWFzVTV3bDFRVkp3TFZ2dkNrWkYvamNMa1dpZHJIMWh4T2xrckdNUmcwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgxNDY4Mjg1CWZpbGU6dmVjdG9yaHVkXzEuMi4yX3g2NC1zZXR1cC5leGUKMGdRL1Q3Q3RTZFlFR0lPMUJuWE9rc1k5TVQ2TzNsOElNVWoyd2RtNklMQndNUTJtNXZxRkxSNUEvZzQ3MU9URGNKc29PbE9CR3l3Tm5QQ3BSMi9tQWc9PQo=",
+      "url": "https://github.com/Francefernance12/VectorHUD/releases/download/v1.2.2/vectorhud_1.2.2_x64-setup.exe"
+    }
+  }
+}
