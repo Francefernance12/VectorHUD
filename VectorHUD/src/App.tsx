@@ -606,7 +606,16 @@ function App() {
               const audioEnabled = useSettingsStore.getState().recordSystemAudio;
               const res = useSettingsStore.getState().replayResolution;
               const fps = useSettingsStore.getState().replayFps;
-              await invoke('start_replay_buffer', { micEnabled, audioEnabled, resolution: res, fps });
+              const encoder = useSettingsStore.getState().videoEncoder;
+              const captureMode = useSettingsStore.getState().captureMode;
+              await invoke('start_replay_buffer', {
+                micEnabled,
+                audioEnabled,
+                resolution: res,
+                fps,
+                encoder,
+                captureMode
+              });
               useRecordingStore.getState().setReplayActive(true);
               showToast("⏪ Replay Buffer Started");
             } catch (err) {

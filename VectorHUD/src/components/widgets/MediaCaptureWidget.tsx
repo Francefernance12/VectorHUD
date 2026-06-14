@@ -98,7 +98,16 @@ export function MediaCaptureWidget() {
       const audioEnabled = useSettingsStore.getState().recordSystemAudio;
       const res = useSettingsStore.getState().replayResolution;
       const fps = useSettingsStore.getState().replayFps;
-      invoke('start_replay_buffer', { micEnabled, audioEnabled, resolution: res, fps })
+      const encoder = useSettingsStore.getState().videoEncoder;
+      const captureMode = useSettingsStore.getState().captureMode;
+      invoke('start_replay_buffer', { 
+        micEnabled, 
+        audioEnabled, 
+        resolution: res, 
+        fps,
+        encoder,
+        captureMode
+      })
         .then(() => {
           logger.info('Auto-started replay buffer for game');
           setReplayActive(true);
@@ -195,8 +204,17 @@ export function MediaCaptureWidget() {
         const audioEnabled = useSettingsStore.getState().recordSystemAudio;
         const res = useSettingsStore.getState().replayResolution;
         const fps = useSettingsStore.getState().replayFps;
+        const encoder = useSettingsStore.getState().videoEncoder;
+        const captureMode = useSettingsStore.getState().captureMode;
         try {
-          await invoke('start_replay_buffer', { micEnabled, audioEnabled, resolution: res, fps });
+          await invoke('start_replay_buffer', { 
+            micEnabled, 
+            audioEnabled, 
+            resolution: res, 
+            fps,
+            encoder,
+            captureMode
+          });
           logger.info('Replay buffer started');
           setReplayActive(true);
         } catch (err) {
