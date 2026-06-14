@@ -48,28 +48,6 @@ fn get_video_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
     Ok(hud_dir)
 }
 
-unsafe fn get_active_monitor_dimensions() -> (u32, u32) {
-    use windows::Win32::Graphics::Gdi::{
-        GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTOPRIMARY,
-    };
-    use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
-
-    let hwnd = GetForegroundWindow();
-    let target_hmonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY);
-    let mut minfo = MONITORINFO {
-        cbSize: std::mem::size_of::<MONITORINFO>() as u32,
-        ..Default::default()
-    };
-
-    if GetMonitorInfoW(target_hmonitor, &mut minfo).into() {
-        let width = (minfo.rcMonitor.right - minfo.rcMonitor.left).unsigned_abs();
-        let height = (minfo.rcMonitor.bottom - minfo.rcMonitor.top).unsigned_abs();
-        (width, height)
-    } else {
-        (1920, 1080)
-    }
-}
-
 #[command]
 pub async fn check_dxgi_support() -> Result<bool, String> {
     unsafe {
@@ -109,12 +87,14 @@ pub async fn start_video_recording(
     let file_name = format!("video_{}.mp4", timestamp);
     let file_path = video_dir.join(file_name);
 
-    // Get the exact dimensions of the active monitor using Windows APIs
-    let (width, height) = unsafe { get_active_monitor_dimensions() };
+    // Get the exact geometry of the active monitor using Windows APIs
+    let (width, height, left, top) = ffmpeg_manager::get_active_monitor_geometry();
     tracing::info!(
-        "Using active monitor resolution for recording: {}x{}",
+        "Using active monitor resolution for recording: {}x{} at offset ({}, {})",
         width,
-        height
+        height,
+        left,
+        top
     );
 
     // Check user preferences from settings.json
@@ -212,6 +192,12 @@ pub async fn start_video_recording(
             "gdigrab".to_string(),
             "-framerate".to_string(),
             "30".to_string(),
+            "-offset_x".to_string(),
+            left.to_string(),
+            "-offset_y".to_string(),
+            top.to_string(),
+            "-video_size".to_string(),
+            format!("{}x{}", width, height),
             "-i".to_string(),
             "desktop".to_string(),
         ]);

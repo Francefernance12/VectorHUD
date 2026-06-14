@@ -35,6 +35,30 @@ unsafe extern "system" fn monitor_enum_proc(
     BOOL(1) // Continue
 }
 
+pub fn get_active_monitor_geometry() -> (u32, u32, i32, i32) {
+    unsafe {
+        use windows::Win32::Graphics::Gdi::{
+            GetMonitorInfoW, MONITORINFO, MONITOR_DEFAULTTOPRIMARY,
+        };
+        let hwnd = GetForegroundWindow();
+        let target_hmonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY);
+        let mut minfo = MONITORINFO {
+            cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+            ..Default::default()
+        };
+
+        if GetMonitorInfoW(target_hmonitor, &mut minfo).into() {
+            let width = (minfo.rcMonitor.right - minfo.rcMonitor.left).unsigned_abs();
+            let height = (minfo.rcMonitor.bottom - minfo.rcMonitor.top).unsigned_abs();
+            let left = minfo.rcMonitor.left;
+            let top = minfo.rcMonitor.top;
+            (width, height, left, top)
+        } else {
+            (1920, 1080, 0, 0)
+        }
+    }
+}
+
 pub fn get_active_monitor_index() -> i32 {
     unsafe {
         let hwnd = GetForegroundWindow();
@@ -176,6 +200,7 @@ pub async fn start_replay_buffer(
     let mut args = vec!["-y".to_string()];
 
     if is_gdi {
+        let (width, height, left, top) = get_active_monitor_geometry();
         args.extend(vec![
             "-thread_queue_size".to_string(),
             "512".to_string(),
@@ -183,6 +208,12 @@ pub async fn start_replay_buffer(
             "gdigrab".to_string(),
             "-framerate".to_string(),
             fps_val.clone(),
+            "-offset_x".to_string(),
+            left.to_string(),
+            "-offset_y".to_string(),
+            top.to_string(),
+            "-video_size".to_string(),
+            format!("{}x{}", width, height),
             "-i".to_string(),
             "desktop".to_string(),
         ]);
