@@ -204,16 +204,21 @@ async fn read_battery_level<P: Peripheral>(peripheral: &P) -> Option<u8> {
 
 /// Scan for Classic Bluetooth devices using PowerShell to filter out offline paired devices
 async fn scan_classic_bluetooth_devices() -> Vec<BluetoothDevice> {
+    #[cfg(target_os = "windows")]
+    use std::os::windows::process::CommandExt;
     use std::process::{Command, Stdio};
 
     let script = r#"$devices = Get-PnpDevice -Class Bluetooth; $results = @(); foreach ($dev in $devices) { if ($dev.InstanceId -like 'BTHLE\DEV_*' -or $dev.InstanceId -like 'BTHENUM\DEV_*') { $statusVal = ($dev | Get-PnpDeviceProperty -KeyName 'DEVPKEY_Device_DevNodeStatus').Data; if ($statusVal -ne $null -and !($statusVal -band 0x02000000)) { $results += [PSCustomObject]@{ id = $dev.InstanceId; name = $dev.FriendlyName } } } }; if ($results.Count -gt 0) { $results | ConvertTo-Json -Compress } else { '[]' }"#;
 
-    let output = match Command::new("powershell")
-        .args(["-NoProfile", "-Command", script])
+    let mut cmd = Command::new("powershell");
+    cmd.args(["-NoProfile", "-Command", script])
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-    {
+        .stderr(Stdio::piped());
+
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+
+    let output = match cmd.output() {
         Ok(out) => out,
         Err(e) => {
             warn!("Failed to execute PowerShell script: {}", e);

@@ -372,10 +372,15 @@ const HIDHIDE_CLI_PATH: &str =
 
 /// Run a HidHideCLI.exe command and log the result. Non-blocking.
 fn run_hidhide_cli(args: &[&str]) -> Result<(), String> {
-    match std::process::Command::new(HIDHIDE_CLI_PATH)
-        .args(args)
-        .output()
-    {
+    #[cfg(target_os = "windows")]
+    use std::os::windows::process::CommandExt;
+
+    let mut cmd = std::process::Command::new(HIDHIDE_CLI_PATH);
+    cmd.args(args);
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+
+    match cmd.output() {
         Ok(output) => {
             if output.status.success() {
                 info!("HidHideCLI {:?} → OK", args);
@@ -404,10 +409,12 @@ fn run_hidhide_cli(args: &[&str]) -> Result<(), String> {
                         HIDHIDE_CLI_PATH,
                         cli_args
                     );
-                    match std::process::Command::new("powershell")
-                        .args(["-NoProfile", "-Command", &ps_command])
-                        .output()
-                    {
+                    let mut ps_cmd = std::process::Command::new("powershell");
+                    ps_cmd.args(["-NoProfile", "-Command", &ps_command]);
+                    #[cfg(target_os = "windows")]
+                    ps_cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+
+                    match ps_cmd.output() {
                         Ok(ps_output) => {
                             if ps_output.status.success() {
                                 info!("HidHideCLI elevated via PowerShell {:?} → OK", args);
@@ -536,10 +543,15 @@ pub fn get_hidhide_hidden_devices() -> Result<Vec<String>, String> {
     if !is_hidhide_available() {
         return Ok(Vec::new());
     }
-    match std::process::Command::new(HIDHIDE_CLI_PATH)
-        .arg("--dev-list")
-        .output()
-    {
+    #[cfg(target_os = "windows")]
+    use std::os::windows::process::CommandExt;
+
+    let mut cmd = std::process::Command::new(HIDHIDE_CLI_PATH);
+    cmd.arg("--dev-list");
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+
+    match cmd.output() {
         Ok(output) => {
             if output.status.success() {
                 let stdout = String::from_utf8_lossy(&output.stdout);
@@ -570,10 +582,15 @@ pub fn get_hidhide_hidden_devices() -> Result<Vec<String>, String> {
 /// Requires Administrator privileges — caller is responsible for elevation.
 pub fn pnp_restart_device(device_instance_id: &str) -> bool {
     info!("PnP restart device: {}", device_instance_id);
-    match std::process::Command::new("pnputil")
-        .args(["/restart-device", device_instance_id])
-        .output()
-    {
+    #[cfg(target_os = "windows")]
+    use std::os::windows::process::CommandExt;
+
+    let mut cmd = std::process::Command::new("pnputil");
+    cmd.args(["/restart-device", device_instance_id]);
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+
+    match cmd.output() {
         Ok(output) => {
             if output.status.success() {
                 info!(
