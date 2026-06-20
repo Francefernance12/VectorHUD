@@ -1,7 +1,9 @@
 pub mod audio_capture;
 pub mod audio_mixer;
 pub mod auth;
+pub mod bluetooth_manager;
 pub mod capture;
+pub mod controller_manager;
 pub mod ffmpeg_manager;
 pub mod media_control;
 pub mod metrics;

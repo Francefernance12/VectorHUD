@@ -17,6 +17,7 @@ VectorHUD is a hyper-lightweight, transparent, globally-summoned desktop overlay
 - **Audio Hub**: Hook directly into the Core Audio API to manage per-application volume, monitor microphone peak levels with a real-time VU meter, and switch hardware input/output devices.
 - **AI Assistant**: Stream responses from OpenRouter, OpenAI, Anthropic, or Groq with support for recursive function-calling (enabling the AI to trigger screenshots, set volume, control media, start timers, and check telemetry). Supports Base64/file path vision parsing of captured frames.
 - **Notion Quick-Capture**: Synchronize paragraph notes and interactive floating checkboxes directly to a target Notion database using block-level page body APIs.
+- **Controller & Bluetooth Hub**: Track and test any connected gamepad (Xbox, PlayStation, Stadia, Generic gamepads) with a highly detailed, real-time HUD telemetry visualizer (featuring stick coordinate radars, trigger level bars, and a digital button grid). Wirelessly monitor classic and BLE Bluetooth scan results (complete with BLE battery percentages). Toggle hardware-level DualShock 4 or Stadia physical controller hiding (via HidHide) and Xbox 360 emulation (via ViGEmBus) with a single click to instantly fix duplicate input issues.
 - **Privacy First**: All session analytics, API credentials, and settings are stored strictly in local SQLite and JSON files. No cloud sync, no tracking.
 
 ### Default Hotkeys
@@ -35,6 +36,12 @@ VectorHUD is a hyper-lightweight, transparent, globally-summoned desktop overlay
 2. Download the latest `vectorhud_x64-setup.exe` or `.msi` installer.
 3. Run the installer. *(Note: Windows SmartScreen may flag it. Click "More Info" -> "Run Anyway".)*
 4. VectorHUD will boot silently to your System Tray. Press `Ctrl + Alt + O` to open the overlay!
+
+### 🎮 Controller Emulation & Hiding Requirements
+To use the controller mapping, physical device cloaking, and Xbox 360 emulation features of the Controller Hub, you must install the following virtual drivers on your Windows system:
+1. **[ViGEmBus](https://github.com/nefarius/ViGEmBus/releases)**: The Virtual Gamepad Emulation Bus driver enables VectorHUD to create virtual Xbox 360 controllers on-the-fly and map inputs.
+2. **[HidHide](https://github.com/nefarius/HidHide/releases)**: The HID device firewall driver allows VectorHUD to hide your physical PlayStation or Stadia controller from games, routing inputs exclusively to the emulated Xbox controller to eliminate double-input issues.
+   * *Note: Operating HidHide settings programmatically requires VectorHUD to be launched with **Administrator** privileges.*
 
 ---
 

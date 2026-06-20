@@ -6,6 +6,7 @@ use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
 use windows_record::{AudioSource, Recorder};
 
+#[derive(Default)]
 pub struct RecorderManager {
     pub standard_recorder: Option<Recorder>,
     pub standard_path: Option<std::path::PathBuf>,
@@ -16,13 +17,7 @@ pub struct RecorderManager {
 
 impl RecorderManager {
     pub fn new() -> Self {
-        Self {
-            standard_recorder: None,
-            standard_path: None,
-            is_recording: false,
-            ffmpeg_recording_process: None,
-            audio_capture: None,
-        }
+        Self::default()
     }
 }
 

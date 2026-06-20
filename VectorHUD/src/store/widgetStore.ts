@@ -15,6 +15,7 @@ export const WIDGETS: WidgetDefinition[] = [
   { id: 'ai-chat', label: 'AI Vision', iconName: 'MessageSquare', defaultWidth: 450, defaultHeight: 550 },
   { id: 'quick-notes', label: 'Notion', iconName: 'Edit3', defaultWidth: 350, defaultHeight: 400 },
   { id: 'game-timer', label: 'Timer', iconName: 'Clock', defaultWidth: 300, defaultHeight: 350 },
+  { id: 'controller-bluetooth', label: 'Controller', iconName: 'Gamepad2', defaultWidth: 380, defaultHeight: 580 },
 ];
 
 export interface WidgetInstance {
@@ -42,12 +43,23 @@ export const useWidgetStore = create<WidgetState>((set) => ({
   topZIndex: 10,
   
   setInitialState: (widgets) => set(() => {
-    // Calculate the highest z-index to avoid overlap issues
     let highestZ = 10;
-    Object.values(widgets).forEach(w => {
-      if (w.zIndex > highestZ) highestZ = w.zIndex;
-    });
-    return { activeWidgets: widgets, topZIndex: highestZ };
+    const merged = { ...widgets };
+    for (const id of Object.keys(merged)) {
+      const def = WIDGETS.find(w => w.id === id);
+      if (def) {
+        if (merged[id].width < def.defaultWidth) {
+          merged[id].width = def.defaultWidth;
+        }
+        if (merged[id].height < def.defaultHeight) {
+          merged[id].height = def.defaultHeight;
+        }
+      }
+      if (merged[id].zIndex > highestZ) {
+        highestZ = merged[id].zIndex;
+      }
+    }
+    return { activeWidgets: merged, topZIndex: highestZ };
   }),
 
   toggleWidget: (id) => set((state) => {
