@@ -54,3 +54,25 @@ img-src 'self' asset: http://asset.localhost data:
 ```
 which allowed screenshots to load via `<img>` tags. However, `<video>` tags are governed by `media-src`. Because `media-src` was undefined, it fell back to the restrictive `default-src 'self'` directive, blocking the custom asset protocol.
 Adding `media-src 'self' asset: http://asset.localhost;` to the CSP resolved all production video loading issues.
+
+---
+
+## 5. Controller Cloaking & Emulation Path Canonicalization (Session 24)
+
+### The Problem
+During the implementation of physical controller hiding (via `HidHide`) and virtual Xbox controller emulation (via `ViGEmBus`), we encountered a bug where the physical controller cloaking toggle would instantly reset/untick on the frontend UI, even though the backend command succeeded in cloaking the device. 
+
+### The Solution: Canonicalization
+The physical device state is determined by matching raw HID paths with the list of hidden paths returned by the HidHide driver. The driver outputs path strings using standard Device Instance IDs (like `HID\VID_045E&PID_028E\...`), whereas `hidapi` and the OS event listeners return device interface paths starting with `\\?\HID#...`. Because these strings were compared directly, the match failed, reporting the device as uncloaked. 
+We resolved this by creating a `canonicalize_hid_id` helper in Rust that extracts the core VID/PID and instance suffix from both formats and normalizes them before comparison. This fixed the UI toggle sync issue.
+
+---
+
+## 6. Multi-Monitor Coordinate Tracking and Mouse Tracking (Session 25)
+
+### The Problem
+Toast notifications were only appearing on the primary screen. If the user was interacting with the overlay on a second screen, they couldn't see critical toast messages. 
+
+### The Solution: Virtual Screen Bounding Box and Active Monitor Lookups
+To resolve this, we configured the transparent Tauri overlay window to size itself to the union bounds of all active monitors (the virtual screen). Rather than trying to open separate Tauri webview windows, we kept everything in a single full-screen canvas. We then implemented a Rust helper to query the monitor layout and scale factors, and determine which monitor contains the mouse cursor. 
+When a toast is spawned or the overlay is summoned, we query the mouse coordinates and position the UI elements (Dock, Voice Assistant PTT cards, and Toasts) by offset coordinates relative to that active monitor. This ensures notifications appear directly in the user's line of sight on any screen.
