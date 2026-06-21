@@ -27,6 +27,11 @@ jobs:
           toolchain: stable
           components: clippy, rustfmt
 
+      - name: Create Dummy FFmpeg Sidecar
+        run: |
+          New-Item -Path "VectorHUD/src-tauri/ffmpeg-x86_64-pc-windows-msvc.exe" -ItemType File -Force
+        shell: pwsh
+
       - name: Install Frontend Dependencies
         run: |
           cd VectorHUD
