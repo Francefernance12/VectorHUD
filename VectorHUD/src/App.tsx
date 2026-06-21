@@ -701,32 +701,44 @@ function App() {
           if (!isMounted) return;
           const unlistenMute = await listen(`hotkey-mute-${i}`, async () => {
             logger.info(`Frontend: hotkey-mute-${i} event received`).catch(console.error);
-            const index = i - 1; // 0-indexed for favoriteApps
-            const favoriteApps = useAudioStore.getState().favoriteApps;
-            const targetApp = favoriteApps[index];
-            if (!targetApp) {
-              showToast(`⚠️ No app assigned to Mute Slot ${i}`);
-              return;
-            }
+            const index = i - 1; // 0-indexed
 
             try {
+              const favoriteApps = useAudioStore.getState().favoriteApps || [];
               const audioState = await invoke<SystemAudio>('get_audio_mixer_state');
-              const matchingSessions = audioState.sessions.filter(
+              
+              // Filter and sort active sessions exactly like they appear in the UI list
+              const sortedSessions = (audioState?.sessions || [])
+                .filter(s => s.name !== "Unknown")
+                .sort((a, b) => {
+                  const aFav = favoriteApps.includes(a.name);
+                  const bFav = favoriteApps.includes(b.name);
+                  if (aFav && !bFav) return -1;
+                  if (!aFav && bFav) return 1;
+                  return a.name.localeCompare(b.name);
+                });
+
+              const targetSession = sortedSessions[index];
+              if (!targetSession) {
+                // Return silently if no application is active at this slot
+                return;
+              }
+
+              const targetApp = targetSession.name;
+              const sessionsToMute = sortedSessions.filter(
                 s => s.name.toLowerCase() === targetApp.toLowerCase()
               );
 
-              if (matchingSessions.length > 0) {
-                for (const session of matchingSessions) {
+              if (sessionsToMute.length > 0) {
+                for (const session of sessionsToMute) {
                   await invoke('toggle_app_mute', { pid: session.process_id });
                 }
-                const nextMutedState = !matchingSessions[0].muted;
+                const nextMutedState = !targetSession.muted;
                 showToast(`${nextMutedState ? "🔇 Muted" : "🔊 Unmuted"} ${targetApp}`);
                 window.dispatchEvent(new Event('refresh-audio-state'));
-              } else {
-                showToast(`⚠️ ${targetApp} is not currently playing audio`);
               }
             } catch (err) {
-              logger.error(`Mute hotkey failed for ${targetApp}: ${err}`).catch(console.error);
+              logger.error(`Mute hotkey failed for Slot ${i}: ${err}`).catch(console.error);
             }
           });
           safePush(unlistenMute);

@@ -392,23 +392,30 @@ export function AudioHubWidget() {
                     if (!aFav && bFav) return 1;
                     return a.name.localeCompare(b.name);
                   })
-                  .map((session) => (
-                  <div key={session.process_id} className="flex flex-col space-y-1 group">
-                    <div className="flex justify-between items-center text-xs text-zinc-300">
-                      <div className="flex items-center gap-2 truncate pr-2">
-                        <button 
-                          onClick={() => toggleFavoriteApp(session.name)}
-                          className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex-shrink-0"
-                        >
-                          <Star 
-                            size={12} 
-                            className={favoriteApps.includes(session.name) ? "fill-accent-amber text-accent-amber" : "text-zinc-500 hover:text-accent-amber"} 
-                          />
-                        </button>
-                        <span className={`truncate ${favoriteApps.includes(session.name) ? 'text-accent-amber font-bold' : ''}`}>{session.name}</span>
-                      </div>
-                      <span>{Math.round(session.volume * 100)}%</span>
-                    </div>
+                  .map((session, index) => {
+                    const slotNum = index < 9 ? index + 1 : index === 9 ? 0 : null;
+                    return (
+                      <div key={session.process_id} className="flex flex-col space-y-1 group">
+                        <div className="flex justify-between items-center text-xs text-zinc-300">
+                          <div className="flex items-center gap-2 truncate pr-2">
+                            <button 
+                              onClick={() => toggleFavoriteApp(session.name)}
+                              className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex-shrink-0"
+                            >
+                              <Star 
+                                size={12} 
+                                className={favoriteApps.includes(session.name) ? "fill-accent-amber text-accent-amber" : "text-zinc-500 hover:text-accent-amber"} 
+                              />
+                            </button>
+                            {slotNum !== null && (
+                              <span className="text-[9px] font-bold text-accent-green font-mono bg-accent-green/10 border border-accent-green/20 px-1.5 py-0.5 rounded flex-shrink-0 leading-none">
+                                {slotNum}
+                              </span>
+                            )}
+                            <span className={`truncate ${favoriteApps.includes(session.name) ? 'text-accent-amber font-bold' : ''}`}>{session.name}</span>
+                          </div>
+                          <span>{Math.round(session.volume * 100)}%</span>
+                        </div>
                     <div className="flex items-center gap-3">
                       <button onClick={() => handleAppMuteToggle(session.process_id)} className="transition-colors hover:opacity-80 flex-shrink-0">
                         {session.muted || session.volume === 0 ? (
@@ -427,7 +434,8 @@ export function AudioHubWidget() {
                       />
                     </div>
                   </div>
-                ))}
+                    );
+                  })}
                 
                 {audioState?.sessions.length === 0 && (
                   <div className="text-xs text-zinc-600 text-center py-4">No active audio sources</div>

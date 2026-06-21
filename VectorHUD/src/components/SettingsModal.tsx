@@ -1143,17 +1143,20 @@ export function SettingsModal() {
       : 'NONE';
 
     return (
-      <div className="space-y-1 bg-black/20 p-3 rounded-lg border border-white/5 flex flex-col justify-between hover:border-white/10 transition-colors">
-        <div className="flex items-center justify-between">
-          <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">{label}</label>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-black/25 p-4 rounded-xl border border-white/5 hover:border-white/10 transition-colors w-full">
+        {/* Left: Title & Original Bind Badge */}
+        <div className="flex flex-col gap-1 min-w-0">
+          <span className="text-xs font-bold text-zinc-300 tracking-wider uppercase font-mono">{label}</span>
           {isRecording && (
-            <span className="text-[10px] px-1.5 py-0.5 bg-white/10 text-zinc-300 rounded font-mono font-medium animate-pulse">
-              Current: {displayVal}
+            <span className="text-[10px] text-zinc-500 font-sans">
+              Currently assigned: <span className="font-mono text-zinc-400 font-bold bg-white/5 px-1.5 py-0.5 rounded border border-white/10">{displayVal}</span>
             </span>
           )}
         </div>
-        <div className="flex flex-col gap-2 mt-1">
-          <div className={`w-full font-mono text-sm px-3 py-1.5 bg-black/40 rounded-lg border flex items-center justify-between min-h-[38px] ${
+
+        {/* Right: Key Input & Controls */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0">
+          <div className={`min-w-[170px] md:max-w-[240px] font-mono text-xs px-3.5 py-2 bg-black/40 rounded-lg border flex items-center justify-between min-h-[36px] ${
             isRecording 
               ? 'border-amber-500/50 text-amber-400 animate-pulse' 
               : value 
@@ -1166,7 +1169,7 @@ export function SettingsModal() {
             {!isRecording && value && (
               <button
                 onClick={() => setLocalHotkeys(s => ({ ...s, [fieldKey]: '' }))}
-                className="text-xs text-zinc-500 hover:text-red-400 transition-colors cursor-pointer shrink-0 ml-2"
+                className="text-[10px] font-bold text-zinc-500 hover:text-red-400 transition-colors cursor-pointer shrink-0 ml-2"
                 title="Clear keybind"
               >
                 Clear
@@ -1183,7 +1186,7 @@ export function SettingsModal() {
                 setTempCombo('');
               }
             }}
-            className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border transition-all ${
+            className={`px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer border transition-all min-h-[36px] ${
               isRecording 
                 ? 'bg-amber-500 text-black border-amber-500 hover:bg-amber-400' 
                 : 'bg-white/5 border-white/10 hover:bg-white/10 text-zinc-200 hover:text-white'
@@ -2299,7 +2302,7 @@ export function SettingsModal() {
                           <h4 className="text-xs font-bold text-accent-green font-mono uppercase tracking-wider flex items-center gap-1.5 border-b border-white/5 pb-2">
                             <Sliders size={13} /> Core Overlay & System Controls
                           </h4>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div className="flex flex-col gap-2">
                             {renderHotkeyField('Main Overlay Toggle', 'overlay')}
                             {renderHotkeyField('Toggle Interactivity', 'interact')}
                           </div>
@@ -2310,7 +2313,7 @@ export function SettingsModal() {
                           <h4 className="text-xs font-bold text-accent-green font-mono uppercase tracking-wider flex items-center gap-1.5 border-b border-white/5 pb-2">
                             <Camera size={13} /> Media & Capture Controls
                           </h4>
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div className="flex flex-col gap-2">
                             {renderHotkeyField('Capture Screenshot', 'screenshot')}
                             {renderHotkeyField('Toggle Video Recording', 'record')}
                             {renderHotkeyField('Save Replay Clip', 'replay')}
@@ -2322,7 +2325,7 @@ export function SettingsModal() {
                           <h4 className="text-xs font-bold text-accent-green font-mono uppercase tracking-wider flex items-center gap-1.5 border-b border-white/5 pb-2">
                             <Clock size={13} /> Timer & Utility Controls
                           </h4>
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div className="flex flex-col gap-2">
                             {renderHotkeyField('Toggle Timer', 'timer')}
                             {renderHotkeyField('Toggle Stopwatch', 'stopwatch')}
                             {renderHotkeyField('Reset Active Timers', 'timerReset')}
@@ -2334,8 +2337,31 @@ export function SettingsModal() {
                           <h4 className="text-xs font-bold text-accent-green font-mono uppercase tracking-wider flex items-center gap-1.5 border-b border-white/5 pb-2">
                             <Mic size={13} /> Voice Assistant Controls
                           </h4>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div className="flex flex-col gap-2">
                             {renderHotkeyField('Voice Assistant PTT', 'voicePtt')}
+                          </div>
+                        </div>
+
+                        {/* Audio Mixer App Mute Slots (Fixed Shortcuts) */}
+                        <div className="bg-zinc-950/40 p-4 border border-white/5 rounded-xl space-y-3">
+                          <h4 className="text-xs font-bold text-accent-green font-mono uppercase tracking-wider flex items-center gap-1.5 border-b border-white/5 pb-2">
+                            <Volume2 size={13} /> Audio Mixer App Mute Slots (Fixed Shortcuts)
+                          </h4>
+                          <p className="text-xs text-zinc-400 font-sans leading-relaxed">
+                            Mute and unmute individual active applications globally. The numbers correspond to the order in which apps are currently listed in the Audio Mixer widget (slots 1 through 10, with slot 10 mapped to 0). Favorited apps are prioritized and stay at the top.
+                          </p>
+                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1">
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((slot) => {
+                              const digit = slot === 10 ? 0 : slot;
+                              return (
+                                <div key={slot} className="bg-black/30 border border-white/5 p-2 rounded-lg text-center flex flex-col items-center justify-center gap-1 hover:border-white/10 transition-colors">
+                                  <span className="text-[10px] font-bold text-zinc-500 font-mono">SLOT {slot}</span>
+                                  <span className="text-[10.5px] font-mono text-accent-green font-bold bg-accent-green/5 border border-accent-green/20 px-1.5 py-0.5 rounded shadow-[0_0_8px_rgba(74,246,38,0.05)]">
+                                    CTRL + ALT + {digit}
+                                  </span>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       </div>
@@ -2892,9 +2918,32 @@ export function SettingsModal() {
                       {/* Rolling Monospaced Log Viewer */}
                       <pre 
                         ref={logsContainerRef}
-                        className="flex-1 p-4 bg-[#050505] border border-white/5 rounded-xl font-mono text-xs text-zinc-400 overflow-y-auto leading-relaxed custom-scrollbar max-h-[360px] whitespace-pre-wrap select-text"
+                        className="flex-1 p-4 bg-[#050505] border border-white/5 rounded-xl font-mono text-xs overflow-y-auto leading-relaxed custom-scrollbar max-h-[360px] whitespace-pre-wrap select-text text-left"
                       >
-                        {logsContent || 'Log stream is currently empty.'}
+                        {logsContent ? (
+                          logsContent.split('\n').map((line, i) => {
+                            if (!line.trim()) return null;
+                            let colorClass = 'text-zinc-400';
+                            if (line.includes('ERROR') || line.includes('error') || line.includes('ERR')) {
+                              colorClass = 'text-red-400 font-bold';
+                            } else if (line.includes('WARN') || line.includes('warn') || line.includes('WRN')) {
+                              colorClass = 'text-amber-400 font-medium';
+                            } else if (line.includes('INFO') || line.includes('info') || line.includes('INF')) {
+                              colorClass = 'text-accent-green';
+                            } else if (line.includes('DEBUG') || line.includes('debug') || line.includes('DBG')) {
+                              colorClass = 'text-sky-400/80';
+                            } else if (line.includes('TRACE') || line.includes('trace') || line.includes('TRC')) {
+                              colorClass = 'text-zinc-500 italic';
+                            }
+                            return (
+                              <div key={i} className={`${colorClass} hover:bg-white/5 px-1 py-0.5 rounded transition-colors`}>
+                                {line}
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="text-zinc-500 italic">Log stream is currently empty.</div>
+                        )}
                       </pre>
                     </div>
                   )}
@@ -3030,6 +3079,9 @@ export function SettingsModal() {
                           <p className="leading-relaxed">
                             <strong className="text-white">Pinning Widgets (Ghost Mode):</strong> Click the pin icon on any widget container. When the overlay is dismissed, pinned widgets remain on screen as floaters and are set to click-through so they don't block your gameplay. Summon the main hotkey to drag/resize or unpin them.
                           </p>
+                          <p className="leading-relaxed">
+                            <strong className="text-white">Collapsible Dock & Library:</strong> Save screen space by clicking the left/right chevrons on the Dock to toggle collapsed mode. Access all HUD widgets anytime from the <b>Widgets Library Popover</b> (by clicking the grid menu button on the Dock).
+                          </p>
                         </div>
                       </div>
 
@@ -3053,7 +3105,10 @@ export function SettingsModal() {
                               <Volume2 size={12} className="text-accent-green" /> Audio Mixer & Peak Analysis
                             </h5>
                             <p className="leading-relaxed pl-4">
-                              Adjust individual application volumes and swap output/input devices without minimizing your game. Displays real-time VU peak meter signals. Set your favorite apps in preferences to pin them to the mixer.
+                              Adjust individual application volumes and swap output/input devices without minimizing your game. Displays real-time VU peak meter signals. Set your favorite apps in preferences to prioritize them at the top of the mixer list.
+                            </p>
+                            <p className="leading-relaxed pl-4 text-zinc-400">
+                              <strong className="text-white">Global Mute Shortcuts:</strong> Toggle mute status for active applications in slots 1 through 10 (displayed with `[1]`..`[10]` indicator badges in the mixer) by pressing <span className="text-accent-amber font-mono font-bold">Ctrl + Alt + [Slot Number]</span>.
                             </p>
                           </div>
 

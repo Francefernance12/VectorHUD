@@ -98,7 +98,7 @@ export function Dock() {
               animate={{ opacity: 1, width: 'auto' }}
               exit={{ opacity: 0, width: 0 }}
               transition={{ duration: 0.2 }}
-              className="flex items-center gap-3 overflow-hidden"
+              className="flex items-center gap-3 overflow-hidden pr-2"
             >
               {/* Widgets Library Button */}
               <button
