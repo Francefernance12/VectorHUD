@@ -1,0 +1,53 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  check-and-test:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: VectorHUD/package-lock.json
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rusttoolchain@v1
+        with:
+          toolchain: stable
+          components: clippy, rustfmt
+
+      - name: Install Frontend Dependencies
+        run: |
+          cd VectorHUD
+          npm ci
+
+      - name: Run Format Check (Rust)
+        run: |
+          cd VectorHUD
+          cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+
+      - name: Run Clippy Lints (Rust)
+        run: |
+          cd VectorHUD
+          cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+
+      - name: Run Frontend Tests (Vitest)
+        run: |
+          cd VectorHUD
+          npm test
+
+      - name: Run Backend Tests (Cargo)
+        run: |
+          cd VectorHUD/src-tauri
+          cargo test
