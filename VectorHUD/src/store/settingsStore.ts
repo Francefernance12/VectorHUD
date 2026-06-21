@@ -42,6 +42,7 @@ interface SettingsState {
   backgroundBlur: number;
   backdropOpacity: number;
   launchOnStartup: boolean;
+  dockCollapsed: boolean;
 
   // Visual customizations
   widgetBorderRadius: number;
@@ -102,6 +103,7 @@ interface SettingsState {
   setBackgroundBlur: (val: number) => Promise<void>;
   setBackdropOpacity: (val: number) => Promise<void>;
   setLaunchOnStartup: (val: boolean) => Promise<void>;
+  setDockCollapsed: (val: boolean) => Promise<void>;
 
   setWidgetBorderRadius: (val: number) => Promise<void>;
   setWidgetBorderWidth: (val: number) => Promise<void>;
@@ -216,6 +218,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   backgroundBlur: 8,
   backdropOpacity: 60,
   launchOnStartup: false,
+  dockCollapsed: false,
 
   widgetBorderRadius: 12,
   widgetBorderWidth: 1,
@@ -415,31 +418,35 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
 
   setMetricsPollInterval: async (val) => {
+    const clamped = Math.max(1000, Math.min(val, 10000));
     const store = await getSettingsStore();
-    await store.set('metricsPollInterval', val);
+    await store.set('metricsPollInterval', clamped);
     await store.save();
-    set({ metricsPollInterval: val });
+    set({ metricsPollInterval: clamped });
   },
 
   setGpuTempAlertThreshold: async (val) => {
+    const clamped = Math.max(40, Math.min(val, 100));
     const store = await getSettingsStore();
-    await store.set('gpuTempAlertThreshold', val);
+    await store.set('gpuTempAlertThreshold', clamped);
     await store.save();
-    set({ gpuTempAlertThreshold: val });
+    set({ gpuTempAlertThreshold: clamped });
   },
 
   setCpuTempAlertThreshold: async (val) => {
+    const clamped = Math.max(40, Math.min(val, 100));
     const store = await getSettingsStore();
-    await store.set('cpuTempAlertThreshold', val);
+    await store.set('cpuTempAlertThreshold', clamped);
     await store.save();
-    set({ cpuTempAlertThreshold: val });
+    set({ cpuTempAlertThreshold: clamped });
   },
 
   setReplayDuration: async (val) => {
+    const clamped = Math.max(5, Math.min(val, 300));
     const store = await getSettingsStore();
-    await store.set('replayDuration', val);
+    await store.set('replayDuration', clamped);
     await store.save();
-    set({ replayDuration: val });
+    set({ replayDuration: clamped });
   },
 
   setExcludeHudFromCapture: async (val) => {
@@ -457,17 +464,19 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
 
   setVolumeStep: async (val) => {
+    const clamped = Math.max(1, Math.min(val, 50));
     const store = await getSettingsStore();
-    await store.set('volumeStep', val);
+    await store.set('volumeStep', clamped);
     await store.save();
-    set({ volumeStep: val });
+    set({ volumeStep: clamped });
   },
 
   setPttBrevityLimit: async (val) => {
+    const clamped = Math.max(50, Math.min(val, 2000));
     const store = await getSettingsStore();
-    await store.set('pttBrevityLimit', val);
+    await store.set('pttBrevityLimit', clamped);
     await store.save();
-    set({ pttBrevityLimit: val });
+    set({ pttBrevityLimit: clamped });
   },
 
   setSystemPromptOverride: async (val) => {
@@ -478,19 +487,21 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
 
   setBackgroundBlur: async (val) => {
+    const clamped = Math.max(0, Math.min(val, 20));
     const store = await getSettingsStore();
-    await store.set('backgroundBlur', val);
+    await store.set('backgroundBlur', clamped);
     await store.save();
-    set({ backgroundBlur: val });
-    document.documentElement.style.setProperty('--bg-blur-amount', `${val}px`);
+    set({ backgroundBlur: clamped });
+    document.documentElement.style.setProperty('--bg-blur-amount', `${clamped}px`);
   },
 
   setBackdropOpacity: async (val) => {
+    const clamped = Math.max(0, Math.min(val, 95));
     const store = await getSettingsStore();
-    await store.set('backdropOpacity', val);
+    await store.set('backdropOpacity', clamped);
     await store.save();
-    set({ backdropOpacity: val });
-    document.documentElement.style.setProperty('--bg-opacity-amount', `${val / 100}`);
+    set({ backdropOpacity: clamped });
+    document.documentElement.style.setProperty('--bg-opacity-amount', `${clamped / 100}`);
   },
 
   setLaunchOnStartup: async (val) => {
@@ -511,43 +522,48 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
 
   setWidgetBorderRadius: async (val) => {
+    const clamped = Math.max(0, Math.min(val, 24));
     const store = await getSettingsStore();
-    await store.set('widgetBorderRadius', val);
+    await store.set('widgetBorderRadius', clamped);
     await store.save();
-    set({ widgetBorderRadius: val });
-    document.documentElement.style.setProperty('--widget-border-radius', `${val}px`);
+    set({ widgetBorderRadius: clamped });
+    document.documentElement.style.setProperty('--widget-border-radius', `${clamped}px`);
   },
 
   setWidgetBorderWidth: async (val) => {
+    const clamped = Math.max(1, Math.min(val, 4));
     const store = await getSettingsStore();
-    await store.set('widgetBorderWidth', val);
+    await store.set('widgetBorderWidth', clamped);
     await store.save();
-    set({ widgetBorderWidth: val });
-    document.documentElement.style.setProperty('--widget-border-width', `${val}px`);
+    set({ widgetBorderWidth: clamped });
+    document.documentElement.style.setProperty('--widget-border-width', `${clamped}px`);
   },
 
   setWidgetBorderOpacity: async (val) => {
+    const clamped = Math.max(5, Math.min(val, 80));
     const store = await getSettingsStore();
-    await store.set('widgetBorderOpacity', val);
+    await store.set('widgetBorderOpacity', clamped);
     await store.save();
-    set({ widgetBorderOpacity: val });
-    document.documentElement.style.setProperty('--widget-border-opacity', `${val / 100}`);
+    set({ widgetBorderOpacity: clamped });
+    document.documentElement.style.setProperty('--widget-border-opacity', `${clamped / 100}`);
   },
 
   setWidgetGlowSize: async (val) => {
+    const clamped = Math.max(0, Math.min(val, 30));
     const store = await getSettingsStore();
-    await store.set('widgetGlowSize', val);
+    await store.set('widgetGlowSize', clamped);
     await store.save();
-    set({ widgetGlowSize: val });
-    document.documentElement.style.setProperty('--widget-glow-size', `${val}px`);
+    set({ widgetGlowSize: clamped });
+    document.documentElement.style.setProperty('--widget-glow-size', `${clamped}px`);
   },
 
   setWidgetGlowOpacity: async (val) => {
+    const clamped = Math.max(0, Math.min(val, 100));
     const store = await getSettingsStore();
-    await store.set('widgetGlowOpacity', val);
+    await store.set('widgetGlowOpacity', clamped);
     await store.save();
-    set({ widgetGlowOpacity: val });
-    document.documentElement.style.setProperty('--widget-glow-opacity', `${val / 100}`);
+    set({ widgetGlowOpacity: clamped });
+    document.documentElement.style.setProperty('--widget-glow-opacity', `${clamped / 100}`);
   },
 
   setSelectedAudioInput: async (val) => {
@@ -565,12 +581,17 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
 
   setMicrophoneVolume: async (val) => {
+    const clamped = Math.max(0, Math.min(val, 100));
     const store = await getSettingsStore();
-    await store.set('microphoneVolume', val);
+    await store.set('microphoneVolume', clamped);
     await store.save();
-    set({ microphoneVolume: val });
-    const { invoke } = await import('@tauri-apps/api/core');
-    await invoke('set_microphone_volume', { volume: val / 100 });
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('set_microphone_volume', { volume: clamped / 100 });
+    } catch (e) {
+      console.warn("Failed to set microphone volume hardware state:", e);
+    }
+    set({ microphoneVolume: clamped });
   },
 
   setMicrophoneMuted: async (val) => {
@@ -580,6 +601,13 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     set({ microphoneMuted: val });
     const { invoke } = await import('@tauri-apps/api/core');
     await invoke('set_microphone_mute', { muted: val });
+  },
+
+  setDockCollapsed: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('dockCollapsed', val);
+    await store.save();
+    set({ dockCollapsed: val });
   },
 
   setSyncBorderGlowWithTheme: async (val) => {
@@ -665,6 +693,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const bgBlur = await store.get<number>('backgroundBlur');
     const bdOpacity = await store.get<number>('backdropOpacity');
     const startStartup = await store.get<boolean>('launchOnStartup');
+    const collapsed = await store.get<boolean>('dockCollapsed');
 
     const wRadius = await store.get<number>('widgetBorderRadius');
     const wWidth = await store.get<number>('widgetBorderWidth');
@@ -732,6 +761,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       backgroundBlur: bgBlur !== undefined ? bgBlur : 8,
       backdropOpacity: bdOpacity !== undefined ? bdOpacity : 60,
       launchOnStartup: finalLaunchOnStartup,
+      dockCollapsed: collapsed !== undefined ? collapsed : false,
 
       widgetBorderRadius: wRadius !== undefined ? wRadius : 12,
       widgetBorderWidth: wWidth !== undefined ? wWidth : 1,

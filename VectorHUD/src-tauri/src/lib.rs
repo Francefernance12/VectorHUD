@@ -110,6 +110,50 @@ fn unregister_all_hotkeys(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn move_to_active_monitor(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        if let Ok(cursor_pos) = app.cursor_position() {
+            if let Ok(monitors) = window.available_monitors() {
+                for m in monitors {
+                    let pos = m.position();
+                    let size = m.size();
+                    let scale = m.scale_factor();
+                    let x = pos.x as f64;
+                    let y = pos.y as f64;
+                    let w = size.width as f64;
+                    let h = size.height as f64;
+
+                    if cursor_pos.x >= x
+                        && cursor_pos.x <= x + w
+                        && cursor_pos.y >= y
+                        && cursor_pos.y <= y + h
+                    {
+                        if let Ok(win_pos) = window.outer_position() {
+                            let wx = win_pos.x as f64;
+                            let wy = win_pos.y as f64;
+                            if wx >= x && wx < x + w && wy >= y && wy < y + h {
+                                return Ok(()); // Already on this monitor
+                            }
+                        }
+                        let lx = x / scale;
+                        let ly = y / scale;
+                        let lw = w / scale;
+                        let lh = h / scale;
+                        let _ = window.set_position(tauri::LogicalPosition::new(lx, ly));
+                        let _ = window.set_size(tauri::LogicalSize::new(lw, lh));
+                        let _ = window.set_decorations(false);
+                        let _ = window.set_skip_taskbar(true);
+                        let _ = window.set_always_on_top(true);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
 #[allow(clippy::too_many_arguments)]
 fn update_hotkeys(
     app: tauri::AppHandle,
@@ -217,6 +261,14 @@ fn update_hotkeys(
     register_hotkey(&stopwatch_hotkey, "hotkey-stopwatch");
     register_hotkey(&timer_reset_hotkey, "hotkey-timer-reset");
     register_hotkey(&interact_hotkey, "hotkey-interact");
+
+    // Register 10 global mute toggle hotkeys (Ctrl+Alt+1 to Ctrl+Alt+0)
+    for i in 1..=10 {
+        let digit = if i == 10 { 0 } else { i };
+        let hotkey = format!("ctrl+alt+{}", digit);
+        let event_name = format!("hotkey-mute-{}", i);
+        register_hotkey(&hotkey, &event_name);
+    }
 
     // Register Voice PTT hotkey separately to handle polling key release
     if !voice_ptt_hotkey.is_empty() {
@@ -653,6 +705,7 @@ pub fn run() {
         )
         .invoke_handler(tauri::generate_handler![
             set_interactive_mode,
+            move_to_active_monitor,
             update_hotkeys,
             unregister_all_hotkeys,
             start_voice_recording,

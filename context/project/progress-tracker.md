@@ -4,7 +4,7 @@ Update this file after every meaningful implementation change.
 
 ## Current Goal
 
-- Session 25: Discord Webhook Integration (Implement Discord Webhook configuration and gallery share button to upload screenshots/clips directly to Discord.)
+- Session 26: Discord Webhook Integration (Implement Discord Webhook configuration and gallery share button to upload screenshots/clips directly to Discord.)
 
 ## Completed
 
@@ -51,6 +51,7 @@ Update this file after every meaningful implementation change.
 - Session 24.4: Generic Gamepads & Bluetooth List Sorting (Expanded controller enumeration to detect any Generic Desktop Gamepad/Joystick via HID usage attributes, supporting 3rd party Xbox 360 controllers. Added path de-duplication and a native Xbox check, hiding emulation toggles on the UI for native Xbox controllers in favor of a "Native Xbox" badge. Sorted classic and BLE Bluetooth scan results to place connected devices at the top of the list. Fixed `gilrs` trigger axis compilation error by changing `LeftTrigger2`/`RightTrigger2` to `LeftZ`/`RightZ` and implemented active state-tracking of `gilrs`-detected gamepads in the backend. Merged `gilrs_controllers` into the status lists in both the background polling watcher and the status command, and updated `ControllerWidget.tsx` to display the active testing controller name in the Tester tab. Verified everything with 30 backend tests and 90 vitest tests).
 - Session 24.5: Controller Test Inputs & Flicker Fix (Resolved the Windows RawInput background thread focus constraint by implementing direct Windows XInput polling in `spawn_gilrs_watcher`. Added `vendor_id` and `product_id` properties to `ControllerTestState` in both Rust and TypeScript, and updated the frontend `activeController` selector to fallback to matching by VID/PID, resolving the device identification mismatches when the gamepad is present in both `hidapi` and `gilrs` loops. Resolved the active controller name label flickering by caching the status state in a React Ref and ignoring emulated/duplicated events from other sources when a physical controller is actively emulated by verifying that the event `controller_id` matches the physical emulating controller's `id` or `path`. Verified all unit tests compile and pass successfully).
 - Session 24.6: Release packaging (Bumped version to v1.3.0, verified backend and frontend test suites are passing green, created and signed auto-updater latest.json metadata, published tag and release v1.3.0 on GitHub, and created Pull Request #42.)
+- Session 25: UI/UX, Technical and Documentation Enhancements (Designed a collapsible/expandable Dock with Framer Motion; implemented a Grid-layout Widgets Library popover; added global hotkeys Ctrl+Alt+1..0 for muting favorited audio apps; updated toast notifications to follow the mouse cursor to the active monitor; overhauled the Settings hotkey recorder to display modifier keys in real-time, show a "Current" hotkey badge to avoid squishing, and handle Escape cancel; added a "Copy Logs" button in the diagnostics log viewer; documented diagnostic log sharing in SUPPORT.md; added database ER and data flow sequence diagrams; and verified all functionalities with comprehensive frontend unit tests).
 
 ## In Progress
 
@@ -60,7 +61,7 @@ Update this file after every meaningful implementation change.
 
 | Session | Unit Name | Focus | Goal |
 | :--- | :--- | :--- | :--- |
-| **Session 25** | Discord Webhook Integration | API | Implement Discord Webhook configuration and gallery share button to upload screenshots/clips directly to Discord. |
+| **Session 26** | Discord Webhook Integration | API | Implement Discord Webhook configuration and gallery share button to upload screenshots/clips directly to Discord. |
 
 ## Architecture Decisions
 
@@ -69,3 +70,4 @@ Update this file after every meaningful implementation change.
 ## Session Notes
 
 - Use the Gemini Antigravity in standard mode for execution, and its planning mode (if available) before starting a new Git branch.
+

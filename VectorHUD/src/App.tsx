@@ -11,6 +11,7 @@ import { useSettingsStore } from "./store/settingsStore";
 import { useToastStore } from "./store/toastStore";
 import { useTimerStore } from "./store/timerStore";
 import { useHardwareStore } from "./store/hardwareStore";
+import { useAudioStore } from "./store/audioStore";
 import { useShallow } from 'zustand/react/shallow';
 import { Dock } from "./components/Dock";
 import { WidgetContainer } from "./components/WidgetContainer";
@@ -32,6 +33,19 @@ import { useOpenRouterStore } from "./store/openRouterStore";
 import { transcribeAudio, executeTool, AI_TOOLS, getAnthropicTools } from "./utils/aiActions";
 import { UI_CONSTANTS } from "./config/constants";
 import "./App.css";
+
+interface AudioSession {
+  process_id: number;
+  name: string;
+  volume: number;
+  muted: boolean;
+}
+
+interface SystemAudio {
+  master_volume: number;
+  master_muted: boolean;
+  sessions: AudioSession[];
+}
 
 interface Message {
   id?: number;
@@ -681,6 +695,42 @@ function App() {
           setPttState('idle');
         });
         safePush(unlistenVoiceError);
+
+        // Listen for the 10 global mute toggle hotkeys (Ctrl+Alt+1 to Ctrl+Alt+0)
+        for (let i = 1; i <= 10; i++) {
+          if (!isMounted) return;
+          const unlistenMute = await listen(`hotkey-mute-${i}`, async () => {
+            logger.info(`Frontend: hotkey-mute-${i} event received`).catch(console.error);
+            const index = i - 1; // 0-indexed for favoriteApps
+            const favoriteApps = useAudioStore.getState().favoriteApps;
+            const targetApp = favoriteApps[index];
+            if (!targetApp) {
+              showToast(`⚠️ No app assigned to Mute Slot ${i}`);
+              return;
+            }
+
+            try {
+              const audioState = await invoke<SystemAudio>('get_audio_mixer_state');
+              const matchingSessions = audioState.sessions.filter(
+                s => s.name.toLowerCase() === targetApp.toLowerCase()
+              );
+
+              if (matchingSessions.length > 0) {
+                for (const session of matchingSessions) {
+                  await invoke('toggle_app_mute', { pid: session.process_id });
+                }
+                const nextMutedState = !matchingSessions[0].muted;
+                showToast(`${nextMutedState ? "🔇 Muted" : "🔊 Unmuted"} ${targetApp}`);
+                window.dispatchEvent(new Event('refresh-audio-state'));
+              } else {
+                showToast(`⚠️ ${targetApp} is not currently playing audio`);
+              }
+            } catch (err) {
+              logger.error(`Mute hotkey failed for ${targetApp}: ${err}`).catch(console.error);
+            }
+          });
+          safePush(unlistenMute);
+        }
       } catch (err) {
         logger.error(`Failed to initialize listeners: ${err}`).catch(console.error);
       }

@@ -4,7 +4,7 @@ import {
   X, Key, Zap, Palette, Save, Settings, Edit3, Download, RefreshCw, 
   CheckCircle2, Search, Terminal, Sliders, Volume2, Cpu, Monitor, 
   Trash2, RotateCcw, HelpCircle, Shield, AlertTriangle, VolumeX, Mic,
-  BookOpen, Camera, Clock
+  BookOpen, Camera, Clock, Copy
 } from 'lucide-react';
 import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
@@ -327,6 +327,7 @@ export function SettingsModal() {
   // Diagnostics logs state
   const [logsContent, setLogsContent] = useState('Loading logs...');
   const [isRefreshingLogs, setIsRefreshingLogs] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
   const logsContainerRef = useRef<HTMLPreElement>(null);
 
   // Confirmation dialogs toggle
@@ -337,6 +338,7 @@ export function SettingsModal() {
 
   // Keybind Recording state
   const [recordingField, setRecordingField] = useState<keyof typeof localHotkeys | null>(null);
+  const [tempCombo, setTempCombo] = useState<string>('');
 
   // Hydrate credentials and basic parameters on mount / open
   useEffect(() => {
@@ -529,11 +531,20 @@ export function SettingsModal() {
 
   // Keybind Recorder keydown listener
   useEffect(() => {
-    if (!recordingField) return;
+    if (!recordingField) {
+      setTempCombo('');
+      return;
+    }
 
     const handleKeyDown = (e: KeyboardEvent) => {
       e.preventDefault();
       e.stopPropagation();
+
+      if (e.key === 'Escape') {
+        setRecordingField(null);
+        setTempCombo('');
+        return;
+      }
 
       const isModifier = ['Control', 'Alt', 'Shift', 'Meta'].includes(e.key);
 
@@ -543,7 +554,17 @@ export function SettingsModal() {
       if (e.shiftKey) parts.push('shift');
       if (e.metaKey) parts.push('super');
 
-      if (!isModifier && e.key) {
+      if (isModifier) {
+        const displayParts = parts.map(p => p.toUpperCase());
+        if (displayParts.length > 0) {
+          setTempCombo(displayParts.join(' + ') + ' + ');
+        } else {
+          setTempCombo('');
+        }
+        return;
+      }
+
+      if (e.key) {
         let primaryKey = e.key.toLowerCase();
         
         // Map key names for Tauri v2 global shortcuts compatibility
@@ -570,6 +591,7 @@ export function SettingsModal() {
             [recordingField]: combo
           }));
           setRecordingField(null);
+          setTempCombo('');
           setHotkeyError('');
         } else {
           setHotkeyError('Keybind requires at least one modifier key (Ctrl, Alt, Shift, Win) or be an F-key.');
@@ -578,8 +600,30 @@ export function SettingsModal() {
       }
     };
 
+    const handleKeyUp = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const parts: string[] = [];
+      if (e.ctrlKey) parts.push('ctrl');
+      if (e.altKey) parts.push('alt');
+      if (e.shiftKey) parts.push('shift');
+      if (e.metaKey) parts.push('super');
+
+      const displayParts = parts.map(p => p.toUpperCase());
+      if (displayParts.length > 0) {
+        setTempCombo(displayParts.join(' + ') + ' + ');
+      } else {
+        setTempCombo('');
+      }
+    };
+
     window.addEventListener('keydown', handleKeyDown, true);
-    return () => window.removeEventListener('keydown', handleKeyDown, true);
+    window.addEventListener('keyup', handleKeyUp, true);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('keyup', handleKeyUp, true);
+    };
   }, [recordingField]);
 
   // Temporary unregister hotkeys on Settings open to prevent capture conflict
@@ -1100,7 +1144,14 @@ export function SettingsModal() {
 
     return (
       <div className="space-y-1 bg-black/20 p-3 rounded-lg border border-white/5 flex flex-col justify-between hover:border-white/10 transition-colors">
-        <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">{label}</label>
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">{label}</label>
+          {isRecording && (
+            <span className="text-[10px] px-1.5 py-0.5 bg-white/10 text-zinc-300 rounded font-mono font-medium animate-pulse">
+              Current: {displayVal}
+            </span>
+          )}
+        </div>
         <div className="flex flex-col gap-2 mt-1">
           <div className={`w-full font-mono text-sm px-3 py-1.5 bg-black/40 rounded-lg border flex items-center justify-between min-h-[38px] ${
             isRecording 
@@ -1109,7 +1160,9 @@ export function SettingsModal() {
                 ? 'border-white/10 text-zinc-200' 
                 : 'border-dashed border-zinc-700 text-zinc-500'
           }`}>
-            <span className="truncate">{isRecording ? 'Listening for keys...' : displayVal}</span>
+            <span className="truncate font-mono">
+              {isRecording ? (tempCombo || 'Press keys... (Esc)') : displayVal}
+            </span>
             {!isRecording && value && (
               <button
                 onClick={() => setLocalHotkeys(s => ({ ...s, [fieldKey]: '' }))}
@@ -1124,8 +1177,10 @@ export function SettingsModal() {
             onClick={() => {
               if (isRecording) {
                 setRecordingField(null);
+                setTempCombo('');
               } else {
                 setRecordingField(fieldKey);
+                setTempCombo('');
               }
             }}
             className={`w-full px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border transition-all ${
@@ -2807,6 +2862,21 @@ export function SettingsModal() {
                             className="px-3 py-1.5 bg-red-950/30 hover:bg-red-950/60 border border-red-500/25 hover:border-red-500/40 text-red-400 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
                           >
                             <Trash2 size={13} /> Purge Chat History
+                          </button>
+
+                          <button
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(logsContent);
+                                setIsCopied(true);
+                                setTimeout(() => setIsCopied(false), 2000);
+                              } catch (err) {
+                                console.error('Failed to copy logs', err);
+                              }
+                            }}
+                            className="px-3 py-1.5 bg-white/5 border border-white/10 hover:bg-white/10 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer"
+                          >
+                            <Copy size={13} className={isCopied ? 'text-green-400' : ''} /> {isCopied ? 'Copied!' : 'Copy Logs'}
                           </button>
                           
                           <button

@@ -242,4 +242,96 @@ describe('settingsStore', () => {
     expect(mockSave).toHaveBeenCalled();
     expect(useSettingsStore.getState().customGlowColor).toBe('#0000ff');
   });
+
+  it('should call set and save on setDockCollapsed', async () => {
+    await useSettingsStore.getState().setDockCollapsed(true);
+    expect(mockSet).toHaveBeenCalledWith('dockCollapsed', true);
+    expect(mockSave).toHaveBeenCalled();
+    expect(useSettingsStore.getState().dockCollapsed).toBe(true);
+  });
+
+  it('should enforce clamping failsafes for settings', async () => {
+    // metricsPollInterval (1000..10000)
+    await useSettingsStore.getState().setMetricsPollInterval(500);
+    expect(useSettingsStore.getState().metricsPollInterval).toBe(1000);
+    await useSettingsStore.getState().setMetricsPollInterval(15000);
+    expect(useSettingsStore.getState().metricsPollInterval).toBe(10000);
+
+    // temp thresholds (40..100)
+    await useSettingsStore.getState().setGpuTempAlertThreshold(20);
+    expect(useSettingsStore.getState().gpuTempAlertThreshold).toBe(40);
+    await useSettingsStore.getState().setGpuTempAlertThreshold(120);
+    expect(useSettingsStore.getState().gpuTempAlertThreshold).toBe(100);
+
+    await useSettingsStore.getState().setCpuTempAlertThreshold(20);
+    expect(useSettingsStore.getState().cpuTempAlertThreshold).toBe(40);
+    await useSettingsStore.getState().setCpuTempAlertThreshold(120);
+    expect(useSettingsStore.getState().cpuTempAlertThreshold).toBe(100);
+
+    // replayDuration (5..300)
+    await useSettingsStore.getState().setReplayDuration(2);
+    expect(useSettingsStore.getState().replayDuration).toBe(5);
+    await useSettingsStore.getState().setReplayDuration(400);
+    expect(useSettingsStore.getState().replayDuration).toBe(300);
+
+    // volumeStep (1..50)
+    await useSettingsStore.getState().setVolumeStep(0);
+    expect(useSettingsStore.getState().volumeStep).toBe(1);
+    await useSettingsStore.getState().setVolumeStep(60);
+    expect(useSettingsStore.getState().volumeStep).toBe(50);
+
+    // brevity limit (50..2000)
+    await useSettingsStore.getState().setPttBrevityLimit(10);
+    expect(useSettingsStore.getState().pttBrevityLimit).toBe(50);
+    await useSettingsStore.getState().setPttBrevityLimit(3000);
+    expect(useSettingsStore.getState().pttBrevityLimit).toBe(2000);
+
+    // backgroundBlur (0..20)
+    await useSettingsStore.getState().setBackgroundBlur(-5);
+    expect(useSettingsStore.getState().backgroundBlur).toBe(0);
+    await useSettingsStore.getState().setBackgroundBlur(30);
+    expect(useSettingsStore.getState().backgroundBlur).toBe(20);
+
+    // backdropOpacity (0..95)
+    await useSettingsStore.getState().setBackdropOpacity(-10);
+    expect(useSettingsStore.getState().backdropOpacity).toBe(0);
+    await useSettingsStore.getState().setBackdropOpacity(110);
+    expect(useSettingsStore.getState().backdropOpacity).toBe(95);
+
+    // widgetBorderRadius (0..24)
+    await useSettingsStore.getState().setWidgetBorderRadius(-5);
+    expect(useSettingsStore.getState().widgetBorderRadius).toBe(0);
+    await useSettingsStore.getState().setWidgetBorderRadius(35);
+    expect(useSettingsStore.getState().widgetBorderRadius).toBe(24);
+
+    // widgetBorderWidth (1..4)
+    await useSettingsStore.getState().setWidgetBorderWidth(0);
+    expect(useSettingsStore.getState().widgetBorderWidth).toBe(1);
+    await useSettingsStore.getState().setWidgetBorderWidth(10);
+    expect(useSettingsStore.getState().widgetBorderWidth).toBe(4);
+
+    // widgetBorderOpacity (5..80)
+    await useSettingsStore.getState().setWidgetBorderOpacity(2);
+    expect(useSettingsStore.getState().widgetBorderOpacity).toBe(5);
+    await useSettingsStore.getState().setWidgetBorderOpacity(95);
+    expect(useSettingsStore.getState().widgetBorderOpacity).toBe(80);
+
+    // widgetGlowSize (0..30)
+    await useSettingsStore.getState().setWidgetGlowSize(-5);
+    expect(useSettingsStore.getState().widgetGlowSize).toBe(0);
+    await useSettingsStore.getState().setWidgetGlowSize(40);
+    expect(useSettingsStore.getState().widgetGlowSize).toBe(30);
+
+    // widgetGlowOpacity (0..100)
+    await useSettingsStore.getState().setWidgetGlowOpacity(-10);
+    expect(useSettingsStore.getState().widgetGlowOpacity).toBe(0);
+    await useSettingsStore.getState().setWidgetGlowOpacity(120);
+    expect(useSettingsStore.getState().widgetGlowOpacity).toBe(100);
+
+    // microphoneVolume (0..100)
+    await useSettingsStore.getState().setMicrophoneVolume(-10);
+    expect(useSettingsStore.getState().microphoneVolume).toBe(0);
+    await useSettingsStore.getState().setMicrophoneVolume(120);
+    expect(useSettingsStore.getState().microphoneVolume).toBe(100);
+  });
 });

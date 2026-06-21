@@ -3,6 +3,51 @@
 This document dynamically tracks the SQLite database schema (`vectorhud.db`) used for the Tactical Gamer's Overlay.
 The database is managed locally via `tauri-plugin-sql` and handles persistent analytics, logs, and capture history.
 
+## Entity Relationship Diagram
+
+```mermaid
+erDiagram
+    widget_analytics {
+        int id PK
+        string widget_name
+        string action
+        datetime timestamp
+    }
+    capture_history {
+        int id PK
+        string file_path
+        string media_type
+        string game_process
+        datetime timestamp
+    }
+    user_credentials {
+        string id PK
+        string encrypted_value
+        datetime updated_at
+    }
+    known_games {
+        string process_name PK
+        datetime timestamp
+    }
+    ai_chat_history {
+        int id PK
+        string role
+        string content
+        string image_path
+        string session_id FK
+        int tokens
+        string tool_calls
+        string tool_call_id
+        datetime timestamp
+    }
+    session_titles {
+        string session_id PK
+        string title
+    }
+
+    session_titles ||--o{ ai_chat_history : "groups messages by"
+```
+
 ## Table: `widget_analytics`
 Tracks usage data for different widgets to understand which tools are used most frequently.
 
