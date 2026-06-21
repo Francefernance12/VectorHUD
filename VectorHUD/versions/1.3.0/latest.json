@@ -1,0 +1,11 @@
+{
+  "version": "1.3.0",
+  "notes": "VectorHUD v1.3.0. Introduced Controller & Bluetooth Management Widget, full gamepad input testing telemetry dashboard, classic/BLE Bluetooth scanner, physical controller cloaking via HidHide, and virtual Xbox emulation via ViGEmBus.",
+  "pub_date": "2026-06-20T18:45:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTVTRjWmZWTDJBcitoY2tmUU5aT1hWTjdGamVvMCtjMElFQnpCYjY1UjliSDFCQ1FWcFRFcVl0MnRiSWU4YjVldDBDaE5tdVp0S2RRZUlrQ2N6V1FmUHNEQzJEZTlpS3dvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgyMDAwNTk2CWZpbGU6dmVjdG9yaHVkXzEuMy4wX3g2NC1zZXR1cC5leGUKRHBibS8rZjNYMzVMcmRxQm5sYlNvWFhSM21mTm5KbmdIK3ZFVXAwU0tqNHFMdlh6VW5iNnVUTGVLemY1bE5INFE0U1IyemY4Q3lKTmFlWmZScmxmQmc9PQo=",
+      "url": "https://github.com/Francefernance12/VectorHUD/releases/download/v1.3.0/vectorhud_1.3.0_x64-setup.exe"
+    }
+  }
+}

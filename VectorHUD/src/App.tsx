@@ -23,6 +23,7 @@ import { AudioHubWidget } from "./components/widgets/AudioHubWidget";
 import { OpenRouterWidget } from "./components/widgets/OpenRouterWidget";
 import { NotionCaptureWidget } from "./components/widgets/NotionCaptureWidget";
 import { TimerWidget } from "./components/widgets/TimerWidget";
+import { ControllerWidget } from "./components/widgets/ControllerWidget";
 import { RecordingStatusBar } from "./components/RecordingStatusBar";
 import { TimerStatusBar } from "./components/TimerStatusBar";
 import { useRecordingStore } from "./store/recordingStore";
@@ -936,6 +937,7 @@ function App() {
                    id === 'ai-chat' ? <OpenRouterWidget /> :
                    id === 'quick-notes' ? <NotionCaptureWidget /> :
                    id === 'game-timer' ? <TimerWidget /> :
+                   id === 'controller-bluetooth' ? <ControllerWidget /> :
                    <DummyWidget />}
                 </ErrorBoundary>
               </WidgetContainer>

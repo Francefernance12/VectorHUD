@@ -1,4 +1,4 @@
-import { Cpu, Camera, Volume2, MessageSquare, Edit3, Clock, LucideIcon } from 'lucide-react';
+import { Cpu, Camera, Volume2, MessageSquare, Edit3, Clock, Gamepad2, LucideIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Settings } from 'lucide-react';
 import { WIDGETS, useWidgetStore } from '../store/widgetStore';
@@ -12,6 +12,7 @@ const iconMap: Record<string, LucideIcon> = {
   'MessageSquare': MessageSquare,
   'Edit3': Edit3,
   'Clock': Clock,
+  'Gamepad2': Gamepad2,
 };
 
 export function Dock() {

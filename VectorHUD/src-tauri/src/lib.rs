@@ -1,5 +1,5 @@
 mod commands;
-mod core;
+pub mod core;
 
 use std::fs;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -512,6 +512,20 @@ pub fn run() {
             )));
             app.manage(core::voice_recorder::VoiceRecorderState(std::sync::Mutex::new(None)));
 
+            // Initialize controller manager state and spawn background watchers
+            let controller_state: core::controller_manager::SharedControllerState =
+                std::sync::Arc::new(std::sync::Mutex::new(
+                    core::controller_manager::ControllerManagerState::new(),
+                ));
+            app.manage(controller_state.clone());
+            core::controller_manager::spawn_controller_watcher(
+                app.handle().clone(),
+                controller_state,
+            );
+
+            // Spawn Bluetooth device watcher (BLE scan + GATT battery)
+            core::bluetooth_manager::spawn_bluetooth_watcher(app.handle().clone());
+
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
@@ -686,7 +700,14 @@ pub fn run() {
             core::media_control::get_current_media,
             core::media_control::media_play_pause,
             core::media_control::media_next,
-            core::media_control::media_prev
+            core::media_control::media_prev,
+            // Session 24: Controller & Bluetooth Widget
+            core::controller_manager::get_controller_status,
+            core::controller_manager::toggle_controller_emulation,
+            core::controller_manager::toggle_physical_device_hiding,
+            core::controller_manager::fix_double_input,
+            core::controller_manager::get_hidhide_status,
+            core::bluetooth_manager::get_bluetooth_devices
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
