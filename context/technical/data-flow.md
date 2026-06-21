@@ -1,5 +1,55 @@
 # Data Flow & Decisions Document
 
+## Visual Data Flow Sequence
+
+```mermaid
+sequenceDiagram
+    autonumber
+    
+    %% IPC Bridge
+    rect rgb(20, 20, 20)
+        Note over Frontend (React), Backend (Rust): IPC Bridge Pattern
+        Frontend (React)->>Backend (Rust): invoke("command_name", payload) (Asynchronous)
+        Backend (Rust)-->>Frontend (React): Promise.resolve(response)
+        Backend (Rust)-xFrontend (React): app_handle.emit("event_name", payload) (Push)
+    end
+
+    %% Hardware telemetry polling loop
+    rect rgb(10, 30, 10)
+        Note over Backend (Rust), OS (Windows): Telemetry Polling Loop (every 1000ms)
+        loop Every 1000ms
+            Backend (Rust)->>OS (Windows): Query CPU/GPU telemetry API
+            OS (Windows)-->>Backend (Rust): Raw hardware stats
+            Backend (Rust)->>Backend (Rust): Compare/Clamping filters
+            Backend (Rust)-xFrontend (React): app_handle.emit("hardware-metrics-update", stats)
+            Frontend (React)->>Frontend (React): Zustand store update & re-render
+        end
+    end
+
+    %% Voice PTT LLM loop
+    rect rgb(10, 10, 30)
+        Note over Frontend (React), AI Model (Cloud): AI Assistant & Voice PTT Flow
+        Frontend (React)->>Backend (Rust): invoke("start_voice_recording")
+        Note over Backend (Rust): Record microphone to WAV buffer
+        Frontend (React)->>Backend (Rust): invoke("stop_voice_recording") (On Key Release)
+        Backend (Rust)-->>Frontend (React): Base64 encoded WAV string
+        Frontend (React)->>Backend (Rust): invoke("transcribe_audio_api", { wav_data })
+        Backend (Rust)->>AI Model (Cloud): HTTPS Request (Whisper/Groq Speech API)
+        AI Model (Cloud)-->>Backend (Rust): Transcribed text
+        Backend (Rust)-->>Frontend (React): Transcript text string
+        Frontend (React)->>Backend (Rust): invoke("call_ai_api", { prompt, tools })
+        Backend (Rust)->>AI Model (Cloud): HTTPS Request (LLM model + tool definitions)
+        AI Model (Cloud)-->>Backend (Rust): LLM Response (Text or Tool Call request)
+        alt Tool Call Requested
+            Backend (Rust)->>Backend (Rust): Execute local system command (e.g. adjust volume, capture screenshot)
+            Backend (Rust)->>AI Model (Cloud): Submit tool output
+            AI Model (Cloud)-->>Backend (Rust): Final text response
+        end
+        Backend (Rust)-->>Frontend (React): Chat assistant response text
+        Frontend (React)->>Frontend (React): Display PTT card & speak response
+    end
+```
+
 ## The Communication Bridge
 Tauri uses an asynchronous Inter-Process Communication (IPC) bridge.
 - **Frontend to Backend:** React calls `invoke('command_name', { payload })`.

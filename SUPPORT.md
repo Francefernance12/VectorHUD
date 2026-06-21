@@ -40,7 +40,9 @@ If you run into issues, need help configuring VectorHUD, or want to report bugs,
 All VectorHUD logs are stored locally to protect user privacy. If you experience an unexpected crash or error:
 1. Open the **Settings Modal** (via Dock or settings hotkey).
 2. Go to the **System Logs** tab to view a rolling monospaced feed of the latest backend trace records.
-3. To view or attach the raw daily log file to bug reports, retrieve it from your system folder:
+3. Click the **"Copy Logs"** button next to "Refresh Logs" to instantly copy the last 200 daily trace and console lines to your clipboard.
+4. Paste the copied log content directly into GitHub issues or support threads.
+5. Alternatively, you can retrieve the raw daily log file from your system folder:
    ```
    C:\Users\<Your_Username>\AppData\Roaming\com.fernando-arias.vectorhud\logs\vectorhud.log
    ```

@@ -11,7 +11,7 @@ export function HotkeyInput({ label, value, onChange }: HotkeyInputProps) {
   const [currentCombo, setCurrentCombo] = useState<string>('');
   const [errorText, setErrorText] = useState<string>('');
 
-  const getModifiers = (e: React.KeyboardEvent | React.MouseEvent) => {
+  const getModifiers = (e: React.KeyboardEvent) => {
     const keys = [];
     if (e.ctrlKey) keys.push('ctrl');
     if (e.altKey) keys.push('alt');
@@ -33,53 +33,71 @@ export function HotkeyInput({ label, value, onChange }: HotkeyInputProps) {
       return;
     }
 
+    const isModifier = ['Control', 'Alt', 'Shift', 'Meta'].includes(e.key);
     const keys = getModifiers(e);
-    const key = e.key.toLowerCase();
-    
-    // Ignore just modifier key presses
-    if (['control', 'alt', 'shift', 'meta'].includes(key)) {
-      setCurrentCombo(keys.join('+') + (keys.length > 0 ? '+' : '') + '...');
+
+    if (isModifier) {
+      const displayParts = keys.map(p => p.toUpperCase());
+      if (displayParts.length > 0) {
+        setCurrentCombo(displayParts.join(' + ') + ' + ');
+      } else {
+        setCurrentCombo('');
+      }
       return;
     }
 
+    const key = e.key.toLowerCase();
     let finalKey = key;
     if (finalKey === ' ') finalKey = 'space';
     
     keys.push(finalKey);
-    setCurrentCombo(keys.join('+'));
+    const combo = keys.join('+');
+
+    const isFKey = /^f\d+$/.test(finalKey);
+    const hasModifier = e.ctrlKey || e.altKey || e.shiftKey || e.metaKey;
+
+    if (hasModifier || isFKey) {
+      onChange(combo);
+      setIsRecording(false);
+      setCurrentCombo('');
+    } else {
+      setErrorText('Keybind requires at least one modifier key (Ctrl, Alt, Shift, Win) or be an F-key.');
+      setCurrentCombo('');
+    }
   };
 
   const handleKeyUp = (e: React.KeyboardEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
-    if (!isRecording || !currentCombo || currentCombo.endsWith('...')) return;
+    if (!isRecording) return;
 
-    const key = e.key.toLowerCase();
-    if (['control', 'alt', 'shift', 'meta'].includes(key)) {
-      return;
-    }
-
-    const keys = currentCombo.split('+');
-    const hasModifier = keys.some(k => ['ctrl', 'alt', 'shift', 'super'].includes(k));
-    
-    if (!hasModifier) {
-      setErrorText('Hotkeys must include a modifier key (Ctrl, Alt, Shift).');
+    const keys = getModifiers(e);
+    const displayParts = keys.map(p => p.toUpperCase());
+    if (displayParts.length > 0) {
+      setCurrentCombo(displayParts.join(' + ') + ' + ');
+    } else {
       setCurrentCombo('');
-      return;
     }
-
-    onChange(currentCombo);
-    setIsRecording(false);
-    setCurrentCombo('');
   };
+
+  const displayVal = value
+    ? value.split('+').map(part => part.toUpperCase()).join(' + ')
+    : 'NONE';
 
   return (
     <div className="space-y-1">
-      <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">{label}</label>
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">{label}</label>
+        {isRecording && (
+          <span className="text-[10px] px-1.5 py-0.5 bg-white/10 text-zinc-300 rounded font-mono font-medium animate-pulse">
+            Current: {displayVal}
+          </span>
+        )}
+      </div>
       <input 
         type="text"
-        value={isRecording ? (currentCombo || 'Listening... (Press Esc to cancel)') : value}
+        value={isRecording ? (currentCombo || 'Press keys... (Esc)') : displayVal}
         onFocus={() => { setIsRecording(true); setCurrentCombo(''); setErrorText(''); }}
         onBlur={() => { setIsRecording(false); setCurrentCombo(''); setErrorText(''); }}
         onKeyDown={handleKeyDown}
