@@ -1,0 +1,11 @@
+{
+  "version": "1.3.2",
+  "notes": "VectorHUD v1.3.2. Session 26 Optimization & Offline Compatibility. Features BLE scanner thread apartment isolation, thread-safe Bluetooth caching and async execution safeguards, demoted high-frequency log spam, and robust offline fallback UX for AI chat and Notion widgets.",
+  "pub_date": "2026-06-22T20:00:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "",
+      "url": "https://github.com/Francefernance12/VectorHUD/releases/download/v1.3.2/vectorhud_1.3.2_x64-setup.exe"
+    }
+  }
+}

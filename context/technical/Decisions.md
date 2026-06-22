@@ -475,4 +475,7 @@ This document tracks all important decisions made throughout the lifecycle of th
   - **Reasoning:** Prevents logging false-alarm network connection timeout errors in the local roll-log database on boot when the device is simply offline.
 - **Decision:** Implement thread-safe caching and serialization locks on Bluetooth scans (caching for 10 seconds), and execute classic Bluetooth PowerShell scans asynchronously using `tokio::process::Command` wrapped in a 10-second `tokio::time::timeout`.
   - **Reasoning:** In Windows, executing shell commands synchronously blocks tokio threads. If the frontend triggers scans repeatedly (e.g. on mount/unmount or during refreshes), it could spawn multiple concurrent PowerShell processes, leading to process duplication, window focus issues (the powershell command windows popping up or duplicating), and CPU/memory overhead. Implementing a 10-second cache and using an async tokio command with a timeout guarantees that only one scan runs at a time and any hanging process is automatically killed without blocking the system or duplicating processes.
+- **Decision:** Bumped version to `1.3.2` to package the BLE threading fixes, COM apartment multithreading isolation, Bluetooth scan caching/async locks, process execution protection timeout safeguards, and frontend offline fallback mode integrations.
+  - **Reasoning:** Prepares the stable codebase for a production release of the optimizations and offline protections, ensuring that all subsequent Tauri build targets bundle the updated configurations.
+
 
