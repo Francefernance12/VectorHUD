@@ -89,6 +89,39 @@ fn classify_device_type(name: &str) -> &'static str {
 /// Scan for BLE peripherals and attempt to read battery levels.
 /// Returns a list of BluetoothDevice for each found peripheral.
 async fn scan_ble_devices() -> Vec<BluetoothDevice> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    std::thread::spawn(move || {
+        use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
+        let _ = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
+
+        let rt = match tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+        {
+            Ok(r) => r,
+            Err(e) => {
+                warn!("Failed to build local tokio runtime: {}", e);
+                let _ = tx.send(Vec::new());
+                return;
+            }
+        };
+
+        rt.block_on(async {
+            let devices = scan_ble_devices_internal().await;
+            let _ = tx.send(devices);
+        });
+    });
+
+    match rx.await {
+        Ok(d) => d,
+        Err(e) => {
+            warn!("Failed to receive BLE scan results from thread: {}", e);
+            Vec::new()
+        }
+    }
+}
+
+async fn scan_ble_devices_internal() -> Vec<BluetoothDevice> {
     let manager = match Manager::new().await {
         Ok(m) => m,
         Err(e) => {
@@ -202,11 +235,32 @@ async fn read_battery_level<P: Peripheral>(peripheral: &P) -> Option<u8> {
 //  Classic Bluetooth & Unified Scanner
 // ─────────────────────────────────────────────────────────────
 
+pub struct BluetoothManagerState {
+    pub last_devices: std::sync::Mutex<Vec<BluetoothDevice>>,
+    pub last_scan: std::sync::Mutex<Option<std::time::Instant>>,
+    pub scan_mutex: tokio::sync::Mutex<()>,
+}
+
+impl BluetoothManagerState {
+    pub fn new() -> Self {
+        Self {
+            last_devices: std::sync::Mutex::new(Vec::new()),
+            last_scan: std::sync::Mutex::new(None),
+            scan_mutex: tokio::sync::Mutex::new(()),
+        }
+    }
+}
+
+impl Default for BluetoothManagerState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Scan for Classic Bluetooth devices using PowerShell to filter out offline paired devices
 async fn scan_classic_bluetooth_devices() -> Vec<BluetoothDevice> {
-    #[cfg(target_os = "windows")]
-    use std::os::windows::process::CommandExt;
-    use std::process::{Command, Stdio};
+    use std::process::Stdio;
+    use tokio::process::Command;
 
     let script = r#"$devices = Get-PnpDevice -Class Bluetooth; $results = @(); foreach ($dev in $devices) { if ($dev.InstanceId -like 'BTHLE\DEV_*' -or $dev.InstanceId -like 'BTHENUM\DEV_*') { $statusVal = ($dev | Get-PnpDeviceProperty -KeyName 'DEVPKEY_Device_DevNodeStatus').Data; if ($statusVal -ne $null -and !($statusVal -band 0x02000000)) { $results += [PSCustomObject]@{ id = $dev.InstanceId; name = $dev.FriendlyName } } } }; if ($results.Count -gt 0) { $results | ConvertTo-Json -Compress } else { '[]' }"#;
 
@@ -218,10 +272,15 @@ async fn scan_classic_bluetooth_devices() -> Vec<BluetoothDevice> {
     #[cfg(target_os = "windows")]
     cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
 
-    let output = match cmd.output() {
-        Ok(out) => out,
-        Err(e) => {
+    let output_future = cmd.output();
+    let output = match tokio::time::timeout(Duration::from_secs(10), output_future).await {
+        Ok(Ok(out)) => out,
+        Ok(Err(e)) => {
             warn!("Failed to execute PowerShell script: {}", e);
+            return Vec::new();
+        }
+        Err(_) => {
+            warn!("PowerShell classic Bluetooth scan timed out after 10s");
             return Vec::new();
         }
     };
@@ -269,8 +328,22 @@ async fn scan_classic_bluetooth_devices() -> Vec<BluetoothDevice> {
         .collect()
 }
 
-/// Scan BLE + Classic and merge them
-async fn scan_all_bluetooth_devices() -> Vec<BluetoothDevice> {
+/// Scan BLE + Classic and merge them, caching the results to prevent duplicate/hanging scans
+async fn scan_all_bluetooth_devices(state: &BluetoothManagerState) -> Vec<BluetoothDevice> {
+    // Prevent overlapping scans using an asynchronous mutex
+    let _lock = state.scan_mutex.lock().await;
+
+    // Return cached results if they are still fresh (under 10 seconds old)
+    {
+        let last_scan_lock = state.last_scan.lock().unwrap();
+        if let Some(instant) = *last_scan_lock {
+            if instant.elapsed() < Duration::from_secs(10) {
+                debug!("Returning cached Bluetooth devices (fresh within 10s)");
+                return state.last_devices.lock().unwrap().clone();
+            }
+        }
+    }
+
     let mut ble_devices = scan_ble_devices().await;
     let classic_devices = scan_classic_bluetooth_devices().await;
 
@@ -289,6 +362,10 @@ async fn scan_all_bluetooth_devices() -> Vec<BluetoothDevice> {
     // Sort so connected devices are at the top
     ble_devices.sort_by_key(|b| std::cmp::Reverse(b.is_connected));
 
+    // Update cache
+    *state.last_devices.lock().unwrap() = ble_devices.clone();
+    *state.last_scan.lock().unwrap() = Some(std::time::Instant::now());
+
     ble_devices
 }
 
@@ -297,12 +374,15 @@ async fn scan_all_bluetooth_devices() -> Vec<BluetoothDevice> {
 // ─────────────────────────────────────────────────────────────
 
 /// Spawn the Bluetooth device watcher. Runs every BT_POLL_INTERVAL_SECS seconds.
-pub fn spawn_bluetooth_watcher(app_handle: AppHandle) {
+pub fn spawn_bluetooth_watcher(
+    app_handle: AppHandle,
+    state: std::sync::Arc<BluetoothManagerState>,
+) {
     tauri::async_runtime::spawn(async move {
         info!("Bluetooth watcher started");
 
         loop {
-            let devices = scan_all_bluetooth_devices().await;
+            let devices = scan_all_bluetooth_devices(&state).await;
 
             if let Err(e) = app_handle.emit("bluetooth-devices-update", &devices) {
                 debug!("Failed to emit bluetooth-devices-update: {}", e);
@@ -319,9 +399,11 @@ pub fn spawn_bluetooth_watcher(app_handle: AppHandle) {
 
 /// Manually trigger a BLE + Classic scan and return results to the caller.
 #[tauri::command]
-pub async fn get_bluetooth_devices() -> Result<Vec<BluetoothDevice>, String> {
+pub async fn get_bluetooth_devices(
+    state: tauri::State<'_, std::sync::Arc<BluetoothManagerState>>,
+) -> Result<Vec<BluetoothDevice>, String> {
     info!("get_bluetooth_devices invoked");
-    let devices = scan_all_bluetooth_devices().await;
+    let devices = scan_all_bluetooth_devices(&state).await;
     Ok(devices)
 }
 

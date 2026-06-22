@@ -460,3 +460,19 @@ This document tracks all important decisions made throughout the lifecycle of th
   - **Reasoning:** Color-coding log severities (Red for errors, Yellow for warnings, Green for successes, Blue/Cyan for telemetry) makes logs easily scannable, and copying the log contents to the clipboard simplifies community support and troubleshooting.
 - **Decision:** Added global shortcut mute slots (`Ctrl+Alt+1` through `Ctrl+Alt+0`) mapping to active audio mixer sessions dynamically.
   - **Reasoning:** Instead of static hardcoded app volume toggles, tracking the sorted volume sessions in real-time allows users to mute and unmute active audio streams using slot numbers shown next to each session.
+
+## Session 26: Optimization & Offline Compatibility
+
+- **Decision:** Demote high-frequency `Gilrs watcher event` logs from `INFO` to `TRACE` and `Gilrs watcher loop alive` checks to `DEBUG`.
+  - **Reasoning:** Analog stick movements poll every 10ms and generated over 200,000 log lines a day (~43MB per day), causing excessive disk writes and diagnostic logs clutter. Demoting them ensures they are ignored under the default `INFO` logging filter, reducing log size to less than 1MB.
+- **Decision:** Isolate the `btleplug` BLE scanner loop into a dedicated MTA OS thread initialized with `COINIT_MULTITHREADED`, communicating results via a `tokio::sync::oneshot` channel.
+  - **Reasoning:** Windows Runtime Bluetooth APIs require COM MTA. Spawning them on worker threads from Tauri's async runtime resulted in thread mode collisions (`0x80010106` "Cannot change thread mode after it is set") because those threads had already been initialized in single-threaded apartment (STA) mode. Spawning a fresh dedicated OS thread avoids COM apartment conflicts and guarantees BLE battery scanning functions correctly.
+- **Decision:** Track network state (`online`/`offline`) dynamically in the frontend and guard all network-dependent commands (OpenRouter AI and Notion Sync) with `navigator.onLine` checks.
+  - **Reasoning:** Disconnecting the internet previously triggered unhandled network promise rejections or Edge WebView2 connection failed error frames. Blocking these actions and displaying clean offline status badges prevents WebView failures.
+- **Decision:** Redesign the Notion widget to automatically disable `INITIATE_SYNC` and transform the `Save Local` button into a full-width `SAVE_LOCAL_ONLY` primary button when offline.
+  - **Reasoning:** Encourages the user to save notes locally without showing frustrating network error prompts, returning to a normal sync flow once connection is restored.
+- **Decision:** Guard the Tauri silent update check `check()` to run only when `navigator.onLine` is true.
+  - **Reasoning:** Prevents logging false-alarm network connection timeout errors in the local roll-log database on boot when the device is simply offline.
+- **Decision:** Implement thread-safe caching and serialization locks on Bluetooth scans (caching for 10 seconds), and execute classic Bluetooth PowerShell scans asynchronously using `tokio::process::Command` wrapped in a 10-second `tokio::time::timeout`.
+  - **Reasoning:** In Windows, executing shell commands synchronously blocks tokio threads. If the frontend triggers scans repeatedly (e.g. on mount/unmount or during refreshes), it could spawn multiple concurrent PowerShell processes, leading to process duplication, window focus issues (the powershell command windows popping up or duplicating), and CPU/memory overhead. Implementing a 10-second cache and using an async tokio command with a timeout guarantees that only one scan runs at a time and any hanging process is automatically killed without blocking the system or duplicating processes.
+

@@ -99,6 +99,27 @@ export function OpenRouterWidget() {
   const [isRecordingMic, setIsRecordingMic] = useState(false);
   const [micSeconds, setMicSeconds] = useState(30);
 
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      showToast("📡 Connection Restored: Online");
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      showToast("📡 Connection Lost: Offline");
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [showToast]);
+
   const stopAndTranscribe = async () => {
     setIsRecordingMic(false);
     showToast("🎙️ Transcribing voice...");
@@ -349,6 +370,10 @@ export function OpenRouterWidget() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!navigator.onLine) {
+      showToast("📡 Connection offline: cannot submit AI chat");
+      return;
+    }
     if (!input.trim() && !draftImagePath) return;
 
     let activeSessionId = currentSessionId;
@@ -720,6 +745,13 @@ export function OpenRouterWidget() {
           <span className="text-xs text-zinc-600 bg-white/5 px-2 py-0.5 rounded-full border border-white/10 uppercase tracking-widest">{getActiveModelName()}</span>
         </div>
 
+        {!isOnline && (
+          <div className="bg-red-950/30 border-b border-red-500/20 px-4 py-2 flex items-center gap-2 text-xs font-mono text-red-400 select-none tracking-widest uppercase animate-pulse shrink-0">
+            <span className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
+            <span>📡 OFFLINE: AI Chat & Voice PTT Unavailable</span>
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-6 custom-scrollbar scroll-smooth w-full">
           {messages.length === 0 && !isTyping && (
             <div className="h-full flex flex-col items-center justify-center text-zinc-500 space-y-3 opacity-50">
@@ -970,14 +1002,14 @@ export function OpenRouterWidget() {
               type="text"
               value={isRecordingMic ? `🎙️ Listening... (${micSeconds}s)` : input}
               onChange={(e) => setInput(e.target.value)}
-              disabled={isRecordingMic}
-              placeholder={isRecordingMic ? `Listening...` : "Enter command..."}
+              disabled={isRecordingMic || !isOnline}
+              placeholder={!isOnline ? "CONNECTION OFFLINE" : isRecordingMic ? `Listening...` : "Enter command..."}
               className="flex-1 bg-zinc-900 border border-zinc-700/50 rounded-sm px-4 py-2.5 text-sm text-zinc-100 outline-none focus:border-accent-amber/50 focus:bg-zinc-800 transition-all placeholder:text-zinc-600 disabled:opacity-75 disabled:text-accent-amber"
             />
             <button
               type="button"
               onClick={handleMicClick}
-              disabled={isTyping}
+              disabled={isTyping || !isOnline}
               className={`px-3 rounded-sm border transition-all flex items-center justify-center ${
                 isRecordingMic
                   ? 'bg-red-500/20 border-red-500/50 text-red-500 animate-pulse'
@@ -989,7 +1021,7 @@ export function OpenRouterWidget() {
             </button>
             <button
               type="submit"
-              disabled={(!input.trim() && !draftImagePath) || isTyping || isRecordingMic}
+              disabled={(!input.trim() && !draftImagePath) || isTyping || isRecordingMic || !isOnline}
               className="px-6 bg-accent-amber/10 border border-accent-amber/30 text-accent-amber rounded-sm py-2 text-xs font-bold uppercase tracking-widest hover:bg-accent-amber hover:text-black transition-all disabled:opacity-30 disabled:cursor-not-allowed"
             >
               Send
@@ -998,7 +1030,7 @@ export function OpenRouterWidget() {
           <button
             type="button"
             onClick={handleAnalyzeScreen}
-            disabled={isTyping}
+            disabled={isTyping || !isOnline}
             className="w-full bg-zinc-900/50 border border-zinc-800 rounded-sm py-2 text-xs font-bold uppercase tracking-widest hover:bg-white/10 hover:border-zinc-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed text-zinc-400 flex items-center justify-center gap-2"
           >
             <Camera size={12} />

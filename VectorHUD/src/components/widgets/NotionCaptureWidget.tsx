@@ -46,11 +46,32 @@ export function NotionCaptureWidget() {
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [togglingTasks, setTogglingTasks] = useState<Record<string, boolean>>({});
 
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      logger.info("📡 Notion Link Restored: Online");
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      logger.info("📡 Notion Link Lost: Offline");
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   useEffect(() => {
     if (activeTab === 'notes') {
       fetchNotes();
     }
-  }, [activeTab]);
+  }, [activeTab, isOnline]);
 
   const getNotionCreds = async () => {
     const fetchPromise = async () => {
@@ -77,6 +98,9 @@ export function NotionCaptureWidget() {
   };
 
   const fetchNotes = async () => {
+    if (!navigator.onLine) {
+      return;
+    }
     setIsLoadingNotes(true);
     setStatusMsg(null);
     try {
@@ -101,6 +125,11 @@ export function NotionCaptureWidget() {
   };
 
   const handleSyncToNotion = async () => {
+    if (!navigator.onLine) {
+      setStatusMsg('SYNC_FAIL: OFFLINE');
+      setTimeout(() => setStatusMsg(null), 3000);
+      return;
+    }
     if (!draft.title.trim() && !draft.description.trim() && !draft.content.trim() && draft.tasks.filter(t => t.trim()).length === 0) return;
     
     setIsSubmitting(true);
@@ -151,6 +180,11 @@ export function NotionCaptureWidget() {
   // Interactive Database Functions
   const handleDeleteNote = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!navigator.onLine) {
+      setStatusMsg('FAIL: OFFLINE');
+      setTimeout(() => setStatusMsg(null), 3000);
+      return;
+    }
     try {
         const creds = await getNotionCreds();
         await invoke('delete_notion_note', { token: creds.token, pageId: id });
@@ -163,6 +197,11 @@ export function NotionCaptureWidget() {
 
   const handleUpdateNote = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!navigator.onLine) {
+      setStatusMsg('FAIL: OFFLINE');
+      setTimeout(() => setStatusMsg(null), 3000);
+      return;
+    }
     if (isSavingEdit) return;
     setIsSavingEdit(true);
     try {
@@ -190,6 +229,11 @@ export function NotionCaptureWidget() {
 
   const handleStatusChange = async (id: string, newStatus: string, e: React.ChangeEvent<HTMLSelectElement>) => {
     e.stopPropagation();
+    if (!navigator.onLine) {
+      setStatusMsg('FAIL: OFFLINE');
+      setTimeout(() => setStatusMsg(null), 3000);
+      return;
+    }
     try {
         const creds = await getNotionCreds();
         await invoke('update_notion_status', { token: creds.token, pageId: id, status: newStatus });
@@ -202,6 +246,11 @@ export function NotionCaptureWidget() {
 
   const handleEditClick = async (note: NotionNote, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!navigator.onLine) {
+      setStatusMsg('FAIL: OFFLINE');
+      setTimeout(() => setStatusMsg(null), 3000);
+      return;
+    }
     setEditTitle(note.title);
     setEditDesc(note.description);
     setEditingNoteId(note.id);
@@ -230,6 +279,9 @@ export function NotionCaptureWidget() {
         return;
     }
     setExpandedNoteId(id);
+    if (!navigator.onLine) {
+      return;
+    }
     if (!noteBlocks[id]) {
         setIsLoadingBlocks(prev => ({ ...prev, [id]: true }));
         try {
@@ -246,6 +298,11 @@ export function NotionCaptureWidget() {
 
   const toggleTaskBlock = async (pageId: string, blockId: string, currentChecked: boolean, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!navigator.onLine) {
+      setStatusMsg('FAIL: OFFLINE');
+      setTimeout(() => setStatusMsg(null), 3000);
+      return;
+    }
     if (togglingTasks[blockId]) return;
     setTogglingTasks(prev => ({ ...prev, [blockId]: true }));
     try {
@@ -297,12 +354,16 @@ export function NotionCaptureWidget() {
         </div>
         
         <div className="flex items-center gap-3">
-           {statusMsg && (
+           {!isOnline ? (
+            <span className="text-[11px] px-2 py-0.5 border font-bold uppercase tracking-widest text-red-400 border-red-500/30 bg-red-500/10 animate-pulse">
+              📡 OFFLINE
+            </span>
+          ) : statusMsg && (
             <span className={`text-[11px] px-2 py-0.5 border font-bold uppercase tracking-widest animate-pulse ${statusMsg.includes('FAIL') || statusMsg.includes('Err') ? 'text-red-400 border-red-500/30 bg-red-500/10' : 'text-accent-green border-accent-green/30 bg-accent-green/10'}`}>
               {statusMsg}
             </span>
           )}
-          {activeTab === 'notes' && (
+          {activeTab === 'notes' && isOnline && (
             <button 
               onClick={fetchNotes}
               className="text-zinc-500 hover:text-accent-green transition-colors p-1.5 rounded hover:bg-white/5 opacity-0 group-hover:opacity-100"
@@ -414,24 +475,40 @@ export function NotionCaptureWidget() {
               <button 
                 type="button" 
                 onClick={handleSyncToNotion}
-                disabled={isSubmitting}
+                disabled={isSubmitting || !isOnline}
                 className="flex-1 py-3 bg-accent-amber/10 border border-accent-amber/30 text-accent-amber rounded-sm hover:bg-accent-amber hover:text-black transition-all disabled:opacity-30 disabled:cursor-not-allowed font-bold tracking-widest text-xs uppercase"
               >
-                {isSubmitting ? 'TRANSMITTING...' : 'INITIATE_SYNC'}
+                {!isOnline ? 'SYNC_OFFLINE' : isSubmitting ? 'TRANSMITTING...' : 'INITIATE_SYNC'}
               </button>
               <button 
                 type="button" 
                 onClick={handleSaveLocal}
-                className="px-4 bg-zinc-900 border border-zinc-700 text-zinc-400 rounded-sm hover:bg-zinc-800 hover:text-zinc-200 transition-all font-bold tracking-widest text-xs uppercase flex items-center justify-center"
-                title="Save to local text file without syncing to Notion"
+                className={`px-4 rounded-sm border transition-all font-bold tracking-widest text-xs uppercase flex items-center justify-center ${
+                  !isOnline 
+                    ? 'flex-1 py-3 bg-accent-green/10 border-accent-green/30 text-accent-green hover:bg-accent-green hover:text-black shadow-[0_0_10px_rgba(74,246,38,0.1)] animate-in fade-in duration-300' 
+                    : 'bg-zinc-900 border-zinc-700 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                }`}
+                title={!isOnline ? "Save note locally (Sync is offline)" : "Save to local text file without syncing to Notion"}
               >
-                <Save size={16} />
+                {!isOnline ? (
+                  <span className="flex items-center gap-1.5"><Save size={14} /> SAVE_LOCAL_ONLY</span>
+                ) : (
+                  <Save size={16} />
+                )}
               </button>
             </div>
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 flex flex-col gap-3">
-            {isLoadingNotes ? (
+            {!isOnline ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 space-y-3 border border-dashed border-zinc-800 m-2 rounded-sm p-4 animate-in fade-in duration-300">
+                <Database size={32} className="text-zinc-700" />
+                <span className="text-xs tracking-widest uppercase font-bold text-red-500/80 animate-pulse">📡 DATABASE_OFFLINE</span>
+                <span className="text-[11px] text-zinc-500 text-center max-w-[220px] font-sans">
+                  The Notion connection is offline. Active notes database and checklist syncing are unavailable.
+                </span>
+              </div>
+            ) : isLoadingNotes ? (
               <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 opacity-50 space-y-3">
                 <Loader2 className="animate-spin" size={24} />
                 <span className="text-xs tracking-widest uppercase font-bold">Querying Database...</span>

@@ -967,11 +967,11 @@ pub fn spawn_gilrs_watcher(app_handle: AppHandle, state: SharedControllerState) 
                     .gamepads()
                     .map(|(_, gp)| gp.name().to_string())
                     .collect();
-                tracing::info!("Gilrs watcher loop alive. Gamepads list: {:?}", gp_names);
+                tracing::debug!("Gilrs watcher loop alive. Gamepads list: {:?}", gp_names);
             }
             while let Some(event) = gilrs.next_event() {
                 let id = event.id;
-                tracing::info!("Gilrs watcher event: id={:?}, event={:?}", id, event.event);
+                tracing::trace!("Gilrs watcher event: id={:?}, event={:?}", id, event.event);
                 match event.event {
                     EventType::Connected => {
                         let mut st = state.lock().unwrap();
