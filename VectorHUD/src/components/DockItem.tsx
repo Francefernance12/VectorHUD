@@ -26,7 +26,7 @@ export function DockItem({ label, Icon, isActive, onClick }: DockItemProps) {
         className={`w-7 h-7 mb-2 transition-colors duration-300 ${isActive ? 'text-accent-green' : 'text-zinc-400 group-hover:text-primary'}`} 
       />
       <span 
-        className={`text-[10px] font-mono tracking-wider transition-colors duration-300 uppercase ${isActive ? 'text-accent-green font-semibold' : 'text-zinc-500 group-hover:text-zinc-300'}`}
+        className={`text-[11px] font-mono tracking-wider transition-colors duration-300 uppercase ${isActive ? 'text-accent-green font-semibold' : 'text-zinc-500 group-hover:text-zinc-300'}`}
       >
         {label}
       </span>
