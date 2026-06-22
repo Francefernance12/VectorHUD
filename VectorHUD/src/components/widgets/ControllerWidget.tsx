@@ -303,7 +303,7 @@ function AnalogStickRadar({ x, y, label }: AnalogStickRadarProps) {
           className="absolute w-2 h-2 rounded-full bg-accent-green shadow-[0_0_12px_rgba(74,246,38,1)] transition-all duration-75 ease-out z-10" 
         />
       </div>
-      <div className="mt-2.5 grid grid-cols-2 gap-x-3 text-[10px] font-mono text-zinc-400 w-full text-center bg-black/20 py-1 rounded border border-zinc-800/30">
+      <div className="mt-2.5 grid grid-cols-2 gap-x-3 text-[11px] font-mono text-zinc-400 w-full text-center bg-black/20 py-1 rounded border border-zinc-800/30">
         <div>X:<span className="text-accent-green font-bold ml-0.5">{x}</span></div>
         <div>Y:<span className="text-accent-green font-bold ml-0.5">{y}</span></div>
       </div>
@@ -349,7 +349,7 @@ interface ButtonBadgeProps {
 function ButtonBadge({ active, label }: ButtonBadgeProps) {
   return (
     <div 
-      className={`py-1.5 px-1 text-center rounded-lg text-[10px] font-mono font-bold transition-all duration-75 uppercase tracking-widest border ${
+      className={`py-1.5 px-1 text-center rounded-lg text-[11px] font-mono font-bold transition-all duration-75 uppercase tracking-widest border ${
         active 
           ? 'bg-accent-green/20 text-accent-green border-accent-green shadow-[0_0_8px_rgba(74,246,38,0.4)]' 
           : 'bg-zinc-950/40 text-zinc-550 border-zinc-800/80 hover:text-zinc-400 hover:border-zinc-700/40'
@@ -628,9 +628,9 @@ export function ControllerWidget() {
                   <DeviceTypeIcon type={device.device_type} />
                   <div className="min-w-0">
                     <p className="text-xs truncate">{device.name}</p>
-                    <p className="text-[10px] text-zinc-600">
+                    <p className="text-[11px] text-zinc-500">
                       {device.connection_mode === 'le' ? 'BLE' : 'Classic BT'} •{' '}
-                      <span className={device.is_connected ? 'text-accent-green' : 'text-zinc-500'}>
+                      <span className={device.is_connected ? 'text-accent-green' : 'text-zinc-550'}>
                         {device.is_connected ? 'Connected' : 'Nearby'}
                       </span>
                     </p>
@@ -650,7 +650,7 @@ export function ControllerWidget() {
                 CONTROLLER TESTER {activeController ? `(${activeController.name})` : ''}
               </span>
               {testState && (
-                <span className="text-[9px] text-accent-green font-mono px-1.5 py-0.5 bg-accent-green/10 rounded border border-accent-green/20 animate-pulse font-bold">
+                <span className="text-[11px] text-accent-green font-mono px-1.5 py-0.5 bg-accent-green/10 rounded border border-accent-green/20 animate-pulse font-bold">
                   CALIBRATION ACTIVE
                 </span>
               )}
@@ -663,9 +663,9 @@ export function ControllerWidget() {
             )}
 
             {/* Controller SVG Visualizer wrapped in a naturally scaling container */}
-            <div className="w-full flex items-center justify-center bg-zinc-950/40 border border-border-wire rounded-lg p-2 relative overflow-hidden select-none">
-              <div className="absolute top-1 left-2 text-[8px] text-zinc-655 font-mono tracking-wider">DIAGNOSTIC.SYS</div>
-              <div className="absolute top-1 right-2 text-[8px] text-zinc-655 font-mono tracking-wider">LIVE_HUD</div>
+            <div className="w-full flex items-center justify-center bg-zinc-950/40 border border-border-wire rounded-lg p-2.5 relative overflow-hidden select-none">
+              <div className="absolute top-1 left-2 text-[11px] text-zinc-600 font-mono tracking-wider">DIAGNOSTIC.SYS</div>
+              <div className="absolute top-1 right-2 text-[11px] text-zinc-600 font-mono tracking-wider">LIVE_HUD</div>
               <ControllerVisualizer testState={testState} />
             </div>
 
@@ -691,7 +691,7 @@ export function ControllerWidget() {
                   <div className="absolute bottom-1.5 left-1.5 w-1.5 h-1.5 border-b border-l border-zinc-700/60" />
                   <div className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 border-b border-r border-zinc-700/60" />
 
-                  <div className="text-[10px] text-zinc-450 font-mono uppercase font-bold tracking-widest">Digital Controls</div>
+                  <div className="text-[11px] text-zinc-450 font-mono uppercase font-bold tracking-widest">Digital Controls</div>
                   <div className="grid grid-cols-4 gap-2">
                     <ButtonBadge active={(testState.buttons & XUSB.A) !== 0} label="A" />
                     <ButtonBadge active={(testState.buttons & XUSB.B) !== 0} label="B" />
@@ -741,7 +741,7 @@ export function ControllerWidget() {
             </div>
 
             {(!controllerStatus?.vigembus_available || !controllerStatus?.hidhide_available) && (
-              <div className="flex items-start gap-2 text-[10px] text-amber-400 border border-amber-900/50 bg-amber-950/20 rounded p-2">
+              <div className="flex items-start gap-2 text-[11px] text-amber-400 border border-amber-900/50 bg-amber-950/20 rounded p-2">
                 <AlertTriangle size={11} className="mt-0.5 shrink-0" />
                 <span>
                   {!controllerStatus?.vigembus_available && 'ViGEmBus driver not found. '}
@@ -768,13 +768,13 @@ export function ControllerWidget() {
               >
                 <div className="min-w-0 flex-1">
                   <p className="text-xs truncate">{ctrl.name}</p>
-                  <p className="text-[10px] text-zinc-600 capitalize">{ctrl.connection_type}</p>
+                  <p className="text-[11px] text-zinc-500 capitalize">{ctrl.connection_type}</p>
                 </div>
 
                 {/* Toggles */}
                 <div className="flex items-center gap-4 shrink-0">
                   {ctrl.is_xbox ? (
-                    <span className="text-[10px] text-accent-green border border-accent-green/30 bg-accent-green/10 px-1.5 py-0.5 rounded font-mono uppercase tracking-wider">
+                    <span className="text-[11px] text-accent-green border border-accent-green/30 bg-accent-green/10 px-1.5 py-0.5 rounded font-mono uppercase tracking-wider">
                       Native Xbox
                     </span>
                   ) : (
@@ -782,7 +782,7 @@ export function ControllerWidget() {
                       {/* Hide Physical toggle */}
                       {controllerStatus?.hidhide_available && (
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] text-zinc-500">Hide Physical</span>
+                          <span className="text-[11px] text-zinc-500">Hide Physical</span>
                           <button
                             id={`ctrl-hide-toggle-${ctrl.id}`}
                             onClick={() =>
@@ -808,7 +808,7 @@ export function ControllerWidget() {
 
                       {/* Emulation toggle */}
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-zinc-500">Xbox Emulation</span>
+                        <span className="text-[11px] text-zinc-500">Xbox Emulation</span>
                         <button
                           id={`ctrl-emulation-toggle-${ctrl.id}`}
                           onClick={() =>
@@ -854,8 +854,8 @@ export function ControllerWidget() {
               </button>
 
               {/* Steam conflict note */}
-              <div className="flex items-start gap-1.5 text-[10px] text-zinc-650">
-                <Info size={10} className="mt-0.5 shrink-0" />
+              <div className="flex items-start gap-1.5 text-[11px] text-zinc-600">
+                <Info size={11} className="mt-0.5 shrink-0" />
                 <span>
                   If double input persists in Steam games, go to Steam → Settings → Controller
                   and disable &quot;PlayStation Configuration Support&quot;.

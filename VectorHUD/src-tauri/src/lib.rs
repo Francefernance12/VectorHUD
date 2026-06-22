@@ -576,7 +576,9 @@ pub fn run() {
             );
 
             // Spawn Bluetooth device watcher (BLE scan + GATT battery)
-            core::bluetooth_manager::spawn_bluetooth_watcher(app.handle().clone());
+            let bluetooth_state = std::sync::Arc::new(core::bluetooth_manager::BluetoothManagerState::new());
+            app.manage(bluetooth_state.clone());
+            core::bluetooth_manager::spawn_bluetooth_watcher(app.handle().clone(), bluetooth_state);
 
             Ok(())
         })

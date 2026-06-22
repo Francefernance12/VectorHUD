@@ -445,14 +445,16 @@ function App() {
         useTimerStore.getState().resetSw();
 
         // Silent Update Check
-        try {
-          const update = await check();
-          if (update?.available) {
-            logger.info(`Update to ${update.version} available!`);
-            useToastStore.getState().showToast(`Update v${update.version} available! Open Settings to install.`);
+        if (navigator.onLine) {
+          try {
+            const update = await check();
+            if (update?.available) {
+              logger.info(`Update to ${update.version} available!`);
+              useToastStore.getState().showToast(`Update v${update.version} available! Open Settings to install.`);
+            }
+          } catch (e) {
+            logger.error(`Silent update check failed: ${e}`);
           }
-        } catch (e) {
-          logger.error(`Silent update check failed: ${e}`);
         }
       } catch (err) {
         logger.error(`Persistence verification failed: ${err}`);

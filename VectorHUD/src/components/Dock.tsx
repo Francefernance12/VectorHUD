@@ -114,7 +114,7 @@ export function Dock() {
                 <Grid size={18} />
                 <span className="text-xs font-bold font-mono tracking-widest uppercase">Widgets</span>
                 {activeWidgetIds.length > 0 && (
-                  <span className="flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-accent-green text-black font-sans font-bold text-[9px] tracking-normal">
+                  <span className="flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-accent-green text-black font-sans font-bold text-[11px] tracking-normal">
                     {activeWidgetIds.length}
                   </span>
                 )}
@@ -178,8 +178,8 @@ export function Dock() {
           >
             {/* Header */}
             <div className="flex justify-between items-center border-b border-white/5 pb-2">
-              <span className="text-[10px] font-bold text-zinc-400 font-mono tracking-widest uppercase">HUD Widget Library</span>
-              <span className="text-[9px] text-zinc-600 font-mono">Select widgets to display</span>
+              <span className="text-[11px] font-bold text-zinc-400 font-mono tracking-widest uppercase">HUD Widget Library</span>
+              <span className="text-[11px] text-zinc-600 font-mono">Select widgets to display</span>
             </div>
 
             {/* List of Widgets */}
@@ -211,7 +211,7 @@ export function Dock() {
                       <div className={`text-xs font-bold uppercase tracking-wider ${isActive ? 'text-accent-green' : ''}`}>
                         {widget.label}
                       </div>
-                      <div className="text-[10px] text-zinc-500 font-sans leading-tight mt-0.5 group-hover:text-zinc-400 transition-colors">
+                      <div className="text-[11px] text-zinc-500 font-sans leading-tight mt-0.5 group-hover:text-zinc-400 transition-colors">
                         {desc}
                       </div>
                     </div>
