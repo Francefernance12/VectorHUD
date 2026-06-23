@@ -43,6 +43,14 @@ interface SettingsState {
   backdropOpacity: number;
   launchOnStartup: boolean;
   dockCollapsed: boolean;
+  aiChatTemperature: number;
+  aiChatMaxTokens: number;
+  aiChatContextSize: number;
+  aiChatTopK: number;
+  aiChatTopP: number;
+  aiChatSystemPrompt: string;
+  aiChatPersonality: string;
+  aiSettingsProfiles: Record<string, any>;
 
   // Visual customizations
   widgetBorderRadius: number;
@@ -63,6 +71,16 @@ interface SettingsState {
   customBorderColor: string;
   customGlowColor: string;
   
+  setAiChatTemperature: (val: number) => Promise<void>;
+  setAiChatMaxTokens: (val: number) => Promise<void>;
+  setAiChatContextSize: (val: number) => Promise<void>;
+  setAiChatTopK: (val: number) => Promise<void>;
+  setAiChatTopP: (val: number) => Promise<void>;
+  setAiChatSystemPrompt: (val: string) => Promise<void>;
+  setAiChatPersonality: (val: string) => Promise<void>;
+  setAiSettingsProfiles: (profiles: Record<string, any>) => Promise<void>;
+
+  loadPreferences: () => Promise<void>;
   toggleSettings: () => void;
   setOpenRouterModel: (model: string) => Promise<void>;
   setOpenaiModel: (model: string) => Promise<void>;
@@ -235,6 +253,14 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   syncGlowWithTheme: true,
   customBorderColor: '#ffffff',
   customGlowColor: '#4af626',
+  aiChatTemperature: 0.7,
+  aiChatMaxTokens: 0,
+  aiChatContextSize: 4096,
+  aiChatTopK: 40,
+  aiChatTopP: 0.9,
+  aiChatSystemPrompt: '',
+  aiChatPersonality: 'default',
+  aiSettingsProfiles: {},
 
   toggleSettings: () => set((state) => ({ isSettingsOpen: !state.isSettingsOpen })),
 
@@ -652,6 +678,62 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     applyThemeColors(useSettingsStore.getState().theme, useSettingsStore.getState().customColor);
   },
 
+  setAiChatTemperature: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('aiChatTemperature', val);
+    await store.save();
+    set({ aiChatTemperature: val });
+  },
+
+  setAiChatMaxTokens: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('aiChatMaxTokens', val);
+    await store.save();
+    set({ aiChatMaxTokens: val });
+  },
+
+  setAiChatContextSize: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('aiChatContextSize', val);
+    await store.save();
+    set({ aiChatContextSize: val });
+  },
+
+  setAiChatTopK: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('aiChatTopK', val);
+    await store.save();
+    set({ aiChatTopK: val });
+  },
+
+  setAiChatTopP: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('aiChatTopP', val);
+    await store.save();
+    set({ aiChatTopP: val });
+  },
+
+  setAiChatSystemPrompt: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('aiChatSystemPrompt', val);
+    await store.save();
+    set({ aiChatSystemPrompt: val });
+  },
+
+  setAiChatPersonality: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('aiChatPersonality', val);
+    await store.save();
+    set({ aiChatPersonality: val });
+  },
+
+  setAiSettingsProfiles: async (profiles) => {
+    const store = await getSettingsStore();
+    await store.set('aiSettingsProfiles', profiles);
+    await store.save();
+    set({ aiSettingsProfiles: profiles });
+  },
+
   loadPreferences: async () => {
     const store = await getSettingsStore();
     const model = await store.get<string>('openRouterModel');
@@ -710,6 +792,15 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const syncGlow = await store.get<boolean>('syncGlowWithTheme');
     const customBorder = await store.get<string>('customBorderColor');
     const customGlow = await store.get<string>('customGlowColor');
+
+    const chatTemp = await store.get<number>('aiChatTemperature');
+    const chatMaxTok = await store.get<number>('aiChatMaxTokens');
+    const chatContextSize = await store.get<number>('aiChatContextSize');
+    const chatTopK = await store.get<number>('aiChatTopK');
+    const chatTopP = await store.get<number>('aiChatTopP');
+    const chatSysPrompt = await store.get<string>('aiChatSystemPrompt');
+    const chatPersonality = await store.get<string>('aiChatPersonality');
+    const chatProfiles = await store.get<Record<string, any>>('aiSettingsProfiles');
 
     const finalTheme = theme || 'default';
     const finalColor = customColor || '#FF0000';
@@ -778,6 +869,14 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       syncGlowWithTheme: syncGlow !== undefined ? syncGlow : (syncBorderGlow !== undefined ? syncBorderGlow : true),
       customBorderColor: customBorder || '#ffffff',
       customGlowColor: customGlow || '#4af626',
+      aiChatTemperature: chatTemp !== undefined ? chatTemp : 0.7,
+      aiChatMaxTokens: chatMaxTok !== undefined ? chatMaxTok : 0,
+      aiChatContextSize: chatContextSize !== undefined ? chatContextSize : 4096,
+      aiChatTopK: chatTopK !== undefined ? chatTopK : 40,
+      aiChatTopP: chatTopP !== undefined ? chatTopP : 0.9,
+      aiChatSystemPrompt: chatSysPrompt !== undefined ? chatSysPrompt : '',
+      aiChatPersonality: chatPersonality !== undefined ? chatPersonality : 'default',
+      aiSettingsProfiles: chatProfiles || {},
     });
 
     applyThemeColors(finalTheme, finalColor);

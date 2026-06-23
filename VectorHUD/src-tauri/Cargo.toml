@@ -55,6 +55,7 @@ flume = "0.12.0"
 time = "=0.3.36"
 alloc-stdlib = "=0.2.2"
 brotli-decompressor = "=5.0.1"
+pdf-extract = "0.10.0"
 
 # Controller & Bluetooth Widget (Session 24)
 vigem-client = "0.1.4"

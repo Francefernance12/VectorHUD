@@ -824,6 +824,7 @@ fn map_messages_to_anthropic(messages: &Vec<serde_json::Value>) -> Vec<serde_jso
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn call_ai_api(
     provider: String,
     model: String,
@@ -831,6 +832,10 @@ pub async fn call_ai_api(
     system_prompt: String,
     api_key: String,
     tools: Option<serde_json::Value>,
+    temperature: Option<f64>,
+    max_tokens: Option<u32>,
+    top_p: Option<f64>,
+    top_k: Option<u32>,
 ) -> Result<UnifiedLlmResponse, String> {
     tracing::info!("call_ai_api: provider='{}', model='{}'", provider, model);
 
@@ -864,10 +869,24 @@ pub async fn call_ai_api(
                 "messages": body_messages
             });
 
-            if let Some(t) = &tools {
-                if let Some(body_obj) = body.as_object_mut() {
+            if let Some(body_obj) = body.as_object_mut() {
+                if let Some(t) = &tools {
                     body_obj.insert("tools".to_string(), t.clone());
                     body_obj.insert("tool_choice".to_string(), serde_json::json!("auto"));
+                }
+                if let Some(temp) = temperature {
+                    body_obj.insert("temperature".to_string(), serde_json::json!(temp));
+                }
+                if let Some(tokens) = max_tokens {
+                    if tokens > 0 {
+                        body_obj.insert("max_tokens".to_string(), serde_json::json!(tokens));
+                    }
+                }
+                if let Some(p) = top_p {
+                    body_obj.insert("top_p".to_string(), serde_json::json!(p));
+                }
+                if let Some(k) = top_k {
+                    body_obj.insert("top_k".to_string(), serde_json::json!(k));
                 }
             }
 
@@ -934,16 +953,30 @@ pub async fn call_ai_api(
         }
         "anthropic" => {
             let mapped_messages = map_messages_to_anthropic(&messages);
+            let final_max_tokens = match max_tokens {
+                Some(tokens) if tokens > 0 => tokens,
+                _ => 4096, // default for Anthropic since it's required
+            };
+
             let mut body = serde_json::json!({
                 "model": model,
                 "system": system_prompt,
                 "messages": mapped_messages,
-                "max_tokens": 4096
+                "max_tokens": final_max_tokens
             });
 
-            if let Some(t) = &tools {
-                if let Some(body_obj) = body.as_object_mut() {
+            if let Some(body_obj) = body.as_object_mut() {
+                if let Some(t) = &tools {
                     body_obj.insert("tools".to_string(), t.clone());
+                }
+                if let Some(temp) = temperature {
+                    body_obj.insert("temperature".to_string(), serde_json::json!(temp));
+                }
+                if let Some(p) = top_p {
+                    body_obj.insert("top_p".to_string(), serde_json::json!(p));
+                }
+                if let Some(k) = top_k {
+                    body_obj.insert("top_k".to_string(), serde_json::json!(k));
                 }
             }
 
@@ -1142,4 +1175,66 @@ pub async fn transcribe_audio_api(
         .to_string();
 
     Ok(text)
+}
+
+#[tauri::command]
+pub async fn read_attached_file(path: String) -> Result<String, String> {
+    let path_buf = std::path::PathBuf::from(&path);
+    if !path_buf.exists() {
+        return Err(format!("File does not exist: {}", path));
+    }
+
+    let extension = path_buf
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    if extension == "pdf" {
+        let bytes =
+            std::fs::read(&path_buf).map_err(|e| format!("Failed to read PDF file: {}", e))?;
+
+        let text = tokio::task::spawn_blocking(move || pdf_extract::extract_text_from_mem(&bytes))
+            .await
+            .map_err(|e| format!("Join error during PDF extraction: {}", e))?
+            .map_err(|e| format!("Failed to extract text from PDF: {}", e))?;
+
+        Ok(text)
+    } else {
+        let text = std::fs::read_to_string(&path_buf)
+            .map_err(|e| format!("Failed to read file as UTF-8 string: {}", e))?;
+        Ok(text)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    #[tokio::test]
+    async fn test_read_attached_file_text() {
+        let temp_dir = std::env::temp_dir();
+        let file_path = temp_dir.join("vectorhud_test_attached.txt");
+
+        let mut file = std::fs::File::create(&file_path).unwrap();
+        writeln!(file, "Hello from VectorHUD file attachment test!").unwrap();
+
+        let path_str = file_path.to_string_lossy().to_string();
+        let result = read_attached_file(path_str).await;
+
+        assert!(result.is_ok());
+        assert!(result
+            .unwrap()
+            .contains("Hello from VectorHUD file attachment test!"));
+
+        let _ = std::fs::remove_file(file_path);
+    }
+
+    #[tokio::test]
+    async fn test_read_attached_file_nonexistent() {
+        let result = read_attached_file("nonexistent_file_path_12345.xyz".to_string()).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("File does not exist"));
+    }
 }

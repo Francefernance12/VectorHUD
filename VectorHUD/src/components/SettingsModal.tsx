@@ -121,7 +121,23 @@ export function SettingsModal() {
     customBorderColor,
     setCustomBorderColor,
     customGlowColor,
-    setCustomGlowColor
+    setCustomGlowColor,
+    aiChatTemperature,
+    setAiChatTemperature,
+    aiChatMaxTokens,
+    setAiChatMaxTokens,
+    aiChatContextSize,
+    setAiChatContextSize,
+    aiChatTopK,
+    setAiChatTopK,
+    aiChatTopP,
+    setAiChatTopP,
+    aiChatSystemPrompt,
+    setAiChatSystemPrompt,
+    aiChatPersonality,
+    setAiChatPersonality,
+    aiSettingsProfiles,
+    setAiSettingsProfiles
   } = useSettingsStore(
     useShallow((state) => ({
       isSettingsOpen: state.isSettingsOpen,
@@ -228,6 +244,22 @@ export function SettingsModal() {
       setCustomBorderColor: state.setCustomBorderColor,
       customGlowColor: state.customGlowColor,
       setCustomGlowColor: state.setCustomGlowColor,
+      aiChatTemperature: state.aiChatTemperature,
+      setAiChatTemperature: state.setAiChatTemperature,
+      aiChatMaxTokens: state.aiChatMaxTokens,
+      setAiChatMaxTokens: state.setAiChatMaxTokens,
+      aiChatContextSize: state.aiChatContextSize,
+      setAiChatContextSize: state.setAiChatContextSize,
+      aiChatTopK: state.aiChatTopK,
+      setAiChatTopK: state.setAiChatTopK,
+      aiChatTopP: state.aiChatTopP,
+      setAiChatTopP: state.setAiChatTopP,
+      aiChatSystemPrompt: state.aiChatSystemPrompt,
+      setAiChatSystemPrompt: state.setAiChatSystemPrompt,
+      aiChatPersonality: state.aiChatPersonality,
+      setAiChatPersonality: state.setAiChatPersonality,
+      aiSettingsProfiles: state.aiSettingsProfiles,
+      setAiSettingsProfiles: state.setAiSettingsProfiles,
     }))
   );
 
@@ -321,7 +353,15 @@ export function SettingsModal() {
     syncBorderWithTheme,
     syncGlowWithTheme,
     customBorderColor,
-    customGlowColor
+    customGlowColor,
+    aiChatTemperature,
+    aiChatMaxTokens,
+    aiChatContextSize,
+    aiChatTopK,
+    aiChatTopP,
+    aiChatSystemPrompt,
+    aiChatPersonality,
+    aiSettingsProfiles
   });
 
   // Diagnostics logs state
@@ -398,7 +438,15 @@ export function SettingsModal() {
       syncBorderWithTheme,
       syncGlowWithTheme,
       customBorderColor,
-      customGlowColor
+      customGlowColor,
+      aiChatTemperature,
+      aiChatMaxTokens,
+      aiChatContextSize,
+      aiChatTopK,
+      aiChatTopP,
+      aiChatSystemPrompt,
+      aiChatPersonality,
+      aiSettingsProfiles
     });
 
     async function loadAudioDevices() {
@@ -859,6 +907,14 @@ export function SettingsModal() {
       await setSyncGlowWithTheme(localPreferences.syncGlowWithTheme);
       await setCustomBorderColor(localPreferences.customBorderColor);
       await setCustomGlowColor(localPreferences.customGlowColor);
+      await setAiChatTemperature(localPreferences.aiChatTemperature);
+      await setAiChatMaxTokens(localPreferences.aiChatMaxTokens);
+      await setAiChatContextSize(localPreferences.aiChatContextSize);
+      await setAiChatTopK(localPreferences.aiChatTopK);
+      await setAiChatTopP(localPreferences.aiChatTopP);
+      await setAiChatSystemPrompt(localPreferences.aiChatSystemPrompt);
+      await setAiChatPersonality(localPreferences.aiChatPersonality);
+      await setAiSettingsProfiles(localPreferences.aiSettingsProfiles);
 
       // Save keybind configurations
       try {
@@ -960,7 +1016,15 @@ export function SettingsModal() {
       localPreferences.syncBorderWithTheme !== syncBorderWithTheme ||
       localPreferences.syncGlowWithTheme !== syncGlowWithTheme ||
       localPreferences.customBorderColor !== customBorderColor ||
-      localPreferences.customGlowColor !== customGlowColor
+      localPreferences.customGlowColor !== customGlowColor ||
+      localPreferences.aiChatTemperature !== aiChatTemperature ||
+      localPreferences.aiChatMaxTokens !== aiChatMaxTokens ||
+      localPreferences.aiChatContextSize !== aiChatContextSize ||
+      localPreferences.aiChatTopK !== aiChatTopK ||
+      localPreferences.aiChatTopP !== aiChatTopP ||
+      localPreferences.aiChatSystemPrompt !== aiChatSystemPrompt ||
+      localPreferences.aiChatPersonality !== aiChatPersonality ||
+      JSON.stringify(localPreferences.aiSettingsProfiles) !== JSON.stringify(aiSettingsProfiles)
     );
   };
 
@@ -1035,7 +1099,15 @@ export function SettingsModal() {
       syncBorderWithTheme,
       syncGlowWithTheme,
       customBorderColor,
-      customGlowColor
+      customGlowColor,
+      aiChatTemperature,
+      aiChatMaxTokens,
+      aiChatContextSize,
+      aiChatTopK,
+      aiChatTopP,
+      aiChatSystemPrompt,
+      aiChatPersonality,
+      aiSettingsProfiles
     });
     
     // Restore CSS variables from saved settings
@@ -1100,7 +1172,15 @@ export function SettingsModal() {
       syncBorderWithTheme: true,
       syncGlowWithTheme: true,
       customBorderColor: '#ffffff',
-      customGlowColor: '#4af626'
+      customGlowColor: '#4af626',
+      aiChatTemperature: 0.7,
+      aiChatMaxTokens: 0,
+      aiChatContextSize: 4096,
+      aiChatTopK: 40,
+      aiChatTopP: 0.9,
+      aiChatSystemPrompt: '',
+      aiChatPersonality: 'default',
+      aiSettingsProfiles: {}
     });
 
     setShowConfirmReset(false);
@@ -1261,14 +1341,16 @@ export function SettingsModal() {
                   <select
                     value={localPreferences.openRouterModel}
                     onChange={(e) => setLocalPreferences(s => ({ ...s, openRouterModel: e.target.value }))}
-                    className="w-full bg-zinc-800 border border-zinc-600 rounded-lg px-4 py-2 text-sm text-zinc-100"
+                    className="w-full bg-zinc-800 border border-zinc-650 rounded-lg px-4 py-2 text-sm text-zinc-105"
                   >
-                    <option value="google/gemini-2.5-flash">Gemini 2.5 Flash [Vision]</option>
-                    <option value="google/gemini-2.5-pro">Gemini 2.5 Pro [Vision]</option>
-                    <option value="openai/gpt-4o-mini">GPT-4o Mini [Vision]</option>
-                    <option value="openai/gpt-4o">GPT-4o [Vision]</option>
-                    <option value="anthropic/claude-sonnet-4.6">Claude 3.5 Sonnet [Vision]</option>
-                    <option value="meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B</option>
+                    <option value="google/gemini-2.5-flash">Gemini 2.5 Flash [Vision] [Actions] [File Attachment] [Web Search]</option>
+                    <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet [Vision] [Actions] [File Attachment]</option>
+                    <option value="openai/gpt-4o">OpenAI GPT-4o [Vision] [Actions] [File Attachment]</option>
+                    <option value="deepseek/deepseek-chat">DeepSeek V3 [Actions]</option>
+                    <option value="deepseek/deepseek-r1">DeepSeek R1 [Thinking]</option>
+                    <option value="deepseek/deepseek-v4-flash">DeepSeek v4-Flash [Vision] [File Attachment]</option>
+                    <option value="moonshotai/kimi-k2-thinking">Kimi K2 Thinking [Thinking]</option>
+                    <option value="x-ai/grok-4.3">Grok 4 [Vision] [Actions] [File Attachment]</option>
                   </select>
                 )}
               </div>
@@ -1693,6 +1775,20 @@ export function SettingsModal() {
 
                 <button
                   disabled={!!searchQuery}
+                  onClick={() => setActiveTab('ai_chat')}
+                  className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold tracking-wider uppercase transition-all border ${
+                    searchQuery 
+                      ? 'opacity-40 border-transparent text-zinc-600'
+                      : activeTab === 'ai_chat' 
+                        ? 'bg-primary/15 border-primary/35 text-primary shadow-[inset_0_0_10px_rgba(var(--accent-green-rgb,74,246,38),0.08)]' 
+                        : 'border-transparent text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
+                  }`}
+                >
+                  <Zap size={14} /> AI Chat Config
+                </button>
+
+                <button
+                  disabled={!!searchQuery}
                   onClick={() => setActiveTab('widgets')}
                   className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold tracking-wider uppercase transition-all border ${
                     searchQuery 
@@ -1902,15 +1998,16 @@ export function SettingsModal() {
                                 <select
                                   value={localPreferences.openRouterModel}
                                   onChange={(e) => setLocalPreferences(s => ({ ...s, openRouterModel: e.target.value }))}
-                                  className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2 text-xs text-zinc-200 focus:outline-none focus:border-primary appearance-none cursor-pointer"
+                                  className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2 text-xs text-zinc-200 focus:outline-none focus:border-primary appearance-none cursor-pointer font-mono"
                                 >
-                                  <option value="google/gemini-2.5-flash">Gemini 2.5 Flash [Vision/Actions] (Recommended)</option>
-                                  <option value="google/gemini-2.5-pro">Gemini 2.5 Pro [Vision/Actions]</option>
-                                  <option value="openai/gpt-4o-mini">GPT-4o Mini [Vision/Actions]</option>
-                                  <option value="openai/gpt-4o">GPT-4o [Vision/Actions]</option>
-                                  <option value="anthropic/claude-sonnet-4.6">Claude 3.5 Sonnet v2 [Vision/Actions]</option>
-                                  <option value="meta-llama/llama-3.3-70b-instruct:free">Llama 3.3 70B Instruct [Text-Only/Actions] (Free)</option>
-                                  <option value="meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B Instruct [Text-Only/Actions]</option>
+                                  <option value="google/gemini-2.5-flash">Gemini 2.5 Flash [Vision] [Actions] [File Attachment] [Web Search]</option>
+                                  <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet [Vision] [Actions] [File Attachment]</option>
+                                  <option value="openai/gpt-4o">OpenAI GPT-4o [Vision] [Actions] [File Attachment]</option>
+                                  <option value="deepseek/deepseek-chat">DeepSeek V3 [Actions]</option>
+                                  <option value="deepseek/deepseek-r1">DeepSeek R1 [Thinking]</option>
+                                  <option value="deepseek/deepseek-v4-flash">DeepSeek v4-Flash [Vision] [File Attachment]</option>
+                                  <option value="moonshotai/kimi-k2-thinking">Kimi K2 Thinking [Thinking]</option>
+                                  <option value="x-ai/grok-4.3">Grok 4 [Vision] [Actions] [File Attachment]</option>
                                 </select>
                               </div>
                             )}
@@ -2042,6 +2139,247 @@ export function SettingsModal() {
                             3. Copy the database link and paste it above; VectorHUD will isolate the 32-character ID.
                           </p>
                         </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* AI Chat tab - detailed settings for default chat parameters */}
+                  {activeTab === 'ai_chat' && (
+                    <div className="space-y-6">
+                      <div className="space-y-4 bg-zinc-950/40 p-5 rounded-xl border border-white/5 animate-fadeIn">
+                        <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-2 border-b border-white/10 pb-2 font-mono">
+                          <Zap size={14} className="text-accent-green animate-pulse" /> Master AI Chat Defaults
+                        </h3>
+                        <p className="text-xs text-zinc-400 leading-relaxed font-sans">
+                          Configure default parameters for the AI chat widget. These settings are copied to new chat sessions, but can be overridden on a per-session basis.
+                        </p>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                          {/* Temperature */}
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-zinc-300 font-medium font-mono">Temperature</span>
+                              <span className="text-primary font-mono font-bold">{localPreferences.aiChatTemperature.toFixed(1)}</span>
+                            </div>
+                            <input 
+                              type="range" min="0" max="2" step="0.1"
+                              value={localPreferences.aiChatTemperature}
+                              onChange={(e) => setLocalPreferences(s => ({ ...s, aiChatTemperature: parseFloat(e.target.value) }))}
+                              className="w-full accent-primary cursor-pointer"
+                            />
+                            <p className="text-[10px] text-zinc-500">Higher values produce more creative responses, lower values make responses more factual.</p>
+                          </div>
+
+                          {/* Max Tokens */}
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-zinc-300 font-medium font-mono">Max Output Tokens</span>
+                              <span className="text-primary font-mono font-bold">
+                                {localPreferences.aiChatMaxTokens === 0 ? "Limitless (Model Default)" : localPreferences.aiChatMaxTokens}
+                              </span>
+                            </div>
+                            <input 
+                              type="range" min="0" max="8192" step="128"
+                              value={localPreferences.aiChatMaxTokens}
+                              onChange={(e) => setLocalPreferences(s => ({ ...s, aiChatMaxTokens: parseInt(e.target.value) }))}
+                              className="w-full accent-primary cursor-pointer"
+                            />
+                            <p className="text-[10px] text-zinc-500">Maximum token count the model will generate. Set to 0 to use model defaults.</p>
+                          </div>
+
+                          {/* Context Size */}
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-zinc-300 font-medium font-mono">Context Size Budget</span>
+                              <span className="text-primary font-mono font-bold">{localPreferences.aiChatContextSize} tokens</span>
+                            </div>
+                            <input 
+                              type="range" min="1024" max="128000" step="1024"
+                              value={localPreferences.aiChatContextSize}
+                              onChange={(e) => setLocalPreferences(s => ({ ...s, aiChatContextSize: parseInt(e.target.value) }))}
+                              className="w-full accent-primary cursor-pointer"
+                            />
+                            <p className="text-[10px] text-zinc-500">Maximum window of conversation history and attachment data to feed the model.</p>
+                          </div>
+
+                          {/* Personality Selection */}
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider font-mono">AI Response Personality</label>
+                            <select
+                              value={localPreferences.aiChatPersonality}
+                              onChange={(e) => setLocalPreferences(s => ({ ...s, aiChatPersonality: e.target.value }))}
+                              className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2 text-xs text-zinc-205 focus:outline-none appearance-none cursor-pointer font-mono"
+                            >
+                              <option value="default">Default Neutral</option>
+                              <option value="tactical">Tactical Officer (Direct & Mission-Oriented)</option>
+                              <option value="copilot">Gritty Copilot (Brutally Honest & Supportive)</option>
+                              <option value="operator">Sarcastic Operator (Witty & Cynical)</option>
+                              <option value="scientific">Dry Scientific Advisor (Technical & Formal)</option>
+                            </select>
+                            <p className="text-[10px] text-zinc-500 font-sans">Select a pre-baked personality prefix to alter the tone of the AI responses.</p>
+                          </div>
+
+                          {/* Top-P */}
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-zinc-300 font-medium font-mono">Top-P (Nucleus)</span>
+                              <span className="text-primary font-mono font-bold">{localPreferences.aiChatTopP.toFixed(2)}</span>
+                            </div>
+                            <input 
+                              type="range" min="0" max="1" step="0.05"
+                              value={localPreferences.aiChatTopP}
+                              onChange={(e) => setLocalPreferences(s => ({ ...s, aiChatTopP: parseFloat(e.target.value) }))}
+                              className="w-full accent-primary cursor-pointer"
+                            />
+                          </div>
+
+                          {/* Top-K */}
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-zinc-300 font-medium font-mono">Top-K</span>
+                              <span className="text-primary font-mono font-bold">{localPreferences.aiChatTopK}</span>
+                            </div>
+                            <input 
+                              type="range" min="1" max="100" step="1"
+                              value={localPreferences.aiChatTopK}
+                              onChange={(e) => setLocalPreferences(s => ({ ...s, aiChatTopK: parseInt(e.target.value) }))}
+                              className="w-full accent-primary cursor-pointer"
+                            />
+                          </div>
+                        </div>
+
+                        {/* System Prompt TextArea */}
+                        <div className="space-y-1.5 pt-2">
+                          <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider font-mono">Master Default System Prompt</label>
+                          <textarea 
+                            value={localPreferences.aiChatSystemPrompt}
+                            onChange={(e) => setLocalPreferences(s => ({ ...s, aiChatSystemPrompt: e.target.value }))}
+                            placeholder="Instruct the AI how to behave (e.g., 'You are a gaming strategist...')"
+                            rows={3}
+                            className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-primary resize-none"
+                          />
+                          <p className="text-[10px] text-zinc-500 leading-normal">
+                            This prompt acts as the baseline for new chat sessions. You can also override this on individual sessions via the widget drawer.
+                          </p>
+                        </div>
+
+                        <div className="flex justify-end pt-2 border-t border-white/5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLocalPreferences(s => ({
+                                ...s,
+                                aiChatTemperature: 0.7,
+                                aiChatMaxTokens: 0,
+                                aiChatContextSize: 4096,
+                                aiChatTopK: 40,
+                                aiChatTopP: 0.9,
+                                aiChatSystemPrompt: '',
+                                aiChatPersonality: 'default'
+                              }));
+                            }}
+                            className="flex items-center gap-1 px-3 py-1.5 rounded bg-zinc-900 border border-white/10 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors text-xs font-mono font-bold cursor-pointer"
+                          >
+                            <RotateCcw size={12} /> Reset Master Defaults
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Custom Configuration Profiles Manager */}
+                      <div className="space-y-4 bg-zinc-950/40 p-5 rounded-xl border border-white/5">
+                        <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-2 border-b border-white/10 pb-2 font-mono">
+                          <Save size={14} className="text-accent-amber" /> Saved Custom Profiles
+                        </h3>
+                        <p className="text-xs text-zinc-400 leading-relaxed font-sans">
+                          Save your current parameters as a named configuration profile to easily swap settings later.
+                        </p>
+                        
+                        <div className="flex gap-2">
+                          <input 
+                            type="text"
+                            placeholder="Profile Name (e.g. Creative Writing, Deep Coding)..."
+                            id="new-profile-name"
+                            className="flex-1 bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-primary font-mono"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const inputEl = document.getElementById('new-profile-name') as HTMLInputElement;
+                              if (!inputEl || !inputEl.value.trim()) {
+                                showToast("⚠️ Profile name cannot be empty");
+                                return;
+                              }
+                              const name = inputEl.value.trim();
+                              const currentProfile = {
+                                aiChatTemperature: localPreferences.aiChatTemperature,
+                                aiChatMaxTokens: localPreferences.aiChatMaxTokens,
+                                aiChatContextSize: localPreferences.aiChatContextSize,
+                                aiChatTopK: localPreferences.aiChatTopK,
+                                aiChatTopP: localPreferences.aiChatTopP,
+                                aiChatSystemPrompt: localPreferences.aiChatSystemPrompt,
+                                aiChatPersonality: localPreferences.aiChatPersonality,
+                              };
+                              const updatedProfiles = {
+                                ...localPreferences.aiSettingsProfiles,
+                                [name]: currentProfile
+                              };
+                              setLocalPreferences(s => ({ ...s, aiSettingsProfiles: updatedProfiles }));
+                              inputEl.value = '';
+                              showToast(`💾 Profile "${name}" created`);
+                            }}
+                            className="bg-accent-amber/15 border border-accent-amber/35 text-accent-amber px-4 py-1.5 rounded text-xs font-mono font-bold hover:bg-accent-amber hover:text-black transition-colors cursor-pointer"
+                          >
+                            Save Current
+                          </button>
+                        </div>
+
+                        {Object.keys(localPreferences.aiSettingsProfiles).length > 0 ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-2">
+                            {Object.entries(localPreferences.aiSettingsProfiles).map(([name, prof]: [string, any]) => (
+                              <div key={name} className="flex justify-between items-center bg-black/30 border border-white/5 p-3 rounded-lg text-xs font-mono">
+                                <div className="overflow-hidden">
+                                  <span className="font-bold text-zinc-200 block truncate">{name}</span>
+                                  <span className="text-[10px] text-zinc-500 font-sans">T={prof.aiChatTemperature} | MaxT={prof.aiChatMaxTokens === 0 ? "0" : prof.aiChatMaxTokens} | P={prof.aiChatPersonality}</span>
+                                </div>
+                                <div className="flex gap-2 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setLocalPreferences(s => ({
+                                        ...s,
+                                        aiChatTemperature: prof.aiChatTemperature,
+                                        aiChatMaxTokens: prof.aiChatMaxTokens,
+                                        aiChatContextSize: prof.aiChatContextSize || 4096,
+                                        aiChatTopK: prof.aiChatTopK || 40,
+                                        aiChatTopP: prof.aiChatTopP || 0.9,
+                                        aiChatSystemPrompt: prof.aiChatSystemPrompt || '',
+                                        aiChatPersonality: prof.aiChatPersonality || 'default'
+                                      }));
+                                      showToast(`📂 Profile "${name}" loaded`);
+                                    }}
+                                    className="px-2.5 py-1 bg-zinc-800 text-zinc-200 rounded hover:bg-zinc-700 hover:text-white transition-colors cursor-pointer"
+                                  >
+                                    Load
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const updated = { ...localPreferences.aiSettingsProfiles };
+                                      delete updated[name];
+                                      setLocalPreferences(s => ({ ...s, aiSettingsProfiles: updated }));
+                                      showToast(`🗑️ Profile "${name}" deleted`);
+                                    }}
+                                    className="p-1 hover:bg-red-500/10 text-zinc-500 hover:text-red-400 rounded transition-colors cursor-pointer flex items-center justify-center"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-center italic text-xs text-zinc-500 py-4 font-mono">No custom profiles saved yet</div>
+                        )}
                       </div>
                     </div>
                   )}
