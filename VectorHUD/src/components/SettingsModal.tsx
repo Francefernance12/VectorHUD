@@ -1343,14 +1343,14 @@ export function SettingsModal() {
                     onChange={(e) => setLocalPreferences(s => ({ ...s, openRouterModel: e.target.value }))}
                     className="w-full bg-zinc-800 border border-zinc-650 rounded-lg px-4 py-2 text-sm text-zinc-105"
                   >
-                    <option value="google/gemini-2.5-flash">Gemini 2.5 Flash [Vision] [Actions] [File Attachment] [Web Search]</option>
-                    <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet [Vision] [Actions] [File Attachment]</option>
-                    <option value="openai/gpt-4o">OpenAI GPT-4o [Vision] [Actions] [File Attachment]</option>
+                    <option value="google/gemini-2.5-flash">Gemini 2.5 Flash [Vision] [Actions] [File Attachments] [Web Search]</option>
+                    <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet [Vision] [Actions] [File Attachments] [MCP]</option>
+                    <option value="openai/gpt-4o">OpenAI GPT-4o [Vision] [Actions] [File Attachments]</option>
                     <option value="deepseek/deepseek-chat">DeepSeek V3 [Actions]</option>
                     <option value="deepseek/deepseek-r1">DeepSeek R1 [Thinking]</option>
-                    <option value="deepseek/deepseek-v4-flash">DeepSeek v4-Flash [Vision] [File Attachment]</option>
+                    <option value="deepseek/deepseek-v4-flash">DeepSeek v4-Flash [Vision] [File Attachments]</option>
                     <option value="moonshotai/kimi-k2-thinking">Kimi K2 Thinking [Thinking]</option>
-                    <option value="x-ai/grok-4.3">Grok 4 [Vision] [Actions] [File Attachment]</option>
+                    <option value="x-ai/grok-4.3">Grok 4 [Vision] [Actions] [File Attachments]</option>
                   </select>
                 )}
               </div>
@@ -2000,14 +2000,14 @@ export function SettingsModal() {
                                   onChange={(e) => setLocalPreferences(s => ({ ...s, openRouterModel: e.target.value }))}
                                   className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2 text-xs text-zinc-200 focus:outline-none focus:border-primary appearance-none cursor-pointer font-mono"
                                 >
-                                  <option value="google/gemini-2.5-flash">Gemini 2.5 Flash [Vision] [Actions] [File Attachment] [Web Search]</option>
-                                  <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet [Vision] [Actions] [File Attachment]</option>
-                                  <option value="openai/gpt-4o">OpenAI GPT-4o [Vision] [Actions] [File Attachment]</option>
+                                  <option value="google/gemini-2.5-flash">Gemini 2.5 Flash [Vision] [Actions] [File Attachments] [Web Search]</option>
+                                  <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet [Vision] [Actions] [File Attachments] [MCP]</option>
+                                  <option value="openai/gpt-4o">OpenAI GPT-4o [Vision] [Actions] [File Attachments]</option>
                                   <option value="deepseek/deepseek-chat">DeepSeek V3 [Actions]</option>
                                   <option value="deepseek/deepseek-r1">DeepSeek R1 [Thinking]</option>
-                                  <option value="deepseek/deepseek-v4-flash">DeepSeek v4-Flash [Vision] [File Attachment]</option>
+                                  <option value="deepseek/deepseek-v4-flash">DeepSeek v4-Flash [Vision] [File Attachments]</option>
                                   <option value="moonshotai/kimi-k2-thinking">Kimi K2 Thinking [Thinking]</option>
-                                  <option value="x-ai/grok-4.3">Grok 4 [Vision] [Actions] [File Attachment]</option>
+                                  <option value="x-ai/grok-4.3">Grok 4 [Vision] [Actions] [File Attachments]</option>
                                 </select>
                               </div>
                             )}

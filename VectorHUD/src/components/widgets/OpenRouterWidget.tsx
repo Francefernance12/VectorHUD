@@ -25,6 +25,81 @@ interface Message {
   tool_call_id?: string;
 }
 
+const MODEL_DEFAULT_SETTINGS: Record<string, {
+  temperature: number;
+  maxTokens: number;
+  contextSize: number;
+  topK: number;
+  topP: number;
+}> = {
+  'google/gemini-2.5-flash': {
+    temperature: 1.0,
+    maxTokens: 0,
+    contextSize: 1048576,
+    topK: 40,
+    topP: 0.95
+  },
+  'anthropic/claude-3.5-sonnet': {
+    temperature: 1.0,
+    maxTokens: 0,
+    contextSize: 200000,
+    topK: 0,
+    topP: 1.0
+  },
+  'openai/gpt-4o': {
+    temperature: 1.0,
+    maxTokens: 0,
+    contextSize: 128000,
+    topK: 0,
+    topP: 1.0
+  },
+  'deepseek/deepseek-chat': {
+    temperature: 1.0,
+    maxTokens: 0,
+    contextSize: 64000,
+    topK: 0,
+    topP: 1.0
+  },
+  'deepseek/deepseek-r1': {
+    temperature: 0.6,
+    maxTokens: 0,
+    contextSize: 64000,
+    topK: 0,
+    topP: 0.95
+  },
+  'deepseek/deepseek-v4-flash': {
+    temperature: 1.0,
+    maxTokens: 0,
+    contextSize: 64000,
+    topK: 0,
+    topP: 1.0
+  },
+  'moonshotai/kimi-k2-thinking': {
+    temperature: 1.0,
+    maxTokens: 0,
+    contextSize: 128000,
+    topK: 0,
+    topP: 1.0
+  },
+  'x-ai/grok-4.3': {
+    temperature: 1.0,
+    maxTokens: 0,
+    contextSize: 128000,
+    topK: 0,
+    topP: 1.0
+  }
+};
+
+const getModelDefaultSettings = (model: string) => {
+  return MODEL_DEFAULT_SETTINGS[model] || {
+    temperature: 1.0,
+    maxTokens: 0,
+    contextSize: 4096,
+    topK: 40,
+    topP: 0.9
+  };
+};
+
 interface ChatSession {
   id: string;
   title: string;
@@ -325,14 +400,17 @@ export function OpenRouterWidget() {
         "SELECT session_settings, selected_model FROM session_titles WHERE session_id = ?",
         [sessionId]
       );
+      const selectedModel = (res.length > 0 && res[0].selected_model) || masterDefaults.model;
+      const modelDefaults = getModelDefaultSettings(selectedModel);
+
       if (res.length > 0 && res[0].session_settings) {
         const parsed = JSON.parse(res[0].session_settings);
         setSessionSettings({
-          temperature: parsed.temperature ?? masterDefaults.temperature,
-          maxTokens: parsed.maxTokens ?? masterDefaults.maxTokens,
-          contextSize: parsed.contextSize ?? masterDefaults.contextSize,
-          topK: parsed.topK ?? masterDefaults.topK,
-          topP: parsed.topP ?? masterDefaults.topP,
+          temperature: parsed.temperature ?? modelDefaults.temperature,
+          maxTokens: parsed.maxTokens ?? modelDefaults.maxTokens,
+          contextSize: parsed.contextSize ?? modelDefaults.contextSize,
+          topK: parsed.topK ?? modelDefaults.topK,
+          topP: parsed.topP ?? modelDefaults.topP,
           systemPrompt: parsed.systemPrompt ?? masterDefaults.systemPrompt,
           personality: parsed.personality ?? masterDefaults.personality,
           clipboardAttach: parsed.clipboardAttach ?? false,
@@ -343,14 +421,14 @@ export function OpenRouterWidget() {
             anthropicSearch: false
           }
         });
-        setSessionModel(res[0].selected_model || masterDefaults.model);
+        setSessionModel(selectedModel);
       } else {
         setSessionSettings({
-          temperature: masterDefaults.temperature,
-          maxTokens: masterDefaults.maxTokens,
-          contextSize: masterDefaults.contextSize,
-          topK: masterDefaults.topK,
-          topP: masterDefaults.topP,
+          temperature: modelDefaults.temperature,
+          maxTokens: modelDefaults.maxTokens,
+          contextSize: modelDefaults.contextSize,
+          topK: modelDefaults.topK,
+          topP: modelDefaults.topP,
           systemPrompt: masterDefaults.systemPrompt,
           personality: masterDefaults.personality,
           clipboardAttach: false,
@@ -361,7 +439,7 @@ export function OpenRouterWidget() {
             anthropicSearch: false
           }
         });
-        setSessionModel(masterDefaults.model);
+        setSessionModel(selectedModel);
       }
     } catch (err) {
       logger.error(`Failed to load session settings: ${getErrorMessage(err)}`);
@@ -442,12 +520,15 @@ export function OpenRouterWidget() {
     setCurrentSessionId(newId);
     setMessages([]);
     
+    const selectedModel = masterDefaults.model;
+    const modelDefaults = getModelDefaultSettings(selectedModel);
+    
     const initialSettings = {
-      temperature: masterDefaults.temperature,
-      maxTokens: masterDefaults.maxTokens,
-      contextSize: masterDefaults.contextSize,
-      topK: masterDefaults.topK,
-      topP: masterDefaults.topP,
+      temperature: modelDefaults.temperature,
+      maxTokens: modelDefaults.maxTokens,
+      contextSize: modelDefaults.contextSize,
+      topK: modelDefaults.topK,
+      topP: modelDefaults.topP,
       systemPrompt: masterDefaults.systemPrompt,
       personality: masterDefaults.personality,
       clipboardAttach: false,
@@ -459,8 +540,8 @@ export function OpenRouterWidget() {
       }
     };
     setSessionSettings(initialSettings);
-    setSessionModel(masterDefaults.model);
-    await saveSessionSettings(newId, initialSettings, masterDefaults.model);
+    setSessionModel(selectedModel);
+    await saveSessionSettings(newId, initialSettings, selectedModel);
     
     if (window.innerWidth < 768) {
       setSidebarOpen(false);
@@ -1149,14 +1230,15 @@ export function OpenRouterWidget() {
                     const newModel = e.target.value;
                     setSessionModel(newModel);
                     
-                    // Reset to defaults
+                    // Reset to model defaults
+                    const modelDefaults = getModelDefaultSettings(newModel);
                     const newSettings = {
                       ...sessionSettings,
-                      temperature: masterDefaults.temperature,
-                      maxTokens: masterDefaults.maxTokens,
-                      contextSize: masterDefaults.contextSize,
-                      topK: masterDefaults.topK,
-                      topP: masterDefaults.topP,
+                      temperature: modelDefaults.temperature,
+                      maxTokens: modelDefaults.maxTokens,
+                      contextSize: modelDefaults.contextSize,
+                      topK: modelDefaults.topK,
+                      topP: modelDefaults.topP,
                       systemPrompt: masterDefaults.systemPrompt,
                       personality: masterDefaults.personality
                     };
@@ -1166,14 +1248,14 @@ export function OpenRouterWidget() {
                   }}
                   className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-accent-amber/50 cursor-pointer font-mono"
                 >
-                  <option value="google/gemini-2.5-flash">GEMINI 2.5 FLASH</option>
-                  <option value="anthropic/claude-3.5-sonnet">CLAUDE 3.5 SONNET</option>
-                  <option value="openai/gpt-4o">OPENAI GPT-4O</option>
-                  <option value="deepseek/deepseek-chat">DEEPSEEK V3</option>
-                  <option value="deepseek/deepseek-r1">DEEPSEEK R1</option>
-                  <option value="deepseek/deepseek-v4-flash">DEEPSEEK V4-FLASH</option>
-                  <option value="moonshotai/kimi-k2-thinking">KIMI K2 THINKING</option>
-                  <option value="x-ai/grok-4.3">GROK 4</option>
+                  <option value="google/gemini-2.5-flash">Gemini 2.5 Flash [Vision] [Actions] [File Attachments] [Web Search]</option>
+                  <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet [Vision] [Actions] [File Attachments] [MCP]</option>
+                  <option value="openai/gpt-4o">OpenAI GPT-4o [Vision] [Actions] [File Attachments]</option>
+                  <option value="deepseek/deepseek-chat">DeepSeek V3 [Actions]</option>
+                  <option value="deepseek/deepseek-r1">DeepSeek R1 [Thinking]</option>
+                  <option value="deepseek/deepseek-v4-flash">DeepSeek v4-Flash [Vision] [File Attachments]</option>
+                  <option value="moonshotai/kimi-k2-thinking">Kimi K2 Thinking [Thinking]</option>
+                  <option value="x-ai/grok-4.3">Grok 4 [Vision] [Actions] [File Attachments]</option>
                 </select>
               </div>
 
@@ -1573,33 +1655,64 @@ export function OpenRouterWidget() {
               </div>
 
               {/* Resets */}
-              <button
-                type="button"
-                onClick={() => {
-                  const newSettings = {
-                    temperature: masterDefaults.temperature,
-                    maxTokens: masterDefaults.maxTokens,
-                    contextSize: masterDefaults.contextSize,
-                    topK: masterDefaults.topK,
-                    topP: masterDefaults.topP,
-                    systemPrompt: masterDefaults.systemPrompt,
-                    personality: masterDefaults.personality,
-                    clipboardAttach: false,
-                    activeSkills: {
-                      githubScan: false,
-                      webSearch: false,
-                      systemController: true,
-                      anthropicSearch: false
-                    }
-                  };
-                  setSessionSettings(newSettings);
-                  saveSessionSettings(currentSessionId, newSettings, sessionModel);
-                  showToast("🔄 Reset to Master Defaults");
-                }}
-                className="w-full mt-2 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 py-1.5 text-[9px] font-bold text-zinc-400 hover:text-white tracking-wider uppercase rounded"
-              >
-                Reset Session Parameters
-              </button>
+              <div className="flex gap-2 mt-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const modelDefaults = getModelDefaultSettings(sessionModel);
+                    const newSettings = {
+                      ...sessionSettings,
+                      temperature: modelDefaults.temperature,
+                      maxTokens: modelDefaults.maxTokens,
+                      contextSize: modelDefaults.contextSize,
+                      topK: modelDefaults.topK,
+                      topP: modelDefaults.topP,
+                      systemPrompt: masterDefaults.systemPrompt,
+                      personality: masterDefaults.personality,
+                      clipboardAttach: false,
+                      activeSkills: {
+                        githubScan: false,
+                        webSearch: false,
+                        systemController: true,
+                        anthropicSearch: false
+                      }
+                    };
+                    setSessionSettings(newSettings);
+                    await saveSessionSettings(currentSessionId, newSettings, sessionModel);
+                    showToast("🔄 Reset to Model Defaults");
+                  }}
+                  className="flex-1 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 py-1.5 text-[9px] font-bold text-zinc-400 hover:text-white tracking-wider uppercase rounded"
+                >
+                  Model Defaults
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const newSettings = {
+                      temperature: masterDefaults.temperature,
+                      maxTokens: masterDefaults.maxTokens,
+                      contextSize: masterDefaults.contextSize,
+                      topK: masterDefaults.topK,
+                      topP: masterDefaults.topP,
+                      systemPrompt: masterDefaults.systemPrompt,
+                      personality: masterDefaults.personality,
+                      clipboardAttach: false,
+                      activeSkills: {
+                        githubScan: false,
+                        webSearch: false,
+                        systemController: true,
+                        anthropicSearch: false
+                      }
+                    };
+                    setSessionSettings(newSettings);
+                    await saveSessionSettings(currentSessionId, newSettings, sessionModel);
+                    showToast("🔄 Reset to Master Defaults");
+                  }}
+                  className="flex-1 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 py-1.5 text-[9px] font-bold text-zinc-400 hover:text-white tracking-wider uppercase rounded"
+                >
+                  Master Defaults
+                </button>
+              </div>
             </div>
           </div>
         )}

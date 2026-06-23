@@ -132,4 +132,34 @@ describe('OpenRouterWidget Enhancements Tests', () => {
       expect(screen.getByText(/0.0 KB | 1 LINES/i)).toBeTruthy();
     });
   });
+
+  it('should apply model-specific defaults when switching models and resetting', async () => {
+    render(React.createElement(OpenRouterWidget));
+
+    // Open settings drawer
+    const gearBtn = screen.getByTitle(/Session Settings/i);
+    fireEvent.click(gearBtn);
+
+    // Get the model select dropdown
+    const modelSelect = screen.getByText('Session Model').parentElement?.querySelector('select') as HTMLSelectElement;
+    expect(modelSelect).toBeTruthy();
+
+    // Switch model to Claude 3.5 Sonnet
+    fireEvent.change(modelSelect, { target: { value: 'anthropic/claude-3.5-sonnet' } });
+
+    // Claude 3.5 Sonnet temperature default is 1.0, let's verify temperature is updated
+    await waitFor(() => {
+      expect(screen.getByText('1.0')).toBeTruthy();
+    });
+
+    // Let's check that the Model Defaults button works
+    const modelDefaultsBtn = screen.getByText('Model Defaults');
+    expect(modelDefaultsBtn).toBeTruthy();
+    fireEvent.click(modelDefaultsBtn);
+
+    // Verify it resets and temperature remains at the model default
+    await waitFor(() => {
+      expect(screen.getByText('1.0')).toBeTruthy();
+    });
+  });
 });
