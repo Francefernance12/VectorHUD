@@ -9,9 +9,9 @@ import { useToastStore } from '../../store/toastStore';
 import { useOpenRouterStore } from '../../store/openRouterStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useShellStore } from '../../store/shellStore';
-import { Plus, MessageSquare, Trash2, Camera, Edit3, Copy, Check, Mic, MicOff, Settings, X, Paperclip, Search, Save, RotateCcw } from 'lucide-react';
+import { Plus, MessageSquare, Trash2, Camera, Edit3, Copy, Check, Mic, MicOff, Settings, X, Paperclip, Search } from 'lucide-react';
 import { UI_CONSTANTS } from '../../config/constants';
-import { AI_TOOLS, getAnthropicTools, executeTool, transcribeAudio } from '../../utils/aiActions';
+import { AI_TOOLS, executeTool, transcribeAudio } from '../../utils/aiActions';
 
 interface Message {
   id?: number;
@@ -163,7 +163,8 @@ export function OpenRouterWidget() {
     aiChatSystemPrompt,
     aiChatPersonality,
     aiSettingsProfiles,
-    setAiSettingsProfiles
+    setAiSettingsProfiles,
+    toggleSettings
   } = useSettingsStore(
     useShallow((state) => ({
       aiProvider: state.aiProvider,
@@ -181,7 +182,8 @@ export function OpenRouterWidget() {
       aiChatSystemPrompt: state.aiChatSystemPrompt,
       aiChatPersonality: state.aiChatPersonality,
       aiSettingsProfiles: state.aiSettingsProfiles,
-      setAiSettingsProfiles: state.setAiSettingsProfiles
+      setAiSettingsProfiles: state.setAiSettingsProfiles,
+      toggleSettings: state.toggleSettings
     }))
   );
   

@@ -12,6 +12,7 @@ import { getVersion } from '@tauri-apps/api/app';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { useSettingsStore } from '../store/settingsStore';
 import { useShallow } from 'zustand/react/shallow';
+import { useToastStore } from '../store/toastStore';
 import { invoke } from '@tauri-apps/api/core';
 import { getDb } from '../utils/db';
 import { getErrorMessage } from '../types';
@@ -263,7 +264,9 @@ export function SettingsModal() {
     }))
   );
 
-  const [activeTab, setActiveTab] = useState<'integrations' | 'widgets' | 'hotkeys' | 'audio' | 'general' | 'logs' | 'updates' | 'docs'>('integrations');
+  const showToast = useToastStore(state => state.showToast);
+
+  const [activeTab, setActiveTab] = useState<'integrations' | 'widgets' | 'hotkeys' | 'audio' | 'general' | 'logs' | 'updates' | 'docs' | 'ai_chat'>('integrations');
   const [searchQuery, setSearchQuery] = useState('');
   
   // Credentials loaded from SQLite

@@ -139,7 +139,6 @@ interface SettingsState {
   setCustomBorderColor: (val: string) => Promise<void>;
   setCustomGlowColor: (val: string) => Promise<void>;
   
-  loadPreferences: () => Promise<void>;
   syncHotkeys: () => Promise<void>;
 }
 

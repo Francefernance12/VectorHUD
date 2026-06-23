@@ -17,7 +17,7 @@ window.HTMLElement.prototype.scrollIntoView = vi.fn();
 // ──────────────────────────────────────────────
 //  Mock: @tauri-apps/api/core
 // ──────────────────────────────────────────────
-const mockInvoke = vi.fn().mockImplementation((cmd: string) => {
+const mockInvoke = vi.fn().mockImplementation((_cmd: string) => {
   return Promise.resolve(null);
 });
 

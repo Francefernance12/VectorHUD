@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { render } from '@testing-library/react';
-import React from 'react';
 import { useAudioStore } from './store/audioStore';
 import { useToastStore } from './store/toastStore';
 import { listen } from '@tauri-apps/api/event';
@@ -91,7 +90,7 @@ describe('App & Global Hotkey Integration Tests', () => {
     });
 
     // Mock mixer state
-    mockInvoke.mockImplementation((cmd, args) => {
+    mockInvoke.mockImplementation((cmd, _args) => {
       if (cmd === 'get_audio_mixer_state') {
         return Promise.resolve({
           master_volume: 0.8,
