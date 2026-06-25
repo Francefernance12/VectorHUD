@@ -1,6 +1,43 @@
 import { create } from 'zustand';
 import { getSettingsStore } from '../utils/store';
 
+export interface CustomSkill {
+  id: string;
+  name: string;
+  description: string;
+  instructions: string;
+  isActive: boolean;
+}
+
+export interface CustomMcpTool {
+  name: string;
+  description: string;
+  parameters: any;
+}
+
+export interface CustomMcp {
+  id: string;
+  name: string;
+  description: string;
+  command: string;
+  args: string;
+  env: string;
+  isActive: boolean;
+  tools: CustomMcpTool[];
+}
+
+export interface CustomTone {
+  id: string;
+  name: string;
+  text: string;
+}
+
+export interface CustomSystemPrompt {
+  id: string;
+  name: string;
+  text: string;
+}
+
 interface SettingsState {
   isSettingsOpen: boolean;
   openRouterModel: string;
@@ -43,6 +80,22 @@ interface SettingsState {
   backdropOpacity: number;
   launchOnStartup: boolean;
   dockCollapsed: boolean;
+  aiChatTemperature: number;
+  aiChatMaxTokens: number;
+  aiChatContextSize: number;
+  aiChatTopK: number;
+  aiChatTopP: number;
+  aiChatSystemPrompt: string;
+  aiChatPersonality: string;
+  aiSettingsProfiles: Record<string, any>;
+
+  // Custom tones and prompts
+  customTones: CustomTone[];
+  customSystemPrompts: CustomSystemPrompt[];
+  globalCustomSkills: CustomSkill[];
+  globalCustomMcps: CustomMcp[];
+  aiChatLayoutMode: 'overlay' | 'push';
+  settingsActiveTab: 'integrations' | 'widgets' | 'hotkeys' | 'audio' | 'general' | 'logs' | 'updates' | 'docs' | 'ai_chat' | 'mcp_skills';
 
   // Visual customizations
   widgetBorderRadius: number;
@@ -63,6 +116,23 @@ interface SettingsState {
   customBorderColor: string;
   customGlowColor: string;
   
+  setAiChatTemperature: (val: number) => Promise<void>;
+  setAiChatMaxTokens: (val: number) => Promise<void>;
+  setAiChatContextSize: (val: number) => Promise<void>;
+  setAiChatTopK: (val: number) => Promise<void>;
+  setAiChatTopP: (val: number) => Promise<void>;
+  setAiChatSystemPrompt: (val: string) => Promise<void>;
+  setAiChatPersonality: (val: string) => Promise<void>;
+  setAiSettingsProfiles: (profiles: Record<string, any>) => Promise<void>;
+
+  setCustomTones: (tones: CustomTone[]) => Promise<void>;
+  setCustomSystemPrompts: (prompts: CustomSystemPrompt[]) => Promise<void>;
+  setGlobalCustomSkills: (skills: CustomSkill[]) => Promise<void>;
+  setGlobalCustomMcps: (mcps: CustomMcp[]) => Promise<void>;
+  setAiChatLayoutMode: (mode: 'overlay' | 'push') => Promise<void>;
+  setSettingsActiveTab: (tab: 'integrations' | 'widgets' | 'hotkeys' | 'audio' | 'general' | 'logs' | 'updates' | 'docs' | 'ai_chat' | 'mcp_skills') => void;
+
+  loadPreferences: () => Promise<void>;
   toggleSettings: () => void;
   setOpenRouterModel: (model: string) => Promise<void>;
   setOpenaiModel: (model: string) => Promise<void>;
@@ -121,7 +191,6 @@ interface SettingsState {
   setCustomBorderColor: (val: string) => Promise<void>;
   setCustomGlowColor: (val: string) => Promise<void>;
   
-  loadPreferences: () => Promise<void>;
   syncHotkeys: () => Promise<void>;
 }
 
@@ -187,7 +256,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   customOpenRouterModel: '',
   useCustomOpenRouterModel: false,
   aiProvider: 'openrouter',
-  globalFontSize: 14,
+  globalFontSize: 18,
   theme: 'default',
   customColor: '#FF0000',
   recordMicrophone: false,
@@ -235,6 +304,22 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   syncGlowWithTheme: true,
   customBorderColor: '#ffffff',
   customGlowColor: '#4af626',
+  aiChatTemperature: 0.7,
+  aiChatMaxTokens: 0,
+  aiChatContextSize: 4096,
+  aiChatTopK: 40,
+  aiChatTopP: 0.9,
+  aiChatSystemPrompt: '',
+  aiChatPersonality: 'default',
+  aiSettingsProfiles: {},
+
+  // Custom tones and prompts
+  customTones: [],
+  customSystemPrompts: [],
+  globalCustomSkills: [],
+  globalCustomMcps: [],
+  aiChatLayoutMode: 'overlay',
+  settingsActiveTab: 'integrations',
 
   toggleSettings: () => set((state) => ({ isSettingsOpen: !state.isSettingsOpen })),
 
@@ -652,6 +737,102 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     applyThemeColors(useSettingsStore.getState().theme, useSettingsStore.getState().customColor);
   },
 
+  setAiChatTemperature: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('aiChatTemperature', val);
+    await store.save();
+    set({ aiChatTemperature: val });
+  },
+
+  setAiChatMaxTokens: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('aiChatMaxTokens', val);
+    await store.save();
+    set({ aiChatMaxTokens: val });
+  },
+
+  setAiChatContextSize: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('aiChatContextSize', val);
+    await store.save();
+    set({ aiChatContextSize: val });
+  },
+
+  setAiChatTopK: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('aiChatTopK', val);
+    await store.save();
+    set({ aiChatTopK: val });
+  },
+
+  setAiChatTopP: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('aiChatTopP', val);
+    await store.save();
+    set({ aiChatTopP: val });
+  },
+
+  setAiChatSystemPrompt: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('aiChatSystemPrompt', val);
+    await store.save();
+    set({ aiChatSystemPrompt: val });
+  },
+
+  setAiChatPersonality: async (val) => {
+    const store = await getSettingsStore();
+    await store.set('aiChatPersonality', val);
+    await store.save();
+    set({ aiChatPersonality: val });
+  },
+
+  setAiSettingsProfiles: async (profiles) => {
+    const store = await getSettingsStore();
+    await store.set('aiSettingsProfiles', profiles);
+    await store.save();
+    set({ aiSettingsProfiles: profiles });
+  },
+
+  setCustomTones: async (tones) => {
+    const store = await getSettingsStore();
+    await store.set('customTones', tones);
+    await store.save();
+    set({ customTones: tones });
+  },
+
+  setCustomSystemPrompts: async (prompts) => {
+    const store = await getSettingsStore();
+    await store.set('customSystemPrompts', prompts);
+    await store.save();
+    set({ customSystemPrompts: prompts });
+  },
+
+  setGlobalCustomSkills: async (skills) => {
+    const store = await getSettingsStore();
+    await store.set('globalCustomSkills', skills);
+    await store.save();
+    set({ globalCustomSkills: skills });
+  },
+
+  setGlobalCustomMcps: async (mcps) => {
+    const store = await getSettingsStore();
+    await store.set('globalCustomMcps', mcps);
+    await store.save();
+    set({ globalCustomMcps: mcps });
+  },
+
+  setAiChatLayoutMode: async (mode) => {
+    const store = await getSettingsStore();
+    await store.set('aiChatLayoutMode', mode);
+    await store.save();
+    set({ aiChatLayoutMode: mode });
+  },
+
+  setSettingsActiveTab: (tab) => {
+    set({ settingsActiveTab: tab });
+  },
+
+
   loadPreferences: async () => {
     const store = await getSettingsStore();
     const model = await store.get<string>('openRouterModel');
@@ -711,6 +892,22 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const customBorder = await store.get<string>('customBorderColor');
     const customGlow = await store.get<string>('customGlowColor');
 
+    const chatTemp = await store.get<number>('aiChatTemperature');
+    const chatMaxTok = await store.get<number>('aiChatMaxTokens');
+    const chatContextSize = await store.get<number>('aiChatContextSize');
+    const chatTopK = await store.get<number>('aiChatTopK');
+    const chatTopP = await store.get<number>('aiChatTopP');
+    const chatSysPrompt = await store.get<string>('aiChatSystemPrompt');
+    const chatPersonality = await store.get<string>('aiChatPersonality');
+    const chatProfiles = await store.get<Record<string, any>>('aiSettingsProfiles');
+
+    // Load new custom lists
+    const tones = await store.get<any[]>('customTones') || [];
+    const prompts = await store.get<any[]>('customSystemPrompts') || [];
+    const globalCustomSkills = await store.get<any[]>('globalCustomSkills') || [];
+    const globalCustomMcps = await store.get<any[]>('globalCustomMcps') || [];
+    const aiChatLayoutMode = await store.get<'overlay' | 'push'>('aiChatLayoutMode') || 'overlay';
+
     const finalTheme = theme || 'default';
     const finalColor = customColor || '#FF0000';
 
@@ -722,6 +919,13 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       console.warn('Failed to check autostart status at load:', e);
     }
 
+    let finalFontSize = fontSize;
+    if (fontSize === null || fontSize === undefined) {
+      finalFontSize = 18;
+      await store.set('globalFontSize', 18);
+      await store.save();
+    }
+
     set({
       openRouterModel: model || 'google/gemini-2.5-flash',
       openaiModel: oaiModel || 'gpt-4o-mini',
@@ -730,7 +934,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       customOpenRouterModel: customOrModel || '',
       useCustomOpenRouterModel: useCustomOr !== undefined ? useCustomOr : false,
       aiProvider: provider || 'openrouter',
-      globalFontSize: fontSize || 14,
+      globalFontSize: finalFontSize,
       theme: finalTheme,
       customColor: finalColor,
       recordMicrophone: mic !== undefined ? mic : false,
@@ -778,6 +982,21 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       syncGlowWithTheme: syncGlow !== undefined ? syncGlow : (syncBorderGlow !== undefined ? syncBorderGlow : true),
       customBorderColor: customBorder || '#ffffff',
       customGlowColor: customGlow || '#4af626',
+      aiChatTemperature: chatTemp !== undefined ? chatTemp : 0.7,
+      aiChatMaxTokens: chatMaxTok !== undefined ? chatMaxTok : 0,
+      aiChatContextSize: chatContextSize !== undefined ? chatContextSize : 4096,
+      aiChatTopK: chatTopK !== undefined ? chatTopK : 40,
+      aiChatTopP: chatTopP !== undefined ? chatTopP : 0.9,
+      aiChatSystemPrompt: chatSysPrompt !== undefined ? chatSysPrompt : '',
+      aiChatPersonality: chatPersonality !== undefined ? chatPersonality : 'default',
+      aiSettingsProfiles: chatProfiles || {},
+
+      customTones: tones,
+      customSystemPrompts: prompts,
+      globalCustomSkills: globalCustomSkills,
+      globalCustomMcps: globalCustomMcps,
+      aiChatLayoutMode: aiChatLayoutMode,
+      settingsActiveTab: 'integrations',
     });
 
     applyThemeColors(finalTheme, finalColor);
@@ -788,8 +1007,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       console.error("Failed to sync hotkeys to Rust backend:", err);
     }
 
-    if (fontSize) {
-      document.documentElement.style.setProperty('--base-font-size', `${fontSize}px`);
+    if (finalFontSize) {
+      document.documentElement.style.setProperty('--base-font-size', `${finalFontSize}px`);
     }
 
     const finalBlur = bgBlur !== undefined ? bgBlur : 8;

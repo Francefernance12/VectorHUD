@@ -30,7 +30,7 @@ const widgetDescriptions: Record<string, string> = {
 
 export function Dock() {
   const { activeWidgets, toggleWidget } = useWidgetStore();
-  const { dockCollapsed, setDockCollapsed, toggleSettings } = useSettingsStore();
+  const { dockCollapsed, setDockCollapsed, toggleSettings, isSettingsOpen } = useSettingsStore();
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const libraryRef = useRef<HTMLDivElement>(null);
 
@@ -156,7 +156,13 @@ export function Dock() {
 
         {/* Settings Button */}
         <button
-          onClick={toggleSettings}
+          onClick={() => {
+            if (isSettingsOpen) {
+              window.dispatchEvent(new Event('close-settings-request'));
+            } else {
+              toggleSettings();
+            }
+          }}
           aria-label="Open System Settings"
           title="Open System Settings"
           className="p-2 rounded-xl transition-all duration-200 hover:bg-white/10 text-zinc-400 hover:text-white cursor-pointer flex items-center justify-center"

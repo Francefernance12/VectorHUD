@@ -22,6 +22,52 @@ fn set_interactive_mode(window: tauri::Window, interactive: bool, interactable_p
 
 static HOTKEY_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+#[derive(Clone)]
+struct CachedHotkeys {
+    overlay: String,
+    screenshot: String,
+    record: String,
+    replay: String,
+    timer: String,
+    stopwatch: String,
+    timer_reset: String,
+    voice_ptt: String,
+    interact: String,
+    active: bool,
+}
+
+static CACHED_HOTKEYS: std::sync::Mutex<Option<CachedHotkeys>> = std::sync::Mutex::new(None);
+static HOTKEYS_SUSPENDED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+fn refresh_hotkeys_internal(app: &tauri::AppHandle) -> Result<(), String> {
+    let cached = {
+        let cache = CACHED_HOTKEYS.lock().unwrap_or_else(|e| e.into_inner());
+        match &*cache {
+            Some(c) if c.active => c.clone(),
+            _ => return Ok(()),
+        }
+    };
+
+    if HOTKEYS_SUSPENDED.load(Ordering::Relaxed) {
+        return Ok(());
+    }
+
+    tracing::info!("Failsafe: Refreshing global hotkeys registration with OS");
+
+    update_hotkeys_impl(
+        app.clone(),
+        cached.overlay,
+        cached.screenshot,
+        cached.record,
+        cached.replay,
+        cached.timer,
+        cached.stopwatch,
+        cached.timer_reset,
+        cached.voice_ptt,
+        cached.interact,
+    )
+}
+
 fn parse_hotkey_to_vk(hotkey_str: &str) -> (bool, bool, bool, i32) {
     let mut ctrl = false;
     let mut alt = false;
@@ -102,6 +148,7 @@ fn stop_voice_recording(
 
 #[tauri::command]
 fn unregister_all_hotkeys(app: tauri::AppHandle) -> Result<(), String> {
+    HOTKEYS_SUSPENDED.store(true, std::sync::atomic::Ordering::Relaxed);
     let _lock = HOTKEY_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
     use tauri_plugin_global_shortcut::GlobalShortcutExt;
     let shortcut_manager = app.global_shortcut();
@@ -156,6 +203,50 @@ fn move_to_active_monitor(app: tauri::AppHandle) -> Result<(), String> {
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 fn update_hotkeys(
+    app: tauri::AppHandle,
+    overlay_hotkey: String,
+    screenshot_hotkey: String,
+    record_hotkey: String,
+    replay_hotkey: String,
+    timer_hotkey: String,
+    stopwatch_hotkey: String,
+    timer_reset_hotkey: String,
+    voice_ptt_hotkey: String,
+    interact_hotkey: String,
+) -> Result<(), String> {
+    {
+        let mut cache = CACHED_HOTKEYS.lock().unwrap_or_else(|e| e.into_inner());
+        *cache = Some(CachedHotkeys {
+            overlay: overlay_hotkey.clone(),
+            screenshot: screenshot_hotkey.clone(),
+            record: record_hotkey.clone(),
+            replay: replay_hotkey.clone(),
+            timer: timer_hotkey.clone(),
+            stopwatch: stopwatch_hotkey.clone(),
+            timer_reset: timer_reset_hotkey.clone(),
+            voice_ptt: voice_ptt_hotkey.clone(),
+            interact: interact_hotkey.clone(),
+            active: true,
+        });
+    }
+    HOTKEYS_SUSPENDED.store(false, std::sync::atomic::Ordering::Relaxed);
+
+    update_hotkeys_impl(
+        app,
+        overlay_hotkey,
+        screenshot_hotkey,
+        record_hotkey,
+        replay_hotkey,
+        timer_hotkey,
+        stopwatch_hotkey,
+        timer_reset_hotkey,
+        voice_ptt_hotkey,
+        interact_hotkey,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn update_hotkeys_impl(
     app: tauri::AppHandle,
     overlay_hotkey: String,
     screenshot_hotkey: String,
@@ -524,6 +615,7 @@ pub fn run() {
                     let shutdown_flag_clone = shutdown_flag.clone();
                     let is_focused_clone = is_focused.clone();
                     tauri::async_runtime::spawn(async move {
+                        let mut ticks = 0;
                         loop {
                             if shutdown_flag_clone.load(Ordering::Relaxed) {
                                 break;
@@ -546,6 +638,17 @@ pub fn run() {
                                     tracing::warn!("Failed to get HWND for z-order re-assertion.");
                                 }
                             }
+
+                            // Re-register global hotkeys failsafe every 16 seconds (8 * 2s)
+                            ticks += 1;
+                            if ticks >= 8 {
+                                ticks = 0;
+                                let app = window_clone.app_handle();
+                                if let Err(e) = refresh_hotkeys_internal(app) {
+                                    tracing::error!("Failsafe: Hotkey refresh failed: {}", e);
+                                }
+                            }
+
                             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                         }
                     });
@@ -701,6 +804,15 @@ pub fn run() {
                         ",
                             kind: tauri_plugin_sql::MigrationKind::Up,
                         },
+                        tauri_plugin_sql::Migration {
+                            version: 10,
+                            description: "add_session_settings_and_selected_model",
+                            sql: "
+                        ALTER TABLE session_titles ADD COLUMN session_settings TEXT;
+                        ALTER TABLE session_titles ADD COLUMN selected_model TEXT;
+                        ",
+                            kind: tauri_plugin_sql::MigrationKind::Up,
+                        },
                     ],
                 )
                 .build(),
@@ -728,6 +840,12 @@ pub fn run() {
             commands::api::toggle_notion_task,
             commands::api::call_ai_api,
             commands::api::transcribe_audio_api,
+            commands::api::read_attached_file,
+            commands::api::select_attached_files,
+            commands::api::read_attached_file_data,
+            commands::api::wipe_and_reset_database,
+            commands::api::open_app_data_folder,
+            commands::api::test_mcp_connection,
             core::capture::capture_screenshot,
             core::capture::capture_screen_base64,
             core::capture::check_file_exists,

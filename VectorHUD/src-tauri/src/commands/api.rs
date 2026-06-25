@@ -824,6 +824,7 @@ fn map_messages_to_anthropic(messages: &Vec<serde_json::Value>) -> Vec<serde_jso
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn call_ai_api(
     provider: String,
     model: String,
@@ -831,6 +832,10 @@ pub async fn call_ai_api(
     system_prompt: String,
     api_key: String,
     tools: Option<serde_json::Value>,
+    temperature: Option<f64>,
+    max_tokens: Option<u32>,
+    top_p: Option<f64>,
+    top_k: Option<u32>,
 ) -> Result<UnifiedLlmResponse, String> {
     tracing::info!("call_ai_api: provider='{}', model='{}'", provider, model);
 
@@ -864,10 +869,24 @@ pub async fn call_ai_api(
                 "messages": body_messages
             });
 
-            if let Some(t) = &tools {
-                if let Some(body_obj) = body.as_object_mut() {
+            if let Some(body_obj) = body.as_object_mut() {
+                if let Some(t) = &tools {
                     body_obj.insert("tools".to_string(), t.clone());
                     body_obj.insert("tool_choice".to_string(), serde_json::json!("auto"));
+                }
+                if let Some(temp) = temperature {
+                    body_obj.insert("temperature".to_string(), serde_json::json!(temp));
+                }
+                if let Some(tokens) = max_tokens {
+                    if tokens > 0 {
+                        body_obj.insert("max_tokens".to_string(), serde_json::json!(tokens));
+                    }
+                }
+                if let Some(p) = top_p {
+                    body_obj.insert("top_p".to_string(), serde_json::json!(p));
+                }
+                if let Some(k) = top_k {
+                    body_obj.insert("top_k".to_string(), serde_json::json!(k));
                 }
             }
 
@@ -934,16 +953,30 @@ pub async fn call_ai_api(
         }
         "anthropic" => {
             let mapped_messages = map_messages_to_anthropic(&messages);
+            let final_max_tokens = match max_tokens {
+                Some(tokens) if tokens > 0 => tokens,
+                _ => 4096, // default for Anthropic since it's required
+            };
+
             let mut body = serde_json::json!({
                 "model": model,
                 "system": system_prompt,
                 "messages": mapped_messages,
-                "max_tokens": 4096
+                "max_tokens": final_max_tokens
             });
 
-            if let Some(t) = &tools {
-                if let Some(body_obj) = body.as_object_mut() {
+            if let Some(body_obj) = body.as_object_mut() {
+                if let Some(t) = &tools {
                     body_obj.insert("tools".to_string(), t.clone());
+                }
+                if let Some(temp) = temperature {
+                    body_obj.insert("temperature".to_string(), serde_json::json!(temp));
+                }
+                if let Some(p) = top_p {
+                    body_obj.insert("top_p".to_string(), serde_json::json!(p));
+                }
+                if let Some(k) = top_k {
+                    body_obj.insert("top_k".to_string(), serde_json::json!(k));
                 }
             }
 
@@ -1142,4 +1175,400 @@ pub async fn transcribe_audio_api(
         .to_string();
 
     Ok(text)
+}
+
+#[tauri::command]
+pub async fn read_attached_file(path: String) -> Result<String, String> {
+    let path_buf = std::path::PathBuf::from(&path);
+    if !path_buf.exists() {
+        return Err(format!("File does not exist: {}", path));
+    }
+
+    let extension = path_buf
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    if extension == "pdf" {
+        let bytes =
+            std::fs::read(&path_buf).map_err(|e| format!("Failed to read PDF file: {}", e))?;
+
+        let text = tokio::task::spawn_blocking(move || pdf_extract::extract_text_from_mem(&bytes))
+            .await
+            .map_err(|e| format!("Join error during PDF extraction: {}", e))?
+            .map_err(|e| format!("Failed to extract text from PDF: {}", e))?;
+
+        Ok(text)
+    } else {
+        let text = std::fs::read_to_string(&path_buf)
+            .map_err(|e| format!("Failed to read file as UTF-8 string: {}", e))?;
+        Ok(text)
+    }
+}
+
+#[tauri::command]
+pub async fn select_attached_files(window: tauri::Window) -> Result<Vec<String>, String> {
+    let _ = window.set_always_on_top(false);
+
+    let window_clone = window.clone();
+    let files = tokio::task::spawn_blocking(move || {
+        rfd::FileDialog::new()
+            .add_filter(
+                "Documents",
+                &["txt", "html", "css", "js", "py", "json", "md", "pdf"],
+            )
+            .set_parent(&window_clone)
+            .pick_files()
+    })
+    .await
+    .map_err(|e| {
+        let _ = window.set_always_on_top(true);
+        format!("Join error during file selection: {}", e)
+    })?;
+
+    let _ = window.set_always_on_top(true);
+    let _ = window.set_focus();
+
+    if let Some(paths) = files {
+        Ok(paths
+            .into_iter()
+            .map(|p| p.to_string_lossy().to_string())
+            .collect())
+    } else {
+        Ok(vec![])
+    }
+}
+
+#[derive(serde::Serialize)]
+pub struct AttachedFileData {
+    name: String,
+    path: String,
+    content: String,
+    size: u64,
+    lines: usize,
+}
+
+#[tauri::command]
+pub async fn read_attached_file_data(path: String) -> Result<AttachedFileData, String> {
+    let path_buf = std::path::PathBuf::from(&path);
+    if !path_buf.exists() {
+        return Err(format!("File does not exist: {}", path));
+    }
+
+    let name = path_buf
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown")
+        .to_string();
+
+    let metadata = path_buf
+        .metadata()
+        .map_err(|e| format!("Failed to read file metadata: {}", e))?;
+    let size = metadata.len();
+
+    let extension = path_buf
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    let content = if extension == "pdf" {
+        let bytes =
+            std::fs::read(&path_buf).map_err(|e| format!("Failed to read PDF file: {}", e))?;
+        tokio::task::spawn_blocking(move || pdf_extract::extract_text_from_mem(&bytes))
+            .await
+            .map_err(|e| format!("Join error during PDF extraction: {}", e))?
+            .map_err(|e| format!("Failed to extract text from PDF: {}", e))?
+    } else {
+        std::fs::read_to_string(&path_buf).map_err(|e| format!("Failed to read file: {}", e))?
+    };
+
+    let lines = content.lines().count();
+
+    Ok(AttachedFileData {
+        name,
+        path,
+        content,
+        size,
+        lines,
+    })
+}
+
+#[tauri::command]
+pub async fn wipe_and_reset_database(app: tauri::AppHandle) -> Result<(), String> {
+    use std::fs;
+    use tauri::Manager;
+
+    let app_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let db_path = app_dir.join("vectorhud.db");
+
+    tracing::info!(
+        "wipe_and_reset_database: attempting to delete database file at {:?}",
+        db_path
+    );
+
+    if db_path.exists() {
+        fs::remove_file(&db_path).map_err(|e| format!("Failed to delete database file: {}", e))?;
+        tracing::info!("wipe_and_reset_database: database file deleted successfully");
+    } else {
+        tracing::info!("wipe_and_reset_database: database file does not exist");
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn open_app_data_folder(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    let app_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+
+    if !app_dir.exists() {
+        std::fs::create_dir_all(&app_dir)
+            .map_err(|e| format!("Failed to create AppData directory: {}", e))?;
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(&app_dir)
+            .spawn()
+            .map_err(|e| format!("Failed to open AppData folder: {}", e))?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn test_mcp_connection(command: String, args: String) -> Result<String, String> {
+    let args_list: Vec<&str> = if args.trim().is_empty() {
+        vec!["--version"]
+    } else {
+        args.split_whitespace().collect()
+    };
+
+    let mut cmd = std::process::Command::new(&command);
+    cmd.args(&args_list);
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+
+    let check_res = cmd.output();
+
+    match check_res {
+        Ok(output) => {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                let display = if stdout.is_empty() {
+                    "Executable found and responded".to_string()
+                } else {
+                    stdout
+                };
+                Ok(format!("Connection successful: {}", display))
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+                let display = if stderr.is_empty() {
+                    format!("Exit code: {}", output.status.code().unwrap_or(-1))
+                } else {
+                    stderr
+                };
+                Ok(format!("Executable found but returned error: {}", display))
+            }
+        }
+        Err(e) => {
+            if cfg!(target_os = "windows") {
+                let fallback_args = if args.trim().is_empty() {
+                    "--version"
+                } else {
+                    args.trim()
+                };
+                let mut cmd_fallback = std::process::Command::new("cmd");
+                // Run the command directly through cmd /C so CREATE_NO_WINDOW hides it
+                cmd_fallback.args(["/C", &format!("{} {}", command, fallback_args)]);
+
+                #[cfg(target_os = "windows")]
+                {
+                    use std::os::windows::process::CommandExt;
+                    cmd_fallback.creation_flags(0x08000000); // CREATE_NO_WINDOW
+                }
+
+                let shell_res = cmd_fallback.output();
+                match shell_res {
+                    Ok(output) => {
+                        if output.status.success() {
+                            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                            let display = if stdout.is_empty() {
+                                "Connection successful via shell".to_string()
+                            } else {
+                                stdout
+                            };
+                            Ok(format!("Connection successful: {}", display))
+                        } else {
+                            Err(format!(
+                                "Shell command failed: {}",
+                                String::from_utf8_lossy(&output.stderr).trim()
+                            ))
+                        }
+                    }
+                    Err(err) => Err(format!("Command not found or failed to spawn: {}", err)),
+                }
+            } else {
+                Err(format!("Failed to spawn command: {}", e))
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    #[tokio::test]
+    async fn test_read_attached_file_text() {
+        let temp_dir = std::env::temp_dir();
+        let file_path = temp_dir.join("vectorhud_test_attached.txt");
+
+        let mut file = std::fs::File::create(&file_path).unwrap();
+        writeln!(file, "Hello from VectorHUD file attachment test!").unwrap();
+
+        let path_str = file_path.to_string_lossy().to_string();
+        let result = read_attached_file(path_str).await;
+
+        assert!(result.is_ok());
+        assert!(result
+            .unwrap()
+            .contains("Hello from VectorHUD file attachment test!"));
+
+        let _ = std::fs::remove_file(file_path);
+    }
+
+    #[tokio::test]
+    async fn test_read_attached_file_nonexistent() {
+        let result = read_attached_file("nonexistent_file_path_12345.xyz".to_string()).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("File does not exist"));
+    }
+
+    #[tokio::test]
+    async fn test_call_ai_api_invalid_keys() {
+        // OpenAI invalid key check
+        let res_openai = call_ai_api(
+            "openai".to_string(),
+            "gpt-4o".to_string(),
+            vec![serde_json::json!({"role": "user", "content": "Hello"})],
+            "System prompt".to_string(),
+            "invalid_key_for_testing".to_string(),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await;
+
+        assert!(res_openai.is_err());
+        let err_openai = res_openai.unwrap_err();
+        assert!(
+            err_openai.contains("AI Provider Error")
+                || err_openai.contains("Incorrect API key")
+                || err_openai.contains("failed")
+                || err_openai.contains("status code")
+        );
+
+        // Anthropic invalid key check
+        let res_anthropic = call_ai_api(
+            "anthropic".to_string(),
+            "claude-3-5-sonnet".to_string(),
+            vec![serde_json::json!({"role": "user", "content": "Hello"})],
+            "System prompt".to_string(),
+            "invalid_key_for_testing".to_string(),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await;
+
+        assert!(res_anthropic.is_err());
+        let err_anthropic = res_anthropic.unwrap_err();
+        assert!(
+            err_anthropic.contains("Anthropic Error")
+                || err_anthropic.contains("x-api-key")
+                || err_anthropic.contains("failed")
+                || err_anthropic.contains("status code")
+        );
+
+        // Groq invalid key check
+        let res_groq = call_ai_api(
+            "groq".to_string(),
+            "llama-3.1-8b-instant".to_string(),
+            vec![serde_json::json!({"role": "user", "content": "Hello"})],
+            "System prompt".to_string(),
+            "invalid_key_for_testing".to_string(),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await;
+
+        assert!(res_groq.is_err());
+        let err_groq = res_groq.unwrap_err();
+        assert!(
+            err_groq.contains("AI Provider Error")
+                || err_groq.contains("Incorrect API key")
+                || err_groq.contains("failed")
+                || err_groq.contains("status code")
+                || err_groq.contains("Invalid API Key")
+        );
+
+        // OpenRouter invalid key check
+        let res_or = call_ai_api(
+            "openrouter".to_string(),
+            "google/gemini-2.5-flash".to_string(),
+            vec![serde_json::json!({"role": "user", "content": "Hello"})],
+            "System prompt".to_string(),
+            "invalid_key_for_testing".to_string(),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await;
+
+        assert!(res_or.is_err());
+        let err_or = res_or.unwrap_err();
+        assert!(
+            err_or.contains("AI Provider Error")
+                || err_or.contains("Incorrect API key")
+                || err_or.contains("failed")
+                || err_or.contains("status code")
+                || err_or.contains("credentials")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_test_mcp_connection_valid() {
+        #[cfg(target_os = "windows")]
+        {
+            let res = test_mcp_connection("cmd".to_string(), "/C echo test_ok".to_string()).await;
+            assert!(res.is_ok());
+            let msg = res.unwrap();
+            assert!(msg.contains("Connection successful") && msg.contains("test_ok"));
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let res = test_mcp_connection("echo".to_string(), "test_ok".to_string()).await;
+            assert!(res.is_ok());
+            let msg = res.unwrap();
+            assert!(msg.contains("Connection successful") && msg.contains("test_ok"));
+        }
+    }
 }

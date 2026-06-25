@@ -277,6 +277,27 @@ export const AI_TOOLS = [
         properties: {}
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "test_mcp_connection",
+      description: "Test the connection of a custom Model Context Protocol (MCP) server by running its command.",
+      parameters: {
+        type: "object",
+        properties: {
+          command: {
+            type: "string",
+            description: "The executable command or absolute path (e.g. node, python)."
+          },
+          args: {
+            type: "string",
+            description: "Space-separated arguments to pass to the command (e.g. server.js)."
+          }
+        },
+        required: ["command", "args"]
+      }
+    }
   }
 ];
 
@@ -572,6 +593,16 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
         window.dispatchEvent(new Event('refresh-capture-history'));
 
         return `Success: saved 30-second replay buffer clip to gallery: ${normalizedPath}`;
+      }
+      case 'test_mcp_connection': {
+        const cmd = String(args['command'] || '');
+        const cmdArgs = String(args['args'] || '');
+        try {
+          const res = await invoke<string>('test_mcp_connection', { command: cmd, args: cmdArgs });
+          return `Success: MCP Connection Test Output:\n${res}`;
+        } catch (err) {
+          return `Error: MCP Connection Test Failed:\n${err}`;
+        }
       }
       default:
         return `Error: unknown tool function '${name}'.`;

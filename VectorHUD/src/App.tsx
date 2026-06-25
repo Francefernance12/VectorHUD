@@ -409,8 +409,17 @@ function App() {
     logger.info("VectorHUD UI Booted");
 
     const verifyPersistence = async () => {
+      // 1. Boot SQLite
       try {
         await getDb(); // Boot SQLite
+      } catch (dbErr) {
+        console.error("Database initialization failed during verifyPersistence:", dbErr);
+        // Log to rotating trace file as well
+        logger.error(`Database initialization failed on startup: ${dbErr}`);
+      }
+
+      // 2. Boot Store & Hydrate layout
+      try {
         await setSetting("last_boot", new Date().toISOString()); // Boot Store
         const lastBoot = await getSetting("last_boot", "unknown");
         logger.info(`Persistence verified. Last boot: ${lastBoot}`);
@@ -420,44 +429,58 @@ function App() {
         if (Object.keys(savedWidgets).length > 0) {
           useWidgetStore.getState().setInitialState(savedWidgets);
         }
+      } catch (storeErr) {
+        logger.error(`Store hydration failed on startup: ${storeErr}`);
+      }
 
-        // Hydrate settings
+      // 3. Hydrate settings (which synchronizes global hotkeys)
+      try {
         await useSettingsStore.getState().loadPreferences();
-
-        // Check DXGI support on boot
+      } catch (prefErr) {
+        logger.error(`Failed to load settings preferences on startup: ${prefErr}`);
+        // Failsafe: if loadPreferences fails, still try to sync hotkeys using default/persisted config
         try {
-          const isDxgiSupported = await invoke<boolean>('check_dxgi_support');
-          if (!isDxgiSupported) {
-            const currentMode = useSettingsStore.getState().captureMode;
-            const currentEncoder = useSettingsStore.getState().videoEncoder;
-            if (currentMode !== 'gdi' || currentEncoder !== 'software') {
-              await useSettingsStore.getState().setCaptureMode('gdi');
-              await useSettingsStore.getState().setVideoEncoder('software');
-              useToastStore.getState().showToast("⚠️ Capture Engine: Configured GDI & Software Encoder (DXGI Unsupported)");
-            }
-          }
-        } catch (dxgiErr) {
-          logger.error(`DXGI support check failed on boot: ${dxgiErr}`);
+          await useSettingsStore.getState().syncHotkeys();
+        } catch (hotkeyErr) {
+          logger.error(`Failed to sync hotkeys as failsafe: ${hotkeyErr}`);
         }
+      }
 
-        // Reset countdown and stopwatch states on boot to clear legacy persisted states
+      // 4. Check DXGI support on boot
+      try {
+        const isDxgiSupported = await invoke<boolean>('check_dxgi_support');
+        if (!isDxgiSupported) {
+          const currentMode = useSettingsStore.getState().captureMode;
+          const currentEncoder = useSettingsStore.getState().videoEncoder;
+          if (currentMode !== 'gdi' || currentEncoder !== 'software') {
+            await useSettingsStore.getState().setCaptureMode('gdi');
+            await useSettingsStore.getState().setVideoEncoder('software');
+            useToastStore.getState().showToast("⚠️ Capture Engine: Configured GDI & Software Encoder (DXGI Unsupported)");
+          }
+        }
+      } catch (dxgiErr) {
+        logger.error(`DXGI support check failed on boot: ${dxgiErr}`);
+      }
+
+      // 5. Reset countdown and stopwatch states on boot to clear legacy persisted states
+      try {
         useTimerStore.getState().resetCd();
         useTimerStore.getState().resetSw();
+      } catch (timerErr) {
+        logger.error(`Timer state reset failed: ${timerErr}`);
+      }
 
-        // Silent Update Check
-        if (navigator.onLine) {
-          try {
-            const update = await check();
-            if (update?.available) {
-              logger.info(`Update to ${update.version} available!`);
-              useToastStore.getState().showToast(`Update v${update.version} available! Open Settings to install.`);
-            }
-          } catch (e) {
-            logger.error(`Silent update check failed: ${e}`);
+      // 6. Silent Update Check
+      if (navigator.onLine) {
+        try {
+          const update = await check();
+          if (update?.available) {
+            logger.info(`Update to ${update.version} available!`);
+            useToastStore.getState().showToast(`Update v${update.version} available! Open Settings to install.`);
           }
+        } catch (e) {
+          logger.error(`Silent update check failed: ${e}`);
         }
-      } catch (err) {
-        logger.error(`Persistence verification failed: ${err}`);
       }
     };
     verifyPersistence();
@@ -538,11 +561,30 @@ function App() {
         });
         safePush(unlistenToast);
 
+        let isMouseInsideWindow = false;
+        const handleMouseEnter = () => { isMouseInsideWindow = true; };
+        const handleMouseLeave = () => { isMouseInsideWindow = false; };
+        const handleMouseMove = () => { isMouseInsideWindow = true; };
+
+        document.addEventListener('mouseenter', handleMouseEnter);
+        document.addEventListener('mouseleave', handleMouseLeave);
+        document.addEventListener('mousemove', handleMouseMove);
+        
+        safePush(() => {
+          document.removeEventListener('mouseenter', handleMouseEnter);
+          document.removeEventListener('mouseleave', handleMouseLeave);
+          document.removeEventListener('mousemove', handleMouseMove);
+        });
+
         if (!isMounted) return;
         const unlistenFocusLoss = await listen("window-lost-focus", () => {
-          logger.info(`Frontend: window-lost-focus event received. ignoreFocusLoss: ${useShellStore.getState().ignoreFocusLoss}`).catch(console.error);
+          logger.info(`Frontend: window-lost-focus event received. ignoreFocusLoss: ${useShellStore.getState().ignoreFocusLoss}, isMouseInsideWindow: ${isMouseInsideWindow}`).catch(console.error);
           if (useShellStore.getState().ignoreFocusLoss) {
             logger.info("Ignoring window-lost-focus event during active capture window hide.");
+            return;
+          }
+          if (isMouseInsideWindow) {
+            logger.info("Ignoring window-lost-focus event because mouse is inside window bounds (potential select dropdown/file dialog).");
             return;
           }
           useShellStore.getState().setOverlayOpen(false);
@@ -751,19 +793,6 @@ function App() {
     };
     initListeners();
 
-    const handleBlur = () => {
-      logger.info(`Frontend: window blur event received. isInteractive: ${useShellStore.getState().isInteractive}`).catch(console.error);
-      if (useShellStore.getState().ignoreFocusLoss) {
-        logger.info("Ignoring window blur event because ignoreFocusLoss is true.").catch(console.error);
-        return;
-      }
-      if (useShellStore.getState().isInteractive) {
-        useShellStore.getState().setOverlayOpen(false);
-        useShellStore.getState().setInteractive(false);
-      }
-    };
-    window.addEventListener('blur', handleBlur);
-
     const handleGlobalError = (event: ErrorEvent) => {
       logger.error(
         `[UNCAUGHT] ${event.message} at ${event.filename}:${event.lineno}:${event.colno}`
@@ -781,7 +810,6 @@ function App() {
     return () => {
       isMounted = false;
       unlistenListeners.forEach(fn => fn());
-      window.removeEventListener('blur', handleBlur);
       window.removeEventListener('beforeunload', flushSave);
       window.removeEventListener('error', handleGlobalError);
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
