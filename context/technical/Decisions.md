@@ -508,3 +508,17 @@ This document tracks all important decisions made throughout the lifecycle of th
 - **Decision:** Bump version to `1.4.0` across package.json, package-lock.json, Cargo.toml, and tauri.conf.json, and create a release latest.json under versions.
   - **Reasoning:** Standardizes the version bump to prep the codebase for clean production releases, packaging the UI settings refinements and grouped dropdown updates.
 
+## Session 28.11: Background Process Window Prevention, Resizable Fields, API Provider Model Grouping, and WIP Warning Notices
+
+- **Decision:** Suppressed background CMD window popups on Windows during active MCP server checks by running the fallback execution via `cmd.exe /C` with `CREATE_NO_WINDOW` flag (`0x08000000`) instead of `start /B`.
+  - **Reasoning:** On Windows, using `start /B` to invoke batch or script commands (such as `npx`, `npm`, or node scripts) from a non-console parent process causes `cmd.exe` to spawn a transient console window on the desktop. Replacing this with a direct invocation of `cmd.exe /C` while specifying the `CREATE_NO_WINDOW` process flag completely prevents any window popup, making MCP connectivity tests and command execution completely silent.
+- **Decision:** Stacked the custom MCP form input fields vertically (`flex-col`) instead of keeping them side-by-side.
+  - **Reasoning:** Side-by-side placement of the command and arguments fields in the settings drawer squeezed the input text boxes on narrow screen widths, making them unreadable. Vertical stacking provides sufficient width for both fields.
+- **Decision:** Grouped session models in the OpenRouter dropdown by actual API key provider (`System Default`, `OpenAI (Direct)`, `Anthropic (Direct)`, `Groq (Direct)`, `OpenRouter`) and added a `Use Global Default` option.
+  - **Reasoning:** The flat list of models was confusing because different models require different direct API keys (or OpenRouter keys). Grouping them makes it clear which API key is required. The `Use Global Default` option allows individual chat sessions to dynamically inherit and trace the global model settings.
+- **Decision:** Made custom skill instructions preview containers vertically resizable with `resize-y overflow-auto` and high contrast.
+  - **Reasoning:** Custom skill instructions can be long, and fixed-height previews truncated the content. Allowing users to resize the container vertically ensures readability while keeping the rest of the settings modal/drawer clean.
+- **Decision:** Added explicit warning banners about the experimental WIP status of custom MCPs/HUD Skills in `SettingsModal.tsx` and `ai_actions.md`.
+  - **Reasoning:** Custom MCP servers and custom skills run arbitrary scripts/processes and are in active development. Warning banners set appropriate user expectations and ensure they understand potential instability.
+
+
