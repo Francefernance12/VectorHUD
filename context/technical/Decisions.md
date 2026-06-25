@@ -477,5 +477,34 @@ This document tracks all important decisions made throughout the lifecycle of th
   - **Reasoning:** In Windows, executing shell commands synchronously blocks tokio threads. If the frontend triggers scans repeatedly (e.g. on mount/unmount or during refreshes), it could spawn multiple concurrent PowerShell processes, leading to process duplication, window focus issues (the powershell command windows popping up or duplicating), and CPU/memory overhead. Implementing a 10-second cache and using an async tokio command with a timeout guarantees that only one scan runs at a time and any hanging process is automatically killed without blocking the system or duplicating processes.
 - **Decision:** Bumped version to `1.3.2` to package the BLE threading fixes, COM apartment multithreading isolation, Bluetooth scan caching/async locks, process execution protection timeout safeguards, and frontend offline fallback mode integrations.
   - **Reasoning:** Prepares the stable codebase for a production release of the optimizations and offline protections, ensuring that all subsequent Tauri build targets bundle the updated configurations.
+## Session 28.5: Settings Drawer Resizer, File Dialog Parent Window, and Font consistency
 
+- **Decision:** Associated RFD `FileDialog` with the Tauri window parent handle (`.set_parent(&window_clone)`) during file selection.
+  - **Reasoning:** In borderless transparent Tauri overlay environments, showing a native file dialog without setting a parent window handle causes the window manager to draw the dialog behind the overlay, making it invisible or requiring focus dismissal. Binding it to the window parent forces the OS to render the dialog modal on top of the overlay window, allowing immediate interaction.
+- **Decision:** Migrated the AI Chat's `attachedFiles` state to the persisted Zustand store (`useOpenRouterStore`).
+  - **Reasoning:** The transparent overlay frequently gains/loses focus, triggering full unmounting of frontend widgets when focus is dismissed. Storing attached files inside the persisted Zustand store ensures selected file payloads survive these unmount cycles and WebView focus loss transitions.
+- **Decision:** Optimized the sidebar and settings drawer resize handlers in `OpenRouterWidget.tsx` using `useRef` direct DOM style updates, updating the React state only on `mouseup`.
+  - **Reasoning:** Re-rendering a massive React component (~3000 lines) on every single `mousemove` drag event creates severe input lag. Bypassing the React render cycle during the drag itself and updating the element's width inline produces smooth, fluid 60+ FPS layout adjustments.
+- **Decision:** Standardized all settings drawer subtexts, labels, inputs, and descriptions from small font size classes (`text-[9px]`, `text-[10px]`, and `text-[11px]`) to `text-xs` (12px).
+  - **Reasoning:** Aligning the settings drawer typography with the VectorHUD HUD typography standards (minimum `text-xs`) solves visual inconsistency and dramatically improves readability on different resolutions.
+
+## Session 28.6: AI Chat Model Sync & Database Recovery Failsafes
+
+- **Decision:** Isolate database loading `getDb()` inside `App.tsx` (`verifyPersistence`) in its own `try-catch` block.
+  - **Reasoning:** Previously, a database loading or schema migration failure caused the entire `verifyPersistence` promise to abort. This skipped loading settings preferences and registering the global hotkeys. As a result, the application silently booted in the background but became completely unresponsive to the alt-O hotkey. Isolating the database boot ensures settings are loaded and hotkeys are registered under any database condition.
+- **Decision:** Implement a `wipe_and_reset_database` Tauri command in Rust to delete `vectorhud.db` on disk, and call Tauri's `relaunch()` from settings to restart the app.
+  - **Reasoning:** In a development or upgrade scenario, databases can undergo schema changes or conflicts (like when running an older EXE on a database modified by a newer dev version). If a database becomes corrupted or has migration conflicts, the user needs an easy, non-technical way to recover. Providing a "Reset Database" button in the Danger Zone of the Settings Modal with double-confirmation prompts allows users to safely purge the corrupted database file, relaunch, and automatically rebuild a clean SQLite file from scratch.
+- **Decision:** Dynamically populate the "Session Model" dropdown using a dynamic available models helper `getAvailableModels()`.
+  - **Reasoning:** The settings drawer previously listed only hardcoded OpenRouter paths in its select element. If the user's default model was set to a direct provider model (like Anthropic Claude 3.5 Sonnet direct or Groq Llama), the select dropdown could not match it, causing it to fall back to Gemini 2.5 Flash and overwrite the database value upon any setting changes. Generating the list dynamically ensures that global defaults, custom models, and direct provider models are always visible, selectable, and editable.
+- **Decision:** Update the AI chat top header model label to call `getSessionModelName(sessionModel)`.
+  - **Reasoning:** The header previously called `getActiveModelName()` which resolved to the active global default model name. This caused confusion, as the label displayed the global default model while the active session was executing requests using the session-specific model (such as Gemini 2.5 Flash). Referencing the session model state ensures the header label remains in sync with the actual active model.
+
+## Session 28.10: Redesign of Model Selector & MCP settings and Version Bump
+
+- **Decision:** Redesign the MCP & HUD Skills settings tab in `SettingsModal.tsx` to prevent layout squeezing.
+  - **Reasoning:** Long custom server commands, descriptions, or directories were stretching flexbox rows beyond bounds, squeezing action buttons and toggle switches to the edges. Wrapping text sections inside a `flex-1 min-w-0` container and applying text truncation/wrapping preserves button alignment and keeps details responsive.
+- **Decision:** Overhaul the session model selector in `OpenRouterWidget.tsx` to group available models by provider.
+  - **Reasoning:** Listing many different models flat with multiple tags looked disorganized and minimal. Grouping them dynamically by their provider under distinct headers and adding a provider-colored active LED light makes selection clean and tactical. Glowing capability badges help users instantly recognize model traits (Vision, Actions, Thinking, Files).
+- **Decision:** Bump version to `1.4.0` across package.json, package-lock.json, Cargo.toml, and tauri.conf.json, and create a release latest.json under versions.
+  - **Reasoning:** Standardizes the version bump to prep the codebase for clean production releases, packaging the UI settings refinements and grouped dropdown updates.
 

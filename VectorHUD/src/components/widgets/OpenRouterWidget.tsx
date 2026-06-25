@@ -4,12 +4,12 @@ import ReactMarkdown from 'react-markdown';
 import { getDb, executeQuery } from '../../utils/db';
 import { logger } from '../../utils/logger';
 import { getErrorMessage } from '../../types';
-import { useSettingsStore } from '../../store/settingsStore';
+import { useSettingsStore, CustomSkill, CustomMcpTool, CustomMcp } from '../../store/settingsStore';
 import { useToastStore } from '../../store/toastStore';
-import { useOpenRouterStore } from '../../store/openRouterStore';
+import { useOpenRouterStore, AttachedFile } from '../../store/openRouterStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useShellStore } from '../../store/shellStore';
-import { Plus, MessageSquare, Trash2, Camera, Edit3, Copy, Check, Mic, MicOff, Settings, X, Paperclip, Search } from 'lucide-react';
+import { Plus, MessageSquare, Trash2, Camera, Edit3, Copy, Check, Mic, MicOff, Settings, X, Paperclip, Search, Info, RefreshCw, Terminal, ChevronDown } from 'lucide-react';
 import { UI_CONSTANTS } from '../../config/constants';
 import { AI_TOOLS, executeTool, transcribeAudio } from '../../utils/aiActions';
 
@@ -106,25 +106,136 @@ interface ChatSession {
   timestamp: string;
 }
 
+const parseMcpJson = (jsonStr: string) => {
+  const parsed = JSON.parse(jsonStr);
+  let name = 'Imported MCP';
+  let command = '';
+  let args: string[] = [];
+  let envObj: Record<string, string> = {};
+  let description = '';
+  let tools: any[] = [];
+
+  const extractFromConfig = (config: any, serverName?: string) => {
+    if (serverName) name = serverName;
+    
+    if (Array.isArray(config.command)) {
+      if (config.command.length > 0) {
+        command = config.command[0];
+        args = [...config.command.slice(1)];
+      }
+    } else if (typeof config.command === 'string') {
+      command = config.command;
+    }
+
+    if (Array.isArray(config.args)) {
+      args = [...args, ...config.args];
+    } else if (typeof config.args === 'string') {
+      args.push(config.args);
+    }
+
+    if (config.env && typeof config.env === 'object') {
+      envObj = { ...envObj, ...config.env };
+    }
+
+    if (typeof config.description === 'string') {
+      description = config.description;
+    }
+
+    if (Array.isArray(config.tools)) {
+      tools = config.tools.map((t: any) => ({
+        name: t.name || '',
+        description: t.description || '',
+        parameters: t.parameters || { type: 'object', properties: {} }
+      }));
+    }
+  };
+
+  if (parsed.mcpServers && typeof parsed.mcpServers === 'object') {
+    const keys = Object.keys(parsed.mcpServers);
+    if (keys.length > 0) {
+      extractFromConfig(parsed.mcpServers[keys[0]], keys[0]);
+    }
+  } else if (parsed.mcp && typeof parsed.mcp === 'object') {
+    const keys = Object.keys(parsed.mcp);
+    if (keys.length > 0) {
+      extractFromConfig(parsed.mcp[keys[0]], keys[0]);
+    }
+  } else if (parsed.command) {
+    extractFromConfig(parsed);
+  } else {
+    const keys = Object.keys(parsed);
+    if (keys.length === 1 && typeof parsed[keys[0]] === 'object') {
+      extractFromConfig(parsed[keys[0]], keys[0]);
+    } else {
+      throw new Error("Could not find MCP server configuration fields (command/args)");
+    }
+  }
+
+  if (!command) {
+    throw new Error("Executable command is required in the JSON configuration");
+  }
+
+  return {
+    name,
+    command,
+    args: args.join(' '),
+    env: Object.keys(envObj).length > 0 ? JSON.stringify(envObj) : '',
+    description,
+    tools
+  };
+};
+
 export function OpenRouterWidget() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [sidebarWidth, setSidebarWidth] = useState(240);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     const startX = e.clientX;
     const startWidth = sidebarWidth;
+    let currentWidth = sidebarWidth;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const deltaX = moveEvent.clientX - startX;
-      const newWidth = Math.max(160, Math.min(400, startWidth + deltaX));
-      setSidebarWidth(newWidth);
+      currentWidth = Math.max(160, Math.min(400, startWidth + deltaX));
+      if (sidebarRef.current) {
+        sidebarRef.current.style.width = `${currentWidth}px`;
+      }
     };
 
     const handleMouseUp = () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
+      setSidebarWidth(currentWidth);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const [drawerWidth, setDrawerWidth] = useState(310);
+
+  const handleDrawerMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = drawerWidth;
+    let currentWidth = drawerWidth;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      currentWidth = Math.max(240, Math.min(600, startWidth - deltaX));
+      if (drawerRef.current) {
+        drawerRef.current.style.width = `${currentWidth}px`;
+      }
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      setDrawerWidth(currentWidth);
     };
 
     document.addEventListener('mousemove', handleMouseMove);
@@ -140,7 +251,9 @@ export function OpenRouterWidget() {
     setSidebarOpen, 
     currentSessionId,
     setCurrentSessionId,
-    clearDraft 
+    clearDraft,
+    attachedFiles,
+    setAttachedFiles
   } = useOpenRouterStore();
   
   const [isTyping, setIsTyping] = useState(false);
@@ -164,7 +277,10 @@ export function OpenRouterWidget() {
     aiChatPersonality,
     aiSettingsProfiles,
     setAiSettingsProfiles,
-    toggleSettings
+    toggleSettings,
+    customTones,
+    customSystemPrompts,
+    aiChatLayoutMode
   } = useSettingsStore(
     useShallow((state) => ({
       aiProvider: state.aiProvider,
@@ -183,7 +299,10 @@ export function OpenRouterWidget() {
       aiChatPersonality: state.aiChatPersonality,
       aiSettingsProfiles: state.aiSettingsProfiles,
       setAiSettingsProfiles: state.setAiSettingsProfiles,
-      toggleSettings: state.toggleSettings
+      toggleSettings: state.toggleSettings,
+      customTones: state.customTones,
+      customSystemPrompts: state.customSystemPrompts,
+      aiChatLayoutMode: state.aiChatLayoutMode
     }))
   );
   
@@ -191,15 +310,6 @@ export function OpenRouterWidget() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sessionSearchQuery, setSessionSearchQuery] = useState('');
   
-  // Attached files state
-  interface AttachedFile {
-    name: string;
-    path: string;
-    content: string;
-    size: number;
-    lines: number;
-  }
-  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   
   // Session-specific settings state
   const [sessionSettings, setSessionSettings] = useState({
@@ -210,15 +320,85 @@ export function OpenRouterWidget() {
     topP: 0.9,
     systemPrompt: '',
     personality: 'default',
+    personalityPrompt: '',
     clipboardAttach: false,
     activeSkills: {
       githubScan: false,
       webSearch: false,
       systemController: true,
       anthropicSearch: false
-    }
+    },
+    customSkills: [] as CustomSkill[],
+    customMcps: [] as CustomMcp[]
   });
+ 
+  // MCP connection status tracking
+  const [mcpStatuses, setMcpStatuses] = useState<Record<string, 'online' | 'offline' | 'testing' | 'unknown'>>({});
+
+  const checkMcpStatus = async (mcpId: string, command: string, args: string) => {
+    setMcpStatuses(prev => ({ ...prev, [mcpId]: 'testing' }));
+    try {
+      const res = await invoke<string>('test_mcp_connection', { command, args });
+      if (res.includes("Connection successful") || res.includes("responded")) {
+        setMcpStatuses(prev => ({ ...prev, [mcpId]: 'online' }));
+      } else {
+        setMcpStatuses(prev => ({ ...prev, [mcpId]: 'offline' }));
+      }
+    } catch (err) {
+      setMcpStatuses(prev => ({ ...prev, [mcpId]: 'offline' }));
+    }
+  };
+
+  // Automatically check active custom MCP status on load or list updates
+  useEffect(() => {
+    if (sessionSettings.customMcps && sessionSettings.customMcps.length > 0) {
+      sessionSettings.customMcps.forEach(mcp => {
+        if (mcp.isActive && !mcpStatuses[mcp.id]) {
+          checkMcpStatus(mcp.id, mcp.command, mcp.args);
+        } else if (!mcp.isActive && mcpStatuses[mcp.id] !== 'unknown' && mcpStatuses[mcp.id] !== undefined) {
+          setMcpStatuses(prev => ({ ...prev, [mcp.id]: 'unknown' }));
+        }
+      });
+    }
+  }, [sessionSettings.customMcps]);
+
+  // State for user custom skills and MCP UI forms
+  const [showAddSkillForm, setShowAddSkillForm] = useState(false);
+  const [newSkillName, setNewSkillName] = useState('');
+  const [newSkillDesc, setNewSkillDesc] = useState('');
+  const [newSkillInst, setNewSkillInst] = useState('');
+  const [expandedSkillId, setExpandedSkillId] = useState<string | null>(null);
+
+  const [showAddMcpForm, setShowAddMcpForm] = useState(false);
+  const [newMcpName, setNewMcpName] = useState('');
+  const [newMcpDesc, setNewMcpDesc] = useState('');
+  const [newMcpCmd, setNewMcpCmd] = useState('');
+  const [newMcpArgs, setNewMcpArgs] = useState('');
+  const [newMcpEnv, setNewMcpEnv] = useState('');
+  const [newMcpTools, setNewMcpTools] = useState<CustomMcpTool[]>([]);
+  const [drawerMcpInputMode, setDrawerMcpInputMode] = useState<'fields' | 'json'>('fields');
+  const [drawerMcpJsonInput, setDrawerMcpJsonInput] = useState('');
+  const [showAddToolForm, setShowAddToolForm] = useState(false);
+  const [newToolName, setNewToolName] = useState('');
+  const [newToolDesc, setNewToolDesc] = useState('');
+  const [newToolParams, setNewToolParams] = useState('{\n  "type": "object",\n  "properties": {}\n}');
+  const [expandedMcpId, setExpandedMcpId] = useState<string | null>(null);
+  const [confirmDeleteSkillId, setConfirmDeleteSkillId] = useState<string | null>(null);
+  const [confirmDeleteMcpId, setConfirmDeleteMcpId] = useState<string | null>(null);
   const [sessionModel, setSessionModel] = useState<string>('');
+  const [isModelSelectOpen, setIsModelSelectOpen] = useState(false);
+  const [modelSearchQuery, setModelSearchQuery] = useState('');
+  const modelSelectRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (modelSelectRef.current && !modelSelectRef.current.contains(e.target as Node)) {
+        setIsModelSelectOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
 
   // Pre-baked system prompt templates
   const SYSTEM_PROMPT_TEMPLATES = {
@@ -240,6 +420,165 @@ export function OpenRouterWidget() {
     if (aiProvider === 'anthropic') return anthropicModel;
     if (aiProvider === 'groq') return groqModel;
     return 'google/gemini-2.5-flash';
+  };
+
+  const getModelProvider = (model: string) => {
+    if (!model) return aiProvider || 'openrouter';
+    if (model.includes('/')) {
+      return 'openrouter';
+    }
+    if (model.startsWith('gpt') || model.includes('openai')) {
+      return 'openai';
+    }
+    if (model.startsWith('claude') || model.includes('anthropic')) {
+      return 'anthropic';
+    }
+    if (model.includes('llama') || model.includes('mixtral') || model.includes('gemma')) {
+      return 'groq';
+    }
+    return aiProvider || 'openrouter';
+  };
+
+  const getSessionModelName = (model: string) => {
+    const currentModel = model || getActiveModelDefault();
+    if (currentModel.includes('/')) {
+      return `OpenRouter: ${currentModel.split('/').pop()}`;
+    }
+    if (currentModel.startsWith('gpt') || currentModel.includes('openai')) {
+      return `OpenAI: ${currentModel}`;
+    }
+    if (currentModel.startsWith('claude') || currentModel.includes('anthropic')) {
+      const parts = currentModel.split('-');
+      return `Anthropic: ${parts.length > 2 ? parts.slice(1).join('-') : currentModel}`;
+    }
+    if (currentModel.includes('llama') || currentModel.includes('mixtral') || currentModel.includes('gemma')) {
+      return `Groq: ${currentModel.split('/').pop()}`;
+    }
+    const provider = aiProvider.charAt(0).toUpperCase() + aiProvider.slice(1);
+    return `${provider}: ${currentModel}`;
+  };
+
+  const parseModelOption = (option: { value: string, label: string }) => {
+    // 1. Handle System Default option
+    if (option.value === "") {
+      const defaultModel = getActiveModelDefault();
+      let defaultLabel = "Unknown Model";
+      
+      const found = [
+        { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash [Vision] [Actions] [File Attachments] [Web Search]' },
+        { value: 'anthropic/claude-3.5-sonnet', label: 'Claude 3.5 Sonnet [Vision] [Actions] [File Attachments] [MCP]' },
+        { value: 'openai/gpt-4o', label: 'OpenAI GPT-4o [Vision] [Actions] [File Attachments]' },
+        { value: 'deepseek/deepseek-chat', label: 'DeepSeek V3 [Actions]' },
+        { value: 'deepseek/deepseek-r1', label: 'DeepSeek R1 [Thinking]' },
+        { value: 'deepseek/deepseek-v4-flash', label: 'DeepSeek v4-Flash [Vision] [File Attachments] [Web Search]' },
+        { value: 'moonshotai/kimi-k2-thinking', label: 'Kimi K2 Thinking [Thinking]' },
+        { value: 'x-ai/grok-4.3', label: 'Grok 4 [Vision] [Actions] [File Attachments]' }
+      ].find(m => m.value === defaultModel);
+
+      if (found) {
+        defaultLabel = found.label;
+      } else {
+        if (openaiModel && defaultModel === openaiModel) defaultLabel = `OpenAI: ${openaiModel} (Direct)`;
+        else if (anthropicModel && defaultModel === anthropicModel) defaultLabel = `Anthropic: ${anthropicModel} (Direct)`;
+        else if (groqModel && defaultModel === groqModel) defaultLabel = `Groq: ${groqModel} (Direct)`;
+        else if (openRouterModel && defaultModel === openRouterModel) defaultLabel = `OpenRouter: ${openRouterModel.split('/').pop()}`;
+        else if (useCustomOpenRouterModel && customOpenRouterModel && defaultModel === customOpenRouterModel) defaultLabel = `Custom OpenRouter: ${customOpenRouterModel}`;
+        else defaultLabel = defaultModel;
+      }
+
+      const resolved = parseModelOption({ value: defaultModel, label: defaultLabel });
+      return {
+        value: "",
+        name: `Use Global Default (${resolved.name})`,
+        provider: "System Default",
+        tags: ["Global"]
+      };
+    }
+
+    let rawLabel = option.label;
+    
+    // Parse tags e.g. [Vision]
+    const tags: string[] = [];
+    const tagRegex = /\[([^\]]+)\]/g;
+    let match;
+    while ((match = tagRegex.exec(rawLabel)) !== null) {
+      tags.push(match[1]);
+    }
+    
+    let cleanName = rawLabel.replace(/\[[^\]]+\]/g, '').trim();
+    let provider = '';
+    
+    const val = option.value;
+    if (val.includes('/')) {
+      provider = 'OpenRouter';
+      if (cleanName.includes(':')) {
+        cleanName = cleanName.split(':').slice(1).join(':').trim();
+      }
+    } else {
+      if (val.startsWith('gpt') || val.includes('openai')) {
+        provider = 'OpenAI (Direct)';
+      } else if (val.startsWith('claude') || val.includes('anthropic')) {
+        provider = 'Anthropic (Direct)';
+      } else if (val.includes('llama') || val.includes('mixtral') || val.includes('gemma')) {
+        provider = 'Groq (Direct)';
+      } else {
+        provider = 'API';
+      }
+      
+      if (cleanName.includes(':')) {
+        cleanName = cleanName.split(':').slice(1).join(':').trim();
+      }
+    }
+
+    cleanName = cleanName.replace(/\(Direct\)$/i, '').trim();
+    
+    return {
+      value: val,
+      name: cleanName,
+      provider,
+      tags
+    };
+  };
+
+  const getAvailableModels = () => {
+    const list = [
+      { value: '', label: 'Use Global Default [Global]' },
+      { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash [Vision] [Actions] [File Attachments] [Web Search]' },
+      { value: 'anthropic/claude-3.5-sonnet', label: 'Claude 3.5 Sonnet [Vision] [Actions] [File Attachments] [MCP]' },
+      { value: 'openai/gpt-4o', label: 'OpenAI GPT-4o [Vision] [Actions] [File Attachments]' },
+      { value: 'deepseek/deepseek-chat', label: 'DeepSeek V3 [Actions]' },
+      { value: 'deepseek/deepseek-r1', label: 'DeepSeek R1 [Thinking]' },
+      { value: 'deepseek/deepseek-v4-flash', label: 'DeepSeek v4-Flash [Vision] [File Attachments] [Web Search]' },
+      { value: 'moonshotai/kimi-k2-thinking', label: 'Kimi K2 Thinking [Thinking]' },
+      { value: 'x-ai/grok-4.3', label: 'Grok 4 [Vision] [Actions] [File Attachments]' }
+    ];
+
+    const getModelLabel = (val: string, providerHint?: string) => {
+      const name = val.split('/').pop() || val;
+      const provider = providerHint || getModelProvider(val);
+      const capProvider = provider.charAt(0).toUpperCase() + provider.slice(1);
+      return `${capProvider}: ${name}`;
+    };
+
+    const addIfMissing = (value: string, label: string) => {
+      if (value && !list.some(item => item.value === value)) {
+        list.push({ value, label });
+      }
+    };
+
+    if (openaiModel) addIfMissing(openaiModel, `OpenAI: ${openaiModel} (Direct)`);
+    if (anthropicModel) addIfMissing(anthropicModel, `Anthropic: ${anthropicModel} (Direct)`);
+    if (groqModel) addIfMissing(groqModel, `Groq: ${groqModel} (Direct)`);
+    if (openRouterModel) addIfMissing(openRouterModel, `OpenRouter: ${openRouterModel.split('/').pop()}`);
+    if (useCustomOpenRouterModel && customOpenRouterModel) {
+      addIfMissing(customOpenRouterModel, `Custom OpenRouter: ${customOpenRouterModel}`);
+    }
+
+    if (sessionModel) {
+      addIfMissing(sessionModel, getModelLabel(sessionModel));
+    }
+
+    return list;
   };
 
   const masterDefaults = {
@@ -346,21 +685,7 @@ export function OpenRouterWidget() {
     return '';
   };
 
-  const getActiveModelName = () => {
-    switch (aiProvider) {
-      case 'openai':
-        return `OpenAI: ${openaiModel}`;
-      case 'anthropic': {
-        const parts = anthropicModel.split('-');
-        return `Anthropic: ${parts.length > 2 ? parts.slice(1).join('-') : anthropicModel}`;
-      }
-      case 'groq':
-        return `Groq: ${groqModel}`;
-      case 'openrouter':
-      default:
-        return `OpenRouter: ${(useCustomOpenRouterModel && customOpenRouterModel) ? customOpenRouterModel : openRouterModel.split('/').pop()}`;
-    }
-  };
+
 
   const handleCopy = (text: string, id: number | string | undefined) => {
     navigator.clipboard.writeText(text);
@@ -392,6 +717,32 @@ export function OpenRouterWidget() {
   }, [currentSessionId]);
 
   useEffect(() => {
+    const handleSettingsApplied = () => {
+      if (currentSessionId) {
+        loadSessionSettings(currentSessionId);
+      }
+    };
+    window.addEventListener('settings-applied', handleSettingsApplied);
+    return () => window.removeEventListener('settings-applied', handleSettingsApplied);
+  }, [
+    currentSessionId,
+    aiChatTemperature,
+    aiChatMaxTokens,
+    aiChatContextSize,
+    aiChatTopK,
+    aiChatTopP,
+    aiChatSystemPrompt,
+    aiChatPersonality,
+    aiProvider,
+    openRouterModel,
+    openaiModel,
+    anthropicModel,
+    groqModel,
+    useCustomOpenRouterModel,
+    customOpenRouterModel
+  ]);
+
+  useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
@@ -402,44 +753,84 @@ export function OpenRouterWidget() {
         "SELECT session_settings, selected_model FROM session_titles WHERE session_id = ?",
         [sessionId]
       );
-      const selectedModel = (res.length > 0 && res[0].selected_model) || masterDefaults.model;
-      const modelDefaults = getModelDefaultSettings(selectedModel);
+      const selectedModel = (res.length > 0 && res[0].selected_model !== null) ? res[0].selected_model : "";
+      const resolvedModel = selectedModel || masterDefaults.model;
+      const modelDefaults = getModelDefaultSettings(resolvedModel);
 
       if (res.length > 0 && res[0].session_settings) {
         const parsed = JSON.parse(res[0].session_settings);
+        
+        let loadedPersonalityPrompt = parsed.personalityPrompt;
+        if (loadedPersonalityPrompt === undefined || loadedPersonalityPrompt === null) {
+          loadedPersonalityPrompt = PERSONALITY_PROMPTS[parsed.personality as keyof typeof PERSONALITY_PROMPTS] || "";
+          if (!loadedPersonalityPrompt && parsed.personality !== "default") {
+            const matchedCustom = useSettingsStore.getState().customTones.find(t => t.id === parsed.personality);
+            if (matchedCustom) {
+              loadedPersonalityPrompt = matchedCustom.text;
+            }
+          }
+        }
+
         setSessionSettings({
           temperature: parsed.temperature ?? modelDefaults.temperature,
           maxTokens: parsed.maxTokens ?? modelDefaults.maxTokens,
           contextSize: parsed.contextSize ?? modelDefaults.contextSize,
           topK: parsed.topK ?? modelDefaults.topK,
           topP: parsed.topP ?? modelDefaults.topP,
-          systemPrompt: parsed.systemPrompt ?? masterDefaults.systemPrompt,
-          personality: parsed.personality ?? masterDefaults.personality,
+          systemPrompt: parsed.systemPrompt ?? "",
+          personality: parsed.personality ?? "default",
+          personalityPrompt: loadedPersonalityPrompt ?? "",
           clipboardAttach: parsed.clipboardAttach ?? false,
           activeSkills: parsed.activeSkills ?? {
             githubScan: false,
             webSearch: false,
             systemController: true,
             anthropicSearch: false
-          }
+          },
+          customSkills: (() => {
+            const globalSkills = useSettingsStore.getState().globalCustomSkills || [];
+            return globalSkills.map(gs => {
+              const existing = (parsed.customSkills || []).find((s: any) => s.id === gs.id);
+              return {
+                ...gs,
+                isActive: existing ? existing.isActive : gs.isActive
+              };
+            });
+          })(),
+          customMcps: (() => {
+            const globalMcps = useSettingsStore.getState().globalCustomMcps || [];
+            return globalMcps.map(gm => {
+              const existing = (parsed.customMcps || []).find((m: any) => m.id === gm.id);
+              return {
+                ...gm,
+                isActive: existing ? existing.isActive : gm.isActive
+              };
+            });
+          })()
         });
         setSessionModel(selectedModel);
       } else {
+        const globalSkills = useSettingsStore.getState().globalCustomSkills || [];
+        const globalMcps = useSettingsStore.getState().globalCustomMcps || [];
+
         setSessionSettings({
           temperature: modelDefaults.temperature,
           maxTokens: modelDefaults.maxTokens,
           contextSize: modelDefaults.contextSize,
           topK: modelDefaults.topK,
           topP: modelDefaults.topP,
-          systemPrompt: masterDefaults.systemPrompt,
-          personality: masterDefaults.personality,
+          systemPrompt: "",
+          personality: "default",
+          personalityPrompt: "",
           clipboardAttach: false,
           activeSkills: {
             githubScan: false,
             webSearch: false,
             systemController: true,
             anthropicSearch: false
-          }
+          },
+          customSkills: globalSkills.map(s => ({ ...s, isActive: s.isActive })),
+          customMcps: globalMcps.map(m => ({ ...m, isActive: m.isActive }))
         });
         setSessionModel(selectedModel);
       }
@@ -522,24 +913,31 @@ export function OpenRouterWidget() {
     setCurrentSessionId(newId);
     setMessages([]);
     
-    const selectedModel = masterDefaults.model;
-    const modelDefaults = getModelDefaultSettings(selectedModel);
+    const selectedModel = "";
+    const resolvedModel = masterDefaults.model;
+    const modelDefaults = getModelDefaultSettings(resolvedModel);
     
+    const globalSkills = useSettingsStore.getState().globalCustomSkills || [];
+    const globalMcps = useSettingsStore.getState().globalCustomMcps || [];
+
     const initialSettings = {
       temperature: modelDefaults.temperature,
       maxTokens: modelDefaults.maxTokens,
       contextSize: modelDefaults.contextSize,
       topK: modelDefaults.topK,
       topP: modelDefaults.topP,
-      systemPrompt: masterDefaults.systemPrompt,
-      personality: masterDefaults.personality,
+      systemPrompt: "",
+      personality: "default",
+      personalityPrompt: "",
       clipboardAttach: false,
       activeSkills: {
         githubScan: false,
         webSearch: false,
         systemController: true,
         anthropicSearch: false
-      }
+      },
+      customSkills: globalSkills.map(s => ({ ...s, isActive: s.isActive })),
+      customMcps: globalMcps.map(m => ({ ...m, isActive: m.isActive }))
     };
     setSessionSettings(initialSettings);
     setSessionModel(selectedModel);
@@ -815,8 +1213,14 @@ export function OpenRouterWidget() {
       case 'get_active_media_and_app':
         showToast(`🎵 Querying active application and media`);
         break;
+      case 'web_search':
+      case 'list_github_issues':
+        // Skipped generic toast to prevent duplicates since specific toasts are shown during tool execution
+        break;
       default:
-        showToast(`🔧 Tool Executed: ${name}`);
+        if (!name.startsWith('mcp_')) {
+          showToast(`🔧 Tool Executed: ${name}`);
+        }
         break;
     }
   };
@@ -835,11 +1239,7 @@ export function OpenRouterWidget() {
       let keyId = 'openrouter_key';
       let friendlyProviderName = 'OpenRouter';
       let selectedModel = sessionModel || getActiveModelDefault();
-      let provider = aiProvider || 'openrouter';
-
-      if (selectedModel.includes('/')) {
-        provider = 'openrouter';
-      }
+      let provider = getModelProvider(selectedModel);
 
       switch (provider) {
         case 'openai':
@@ -874,7 +1274,7 @@ export function OpenRouterWidget() {
         throw new Error(`${friendlyProviderName} API key is invalid or empty.`);
       }
 
-      const apiMessages = currentMessages.map(msg => {
+      const apiMessages = currentMessages.map((msg, index) => {
         if (msg.role === 'tool') {
           return {
             role: 'tool',
@@ -894,14 +1294,23 @@ export function OpenRouterWidget() {
         const attachments = parseImagePath(msg.image_path);
         
         if (attachments) {
+          const shouldTruncate = (currentMessages.length - index) > 2;
           if (attachments.files && attachments.files.length > 0) {
             messageContent += "\n\n=== ATTACHED_FILES ===";
             attachments.files.forEach((file: any) => {
-              messageContent += `\n\n<attached_file name="${file.name}">\n${file.content}\n</attached_file>`;
+              if (shouldTruncate && file.content && file.content.length > 300) {
+                messageContent += `\n\n<attached_file name="${file.name}">\n[File content truncated to save tokens...]\n</attached_file>`;
+              } else {
+                messageContent += `\n\n<attached_file name="${file.name}">\n${file.content}\n</attached_file>`;
+              }
             });
           }
           if (attachments.clipboard) {
-            messageContent += `\n\n=== CLIPBOARD_ATTACHMENT ===\n${attachments.clipboard}`;
+            if (shouldTruncate && attachments.clipboard.length > 300) {
+              messageContent += `\n\n=== CLIPBOARD_ATTACHMENT ===\n${attachments.clipboard.substring(0, 300)}\n[Clipboard content truncated to save tokens...]`;
+            } else {
+              messageContent += `\n\n=== CLIPBOARD_ATTACHMENT ===\n${attachments.clipboard}`;
+            }
           }
           
           if (attachments.image) {
@@ -946,6 +1355,29 @@ export function OpenRouterWidget() {
         activeTools = [...activeTools, ...MOCK_WEB_SEARCH_TOOLS];
       }
 
+      // Inject custom user MCP tools
+      if (sessionSettings.customMcps) {
+        const activeCustomMcps = sessionSettings.customMcps.filter(m => m.isActive);
+        activeCustomMcps.forEach(mcp => {
+          if (mcp.tools && mcp.tools.length > 0) {
+            mcp.tools.forEach(t => {
+              let toolName = t.name;
+              if (!toolName.startsWith('mcp_')) {
+                toolName = `mcp_${mcp.name.toLowerCase().replace(/[^a-z0-9_]/g, '_')}_${toolName}`;
+              }
+              activeTools.push({
+                type: "function",
+                function: {
+                  name: toolName,
+                  description: t.description,
+                  parameters: t.parameters || { type: "object", properties: {} }
+                }
+              });
+            });
+          }
+        });
+      }
+
       const toolsPayload = supportsTools && activeTools.length > 0
         ? (provider === 'anthropic' 
             ? activeTools.map(t => ({
@@ -962,9 +1394,44 @@ export function OpenRouterWidget() {
         tool_calls?: any;
       }
 
-      const personalityPrefix = PERSONALITY_PROMPTS[sessionSettings.personality as keyof typeof PERSONALITY_PROMPTS] || "";
+      let personalityPrefix = sessionSettings.personalityPrompt;
+      if (personalityPrefix === undefined || personalityPrefix === null || personalityPrefix === "") {
+        personalityPrefix = PERSONALITY_PROMPTS[sessionSettings.personality as keyof typeof PERSONALITY_PROMPTS] || "";
+        if (!personalityPrefix && sessionSettings.personality !== "default") {
+          const matchedCustom = customTones.find(t => t.id === sessionSettings.personality);
+          if (matchedCustom) {
+            personalityPrefix = `Respond in character as ${matchedCustom.name}. ${matchedCustom.text}`;
+          }
+        }
+      }
       const baseSystemPrompt = sessionSettings.systemPrompt || UI_CONSTANTS.CHAT_SYSTEM_PROMPT;
-      const finalSystemPrompt = personalityPrefix + baseSystemPrompt;
+      let finalSystemPrompt = (personalityPrefix ? (personalityPrefix + " ") : "") + baseSystemPrompt;
+
+      if (sessionSettings.customMcps) {
+        const activeCustomMcps = sessionSettings.customMcps.filter(m => m.isActive);
+        if (activeCustomMcps.length > 0) {
+          finalSystemPrompt += "\n\n=== USER ACTIVE MCP SERVERS ===";
+          activeCustomMcps.forEach(mcp => {
+            finalSystemPrompt += `\n\n[MCP SERVER: ${mcp.name}]\nDescription: ${mcp.description || 'No description'}\nCommand: ${mcp.command} ${mcp.args}\nStatus: Active`;
+            if (mcp.tools && mcp.tools.length > 0) {
+              finalSystemPrompt += "\nAvailable Tools:";
+              mcp.tools.forEach(t => {
+                finalSystemPrompt += `\n  - ${t.name}: ${t.description}`;
+              });
+            }
+          });
+        }
+      }
+
+      if (sessionSettings.customSkills) {
+        const activeCustomSkills = sessionSettings.customSkills.filter(s => s.isActive);
+        if (activeCustomSkills.length > 0) {
+          finalSystemPrompt += "\n\n=== USER CUSTOM SKILLS ===";
+          activeCustomSkills.forEach(s => {
+            finalSystemPrompt += `\n\n[SKILL: ${s.name}]\nDescription: ${s.description}\nInstructions:\n${s.instructions}`;
+          });
+        }
+      }
 
       const result = await invoke<UnifiedLlmResponse>('call_ai_api', {
         provider: provider,
@@ -1010,7 +1477,35 @@ export function OpenRouterWidget() {
           showToolToast(name, args);
           
           let output = "";
-          if (name === "list_github_issues") {
+          const getMcpCommandInfo = (toolName: string) => {
+            if (sessionSettings.customMcps) {
+              for (const mcp of sessionSettings.customMcps) {
+                if (mcp.tools) {
+                  const found = mcp.tools.some((t: any) => {
+                    let tName = t.name;
+                    if (!tName.startsWith('mcp_')) {
+                      tName = `mcp_${mcp.name.toLowerCase().replace(/[^a-z0-9_]/g, '_')}_${tName}`;
+                    }
+                    return tName === toolName;
+                  });
+                  if (found) {
+                    return { command: mcp.command, args: mcp.args, env: mcp.env, serverName: mcp.name };
+                  }
+                }
+              }
+            }
+            return null;
+          };
+
+          const mcpInfo = getMcpCommandInfo(name);
+
+          if (mcpInfo) {
+            showToast(`🔌 MCP Tool: Executed ${name} on ${mcpInfo.serverName}`);
+            output = `[MCP Server: ${mcpInfo.serverName}]\n[Command: ${mcpInfo.command} ${mcpInfo.args}]\n[Env Variables: ${mcpInfo.env || 'none'}]\n[Args passed to tool: ${JSON.stringify(args)}]\n[Stdout]: Connection to MCP server established. Executed tool '${name}' successfully. Simulated response output.`;
+          } else if (name.startsWith('mcp_')) {
+            showToast(`🔌 MCP Tool: Executed ${name}`);
+            output = `[MCP Tool: ${name}]\n[Args: ${JSON.stringify(args)}]\n[Stdout]: Simulated tool execution completed.`;
+          } else if (name === "list_github_issues") {
             output = JSON.stringify([
               { id: 104, title: "Failsafe hotkey watcher drop on borderless window", state: "open", assignee: "Arias" },
               { id: 105, title: "Integrate vector HUD analytics telemetry database", state: "open", assignee: "Arias" },
@@ -1023,12 +1518,29 @@ export function OpenRouterWidget() {
               output = "Live Search Results: Clear sky, 72°F (22°C), humidity 45%, wind NW at 8 mph. No precipitation alerts.";
             } else if (query.toLowerCase().includes("stock") || query.toLowerCase().includes("market")) {
               output = "Live Financial Index: NASDAQ +1.2%, DOW +0.8%, S&P 500 +1.0%. Tech sector leading gains.";
-            } else if (query.toLowerCase().includes("news")) {
-              output = "Live News Bulletin: Global Summit reaches agreement on clean energy transitions. Tech consortium releases new standards for interoperable overlays.";
             } else {
-              output = `Live Search Results for '${query}': Standard database entry found. VectorHUD v1.3.2 is fully verified. Settings saving successfully completed. Local workspace is clean.`;
+              // Return a rich set of 5 chronologically ordered tech news items by default for general queries
+              output = JSON.stringify([
+                { date: "2026-06-24", title: "Micron Reports Record $41.46B Revenue Driven by HBM AI Memory Demand", source: "MarketWatch", summary: "Micron Technology reported fiscal Q3 2026 revenue of $41.46 billion, a massive jump from $9.30 billion last year, driven by unprecedented demand for High-Bandwidth Memory (HBM3E) chips used in AI accelerators." },
+                { date: "2026-06-22", title: "White House Directs Agencies to Accelerate Quantum Computing & Security", source: "Reuters", summary: "The Biden administration issued a presidential directive aiming to speed up the commercialization of Quantum Information Science and Technology (QIST) while establishing quantum-resistant cryptography frameworks." },
+                { date: "2026-06-20", title: "World Economic Forum Unveils Top 10 Emerging Technologies of 2026", source: "WEF News", summary: "At the Summer Davos in China, the WEF listed the Top 10 Emerging Technologies of 2026, emphasizing exosome-targeted drug delivery, direct lithium extraction, and passive radiative cooling energy grids." },
+                { date: "2026-06-18", title: "NVIDIA Details Blackwell B200 Architecture Performance Metrics", source: "EE Times", summary: "NVIDIA shared updated technical performance metrics for its next-gen Blackwell AI platform, highlighting extreme memory bandwidth and 30x energy efficiency gains for large language model inference." },
+                { date: "2026-06-15", title: "Tauri v2.0 Stable Released with Rust-based Android & iOS Targets", source: "GitHub Blog", summary: "The Tauri team officially announced the stable release of Tauri v2, enabling web developers to compile lightweight, Rust-backed desktop applications into native mobile iOS and Android binaries." }
+              ]);
             }
             showToast(`🔍 Web Search: Queried "${query.substring(0, 15)}..."`);
+          } else if (name.startsWith("mcp_")) {
+            // Simulated MCP tool execution
+            output = JSON.stringify({
+              status: "success",
+              message: `Simulated response from custom MCP tool '${name.replace(/^mcp_/, '')}'`,
+              arguments_received: args,
+              data: {
+                timestamp: new Date().toISOString(),
+                result: `Successfully processed request for tool '${name}' with parameters ${JSON.stringify(args)}`
+              }
+            });
+            showToast(`🔌 MCP Tool: Executed ${name.substring(0, 20)}...`);
           } else {
             output = await executeTool(name, args);
           }
@@ -1076,11 +1588,31 @@ export function OpenRouterWidget() {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
     const filesArray = Array.from(e.target.files);
+    let currentFiles = [...attachedFiles];
     
     for (const file of filesArray) {
       const filePath = (file as any).path || '';
       if (!filePath) {
-        showToast("⚠️ Could not retrieve absolute path for file");
+        // Fallback: Read file directly using JS FileReader / text()
+        try {
+          showToast(`📄 Reading ${file.name}...`);
+          const content = await file.text();
+          const lineCount = content.split('\n').length;
+          
+          const attached: AttachedFile = {
+            name: file.name,
+            path: file.name, // fallback path is just the name
+            content: content,
+            size: file.size,
+            lines: lineCount
+          };
+          
+          currentFiles = [...currentFiles, attached];
+          setAttachedFiles(currentFiles);
+          showToast(`✓ Attached: ${file.name}`);
+        } catch (err) {
+          showToast(`❌ Failed to read file content: ${getErrorMessage(err)}`);
+        }
         continue;
       }
       
@@ -1097,7 +1629,8 @@ export function OpenRouterWidget() {
           lines: lineCount
         };
         
-        setAttachedFiles(prev => [...prev, attached]);
+        currentFiles = [...currentFiles, attached];
+        setAttachedFiles(currentFiles);
         showToast(`✓ Attached: ${file.name}`);
       } catch (err) {
         showToast(`❌ Failed to read file: ${getErrorMessage(err)}`);
@@ -1111,12 +1644,14 @@ export function OpenRouterWidget() {
   };
 
   return (
-    <div className="flex h-full bg-black/60 font-mono overflow-hidden w-full min-w-0">
+    <div className="flex h-full bg-black/60 font-mono overflow-hidden w-full min-w-0 relative">
       {/* Sidebar */}
       {sidebarOpen && (
         <div 
+          ref={sidebarRef}
+          onClick={(e) => e.stopPropagation()}
           style={{ width: `${sidebarWidth}px` }}
-          className="bg-black flex flex-col shrink-0 overflow-hidden"
+          className={`${aiChatLayoutMode === 'overlay' ? 'absolute left-0 top-0 bottom-0 z-30 border-r border-zinc-805 shadow-2xl h-full' : 'relative'} bg-black flex flex-col shrink-0 overflow-hidden`}
         >
           <div className="p-3 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50">
             <h3 className="text-xs font-bold tracking-widest text-zinc-500 uppercase">Chat Sessions</h3>
@@ -1205,524 +1740,29 @@ export function OpenRouterWidget() {
       {sidebarOpen && (
         <div
           onMouseDown={handleMouseDown}
-          className="w-[3px] hover:w-[5px] bg-zinc-800 hover:bg-accent-amber/50 active:bg-accent-amber/80 cursor-col-resize transition-all h-full shrink-0 z-20 relative select-none"
+          className={`w-[3px] hover:w-[5px] bg-zinc-800 hover:bg-accent-amber/50 active:bg-accent-amber/80 cursor-col-resize transition-all h-full shrink-0 z-35 select-none ${aiChatLayoutMode === 'overlay' ? 'absolute top-0 bottom-0' : 'relative'}`}
+          style={aiChatLayoutMode === 'overlay' ? { left: `${sidebarWidth}px` } : undefined}
           title="Drag to resize sidebar"
         />
       )}
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col relative min-w-0">
-        {/* Settings Drawer Overlay */}
-        {drawerOpen && (
-          <div className="absolute right-0 top-0 h-full w-[310px] bg-zinc-950/95 border-l border-zinc-800 z-30 shadow-2xl flex flex-col animate-in slide-in-from-right duration-200 select-none backdrop-blur-md">
-            <div className="p-3 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/40 shrink-0">
-              <span className="text-xs font-bold text-zinc-200 tracking-widest uppercase font-mono">Session settings</span>
-              <button onClick={() => setDrawerOpen(false)} className="text-zinc-500 hover:text-zinc-300">
-                <X size={14} />
-              </button>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4 font-mono text-[11px] text-zinc-300">
-              {/* Model Override Dropdown */}
-              <div className="space-y-1">
-                <label className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider font-mono">Session Model</label>
-                <select
-                  value={sessionModel}
-                  onChange={(e) => {
-                    const newModel = e.target.value;
-                    setSessionModel(newModel);
-                    
-                    // Reset to model defaults
-                    const modelDefaults = getModelDefaultSettings(newModel);
-                    const newSettings = {
-                      ...sessionSettings,
-                      temperature: modelDefaults.temperature,
-                      maxTokens: modelDefaults.maxTokens,
-                      contextSize: modelDefaults.contextSize,
-                      topK: modelDefaults.topK,
-                      topP: modelDefaults.topP,
-                      systemPrompt: masterDefaults.systemPrompt,
-                      personality: masterDefaults.personality
-                    };
-                    setSessionSettings(newSettings);
-                    saveSessionSettings(currentSessionId, newSettings, newModel);
-                    showToast(`🤖 Switched session model to: ${newModel.split('/').pop()}`);
-                  }}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-accent-amber/50 cursor-pointer font-mono"
-                >
-                  <option value="google/gemini-2.5-flash">Gemini 2.5 Flash [Vision] [Actions] [File Attachments] [Web Search]</option>
-                  <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet [Vision] [Actions] [File Attachments] [MCP]</option>
-                  <option value="openai/gpt-4o">OpenAI GPT-4o [Vision] [Actions] [File Attachments]</option>
-                  <option value="deepseek/deepseek-chat">DeepSeek V3 [Actions]</option>
-                  <option value="deepseek/deepseek-r1">DeepSeek R1 [Thinking]</option>
-                  <option value="deepseek/deepseek-v4-flash">DeepSeek v4-Flash [Vision] [File Attachments]</option>
-                  <option value="moonshotai/kimi-k2-thinking">Kimi K2 Thinking [Thinking]</option>
-                  <option value="x-ai/grok-4.3">Grok 4 [Vision] [Actions] [File Attachments]</option>
-                </select>
-              </div>
-
-              {/* Temperature */}
-              <div className="space-y-1">
-                <div className="flex justify-between items-center text-[9px] text-zinc-500 uppercase">
-                  <span>Temperature</span>
-                  <span className="text-accent-amber font-bold">{sessionSettings.temperature.toFixed(1)}</span>
-                </div>
-                <input 
-                  type="range" min="0" max="2" step="0.1"
-                  value={sessionSettings.temperature}
-                  onChange={(e) => {
-                     const newSettings = { ...sessionSettings, temperature: parseFloat(e.target.value) };
-                     setSessionSettings(newSettings);
-                     saveSessionSettings(currentSessionId, newSettings, sessionModel);
-                  }}
-                  className="w-full accent-accent-amber cursor-pointer bg-zinc-900 h-1 rounded"
-                />
-              </div>
-
-              {/* Max Tokens */}
-              <div className="space-y-1">
-                <div className="flex justify-between items-center text-[9px] text-zinc-500 uppercase">
-                  <span>Max Output Tokens</span>
-                  <span className="text-accent-amber font-bold">
-                    {sessionSettings.maxTokens === 0 ? "LIMITLESS" : sessionSettings.maxTokens}
-                  </span>
-                </div>
-                <input 
-                  type="range" min="0" max="8192" step="128"
-                  value={sessionSettings.maxTokens}
-                  onChange={(e) => {
-                     const newSettings = { ...sessionSettings, maxTokens: parseInt(e.target.value) };
-                     setSessionSettings(newSettings);
-                     saveSessionSettings(currentSessionId, newSettings, sessionModel);
-                  }}
-                  className="w-full accent-accent-amber cursor-pointer bg-zinc-900 h-1 rounded"
-                />
-              </div>
-
-              {/* Context Size */}
-              <div className="space-y-1">
-                <div className="flex justify-between items-center text-[9px] text-zinc-500 uppercase">
-                  <span>Context Budget</span>
-                  <span className="text-accent-amber font-bold">{sessionSettings.contextSize} TK</span>
-                </div>
-                <input 
-                  type="range" min="1024" max="128000" step="1024"
-                  value={sessionSettings.contextSize}
-                  onChange={(e) => {
-                     const newSettings = { ...sessionSettings, contextSize: parseInt(e.target.value) };
-                     setSessionSettings(newSettings);
-                     saveSessionSettings(currentSessionId, newSettings, sessionModel);
-                  }}
-                  className="w-full accent-accent-amber cursor-pointer bg-zinc-900 h-1 rounded"
-                />
-              </div>
-
-              {/* Top-P and Top-K */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <div className="flex justify-between items-center text-[9px] text-zinc-500 uppercase">
-                    <span>Top-P</span>
-                    <span className="text-accent-amber font-bold">{sessionSettings.topP.toFixed(2)}</span>
-                  </div>
-                  <input 
-                    type="range" min="0" max="1" step="0.05"
-                    value={sessionSettings.topP}
-                    onChange={(e) => {
-                       const newSettings = { ...sessionSettings, topP: parseFloat(e.target.value) };
-                       setSessionSettings(newSettings);
-                       saveSessionSettings(currentSessionId, newSettings, sessionModel);
-                    }}
-                    className="w-full accent-accent-amber cursor-pointer bg-zinc-900 h-1 rounded"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <div className="flex justify-between items-center text-[9px] text-zinc-500 uppercase">
-                    <span>Top-K</span>
-                    <span className="text-accent-amber font-bold">{sessionSettings.topK}</span>
-                  </div>
-                  <input 
-                    type="range" min="1" max="100" step="1"
-                    value={sessionSettings.topK}
-                    onChange={(e) => {
-                       const newSettings = { ...sessionSettings, topK: parseInt(e.target.value) };
-                       setSessionSettings(newSettings);
-                       saveSessionSettings(currentSessionId, newSettings, sessionModel);
-                    }}
-                    className="w-full accent-accent-amber cursor-pointer bg-zinc-900 h-1 rounded"
-                  />
-                </div>
-              </div>
-
-              {/* Token Ammo Gauge */}
-              {(() => {
-                const estimateTokens = () => {
-                  let charCount = 0;
-                  messages.forEach(msg => {
-                    charCount += (msg.content || '').length;
-                    const attachments = parseImagePath(msg.image_path);
-                    if (attachments) {
-                      if (attachments.image) charCount += 4000;
-                      if (attachments.files) {
-                        attachments.files.forEach((f: any) => {
-                          charCount += (f.content || '').length;
-                        });
-                      }
-                    }
-                  });
-                  attachedFiles.forEach(file => {
-                    charCount += (file.content || '').length;
-                  });
-                  return Math.round(charCount / 4);
-                };
-                const used = estimateTokens();
-                const percentage = Math.min(100, (used / sessionSettings.contextSize) * 100);
-                
-                return (
-                  <div className="space-y-1.5 border-t border-zinc-900 pt-3">
-                    <div className="flex justify-between items-center text-[9px] text-zinc-550">
-                      <span>Token Ammo Gauge</span>
-                      <span className="text-accent-green font-bold">{used} / {sessionSettings.contextSize} TK</span>
-                    </div>
-                    <div className="h-2.5 bg-zinc-950 border border-zinc-800 rounded p-[1px] flex gap-[2px] overflow-hidden">
-                      {Array.from({ length: 10 }).map((_, idx) => {
-                        const threshold = (idx + 1) * 10;
-                        const isFilled = percentage >= threshold;
-                        let color = 'bg-zinc-850';
-                        if (isFilled) {
-                          if (threshold > 80) color = 'bg-red-500';
-                          else if (threshold > 50) color = 'bg-accent-amber';
-                          else color = 'bg-accent-green';
-                        }
-                        return (
-                          <div 
-                            key={idx} 
-                            className={`flex-1 h-full rounded-sm transition-all duration-300 ${color}`}
-                            style={{ opacity: isFilled ? 1 : 0.15 }}
-                          />
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* System Prompt Custom templates */}
-              <div className="space-y-1 border-t border-zinc-900 pt-3">
-                <label className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider font-mono">System Prompt Template</label>
-                <select
-                  value={
-                    Object.entries(SYSTEM_PROMPT_TEMPLATES).find(([_, temp]) => temp.text === sessionSettings.systemPrompt)?.[0] || 'custom'
-                  }
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    let nextPrompt = sessionSettings.systemPrompt;
-                    if (val !== 'custom') {
-                      nextPrompt = SYSTEM_PROMPT_TEMPLATES[val as keyof typeof SYSTEM_PROMPT_TEMPLATES].text;
-                    }
-                    const newSettings = { ...sessionSettings, systemPrompt: nextPrompt };
-                    setSessionSettings(newSettings);
-                    saveSessionSettings(currentSessionId, newSettings, sessionModel);
-                  }}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-200 focus:outline-none focus:border-accent-amber/50 cursor-pointer font-mono"
-                >
-                  {Object.entries(SYSTEM_PROMPT_TEMPLATES).map(([key, value]) => (
-                    <option key={key} value={key}>{value.name.toUpperCase()}</option>
-                  ))}
-                </select>
-                
-                <textarea
-                  value={sessionSettings.systemPrompt}
-                  onChange={(e) => {
-                    const newSettings = { ...sessionSettings, systemPrompt: e.target.value };
-                    setSessionSettings(newSettings);
-                    saveSessionSettings(currentSessionId, newSettings, sessionModel);
-                  }}
-                  placeholder="Enter custom instructions..."
-                  rows={2}
-                  className="w-full bg-black/40 border border-zinc-800 rounded px-2.5 py-1.5 text-[11px] font-mono text-zinc-300 focus:outline-none focus:border-accent-amber/50 resize-none mt-1"
-                />
-              </div>
-
-              {/* AI Personality Selector */}
-              <div className="space-y-1">
-                <label className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider font-mono">AI Response Tone</label>
-                <select
-                  value={sessionSettings.personality}
-                  onChange={(e) => {
-                    const newSettings = { ...sessionSettings, personality: e.target.value };
-                    setSessionSettings(newSettings);
-                    saveSessionSettings(currentSessionId, newSettings, sessionModel);
-                  }}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-200 focus:outline-none focus:border-accent-amber/50 cursor-pointer font-mono"
-                >
-                  <option value="default">DEFAULT NEUTRAL</option>
-                  <option value="tactical">TACTICAL OFFICER</option>
-                  <option value="copilot">GRITTY COPILOT</option>
-                  <option value="operator">SARCASTIC OPERATOR</option>
-                  <option value="scientific">DRY SCIENTIFIC ADVISOR</option>
-                </select>
-              </div>
-
-              {/* Active Skills Checklist */}
-              <div className="space-y-2 border-t border-zinc-900 pt-3">
-                <label className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider font-mono">Active HUD Skills</label>
-                
-                {/* System Controller */}
-                <div className="bg-zinc-950 border border-zinc-900 p-2 rounded flex flex-col gap-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-zinc-300 text-[10px]">SYSTEM CONTROLLER</span>
-                    <input
-                      type="checkbox"
-                      checked={sessionSettings.activeSkills.systemController}
-                      onChange={(e) => {
-                        const newSettings = {
-                          ...sessionSettings,
-                          activeSkills: { ...sessionSettings.activeSkills, systemController: e.target.checked }
-                        };
-                        setSessionSettings(newSettings);
-                        saveSessionSettings(currentSessionId, newSettings, sessionModel);
-                      }}
-                      className="accent-accent-amber"
-                    />
-                  </div>
-                  <span className="text-[9px] text-zinc-600">Controls PC audio volumes, media playback track, stopwatch, timers, and telemetry statistics.</span>
-                </div>
-
-                {/* GitHub Scan */}
-                <div className="bg-zinc-950 border border-zinc-900 p-2 rounded flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-zinc-300 text-[10px]">GITHUB SCAN</span>
-                    <input
-                      type="checkbox"
-                      checked={sessionSettings.activeSkills.githubScan}
-                      onChange={(e) => {
-                        const newSettings = {
-                          ...sessionSettings,
-                          activeSkills: { ...sessionSettings.activeSkills, githubScan: e.target.checked }
-                        };
-                        setSessionSettings(newSettings);
-                        saveSessionSettings(currentSessionId, newSettings, sessionModel);
-                      }}
-                      className="accent-accent-amber"
-                    />
-                  </div>
-                  <span className="text-[9px] text-zinc-600">Enables scanning repository commits, monitoring issue lists, and tracking pull requests.</span>
-                  {sessionSettings.activeSkills.githubScan && (
-                    <div className="border border-zinc-800 bg-black/50 p-1.5 rounded text-[9px] text-zinc-400 space-y-1">
-                      <span className="text-accent-amber block font-bold">⚠️ REQUIRES REPO PERMISSION KEYS</span>
-                      <button
-                        type="button"
-                        onClick={() => toggleSettings()}
-                        className="w-full text-center bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 py-1 text-[8px] font-bold text-accent-amber tracking-wider uppercase rounded"
-                      >
-                        Navigate to Credentials
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Web Search */}
-                <div className="bg-zinc-950 border border-zinc-900 p-2 rounded flex flex-col gap-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-zinc-300 text-[10px]">WEB SEARCH</span>
-                    <input
-                      type="checkbox"
-                      checked={sessionSettings.activeSkills.webSearch}
-                      onChange={(e) => {
-                        const newSettings = {
-                          ...sessionSettings,
-                          activeSkills: { ...sessionSettings.activeSkills, webSearch: e.target.checked }
-                        };
-                        setSessionSettings(newSettings);
-                        saveSessionSettings(currentSessionId, newSettings, sessionModel);
-                      }}
-                      className="accent-accent-amber"
-                    />
-                  </div>
-                  <span className="text-[9px] text-zinc-600">Accesses external search tools to pull real-time weather, market indexes, or live documentation.</span>
-                </div>
-
-                {/* Anthropic Search */}
-                <div className="bg-zinc-950 border border-zinc-900 p-2 rounded flex flex-col gap-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-zinc-300 text-[10px]">ANTHROPIC SEARCH</span>
-                    <input
-                      type="checkbox"
-                      checked={sessionSettings.activeSkills.anthropicSearch}
-                      onChange={(e) => {
-                        const newSettings = {
-                          ...sessionSettings,
-                          activeSkills: { ...sessionSettings.activeSkills, anthropicSearch: e.target.checked }
-                        };
-                        setSessionSettings(newSettings);
-                        saveSessionSettings(currentSessionId, newSettings, sessionModel);
-                      }}
-                      className="accent-accent-amber"
-                    />
-                  </div>
-                  <span className="text-[9px] text-zinc-600">Use Anthropic web tools integration when utilizing Claude provider models.</span>
-                </div>
-              </div>
-
-               {/* Clipboard Attach */}
-               <div className="space-y-1 border-t border-zinc-900 pt-3">
-                 <div className="flex items-center justify-between">
-                   <label className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider font-mono">Clipboard Auto-Attach</label>
-                   <input
-                     type="checkbox"
-                     checked={sessionSettings.clipboardAttach}
-                     onChange={(e) => {
-                       const newSettings = { ...sessionSettings, clipboardAttach: e.target.checked };
-                       setSessionSettings(newSettings);
-                       saveSessionSettings(currentSessionId, newSettings, sessionModel);
-                     }}
-                     className="accent-accent-amber"
-                   />
-                 </div>
-                 <span className="text-[9px] text-zinc-600">Automatically appends system clipboard text content to your message prompts on send.</span>
-               </div>
-
-              {/* Profiles management */}
-              <div className="space-y-2 border-t border-zinc-900 pt-3">
-                <label className="text-[9px] font-bold text-zinc-500 uppercase tracking-wider font-mono">Save Custom Profile</label>
-                <div className="flex gap-2">
-                  <input 
-                    type="text"
-                    id="drawer-profile-name"
-                    placeholder="PROFILE NAME..."
-                    className="flex-1 bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-[10px] font-mono text-zinc-300 placeholder:text-zinc-700 focus:outline-none uppercase"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const el = document.getElementById('drawer-profile-name') as HTMLInputElement;
-                      if (!el || !el.value.trim()) {
-                        showToast("⚠️ Profile name cannot be empty");
-                        return;
-                      }
-                      const name = el.value.trim();
-                      const currentProfile = {
-                        aiChatTemperature: sessionSettings.temperature,
-                        aiChatMaxTokens: sessionSettings.maxTokens,
-                        aiChatContextSize: sessionSettings.contextSize,
-                        aiChatTopK: sessionSettings.topK,
-                        aiChatTopP: sessionSettings.topP,
-                        aiChatSystemPrompt: sessionSettings.systemPrompt,
-                        aiChatPersonality: sessionSettings.personality,
-                      };
-                      const updatedProfiles = {
-                        ...aiSettingsProfiles,
-                        [name]: currentProfile
-                      };
-                      setAiSettingsProfiles(updatedProfiles);
-                      el.value = '';
-                      showToast(`💾 Profile "${name}" saved`);
-                    }}
-                    className="bg-accent-amber/15 border border-accent-amber/35 text-accent-amber px-3 py-1 rounded text-[10px] font-bold uppercase hover:bg-accent-amber hover:text-black transition-colors"
-                  >
-                    Save
-                  </button>
-                </div>
-                {Object.keys(aiSettingsProfiles).length > 0 && (
-                  <select
-                    onChange={(e) => {
-                      const name = e.target.value;
-                      if (!name) return;
-                      const prof = aiSettingsProfiles[name];
-                      if (prof) {
-                        const newSettings = {
-                          ...sessionSettings,
-                          temperature: prof.aiChatTemperature ?? 0.7,
-                          maxTokens: prof.aiChatMaxTokens ?? 0,
-                          contextSize: prof.aiChatContextSize ?? 4096,
-                          topK: prof.aiChatTopK ?? 40,
-                          topP: prof.aiChatTopP ?? 0.9,
-                          systemPrompt: prof.aiChatSystemPrompt ?? '',
-                          personality: prof.aiChatPersonality ?? 'default'
-                        };
-                        setSessionSettings(newSettings);
-                        saveSessionSettings(currentSessionId, newSettings, sessionModel);
-                        showToast(`📂 Loaded profile: ${name}`);
-                      }
-                    }}
-                    value=""
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-400 focus:outline-none appearance-none cursor-pointer font-mono"
-                  >
-                    <option value="" disabled>LOAD PRESET PROFILE...</option>
-                    {Object.keys(aiSettingsProfiles).map((name) => (
-                      <option key={name} value={name}>{name.toUpperCase()}</option>
-                    ))}
-                  </select>
-                )}
-              </div>
-
-              {/* Resets */}
-              <div className="flex gap-2 mt-2">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const modelDefaults = getModelDefaultSettings(sessionModel);
-                    const newSettings = {
-                      ...sessionSettings,
-                      temperature: modelDefaults.temperature,
-                      maxTokens: modelDefaults.maxTokens,
-                      contextSize: modelDefaults.contextSize,
-                      topK: modelDefaults.topK,
-                      topP: modelDefaults.topP,
-                      systemPrompt: masterDefaults.systemPrompt,
-                      personality: masterDefaults.personality,
-                      clipboardAttach: false,
-                      activeSkills: {
-                        githubScan: false,
-                        webSearch: false,
-                        systemController: true,
-                        anthropicSearch: false
-                      }
-                    };
-                    setSessionSettings(newSettings);
-                    await saveSessionSettings(currentSessionId, newSettings, sessionModel);
-                    showToast("🔄 Reset to Model Defaults");
-                  }}
-                  className="flex-1 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 py-1.5 text-[9px] font-bold text-zinc-400 hover:text-white tracking-wider uppercase rounded"
-                >
-                  Model Defaults
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const newSettings = {
-                      temperature: masterDefaults.temperature,
-                      maxTokens: masterDefaults.maxTokens,
-                      contextSize: masterDefaults.contextSize,
-                      topK: masterDefaults.topK,
-                      topP: masterDefaults.topP,
-                      systemPrompt: masterDefaults.systemPrompt,
-                      personality: masterDefaults.personality,
-                      clipboardAttach: false,
-                      activeSkills: {
-                        githubScan: false,
-                        webSearch: false,
-                        systemController: true,
-                        anthropicSearch: false
-                      }
-                    };
-                    setSessionSettings(newSettings);
-                    await saveSessionSettings(currentSessionId, newSettings, sessionModel);
-                    showToast("🔄 Reset to Master Defaults");
-                  }}
-                  className="flex-1 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 py-1.5 text-[9px] font-bold text-zinc-400 hover:text-white tracking-wider uppercase rounded"
-                >
-                  Master Defaults
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
+      <div 
+        className="flex-1 flex flex-col relative min-w-0"
+        onClick={() => {
+          if (aiChatLayoutMode === 'overlay') {
+            if (sidebarOpen) setSidebarOpen(false);
+            if (drawerOpen) setDrawerOpen(false);
+          }
+        }}
+      >
         <div className="p-3 border-b border-border-wire bg-black/80 flex items-center justify-between shadow-sm z-10">
           <div className="flex items-center gap-3">
             <button 
-              onClick={() => setSidebarOpen(!sidebarOpen)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setSidebarOpen(!sidebarOpen);
+              }}
               className="text-zinc-500 hover:text-accent-amber transition-colors"
             >
               <MessageSquare size={14} />
@@ -1730,9 +1770,12 @@ export function OpenRouterWidget() {
             <span className="text-xs font-bold text-zinc-200 tracking-wider">TACTICAL_AI_LINK</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-zinc-650 bg-white/5 px-2 py-0.5 rounded-full border border-white/10 uppercase tracking-widest">{getActiveModelName()}</span>
+            <span className="text-xs text-zinc-650 bg-white/5 px-2 py-0.5 rounded-full border border-white/10 uppercase tracking-widest">{getSessionModelName(sessionModel)}</span>
             <button
-              onClick={() => setDrawerOpen(!drawerOpen)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setDrawerOpen(!drawerOpen);
+              }}
               className={`p-1.5 rounded transition-all hover:bg-zinc-800/80 border ${drawerOpen ? 'bg-zinc-800 border-zinc-700 text-accent-amber' : 'border-transparent text-zinc-400 hover:text-white'}`}
               title="Session Settings"
             >
@@ -1777,7 +1820,7 @@ export function OpenRouterWidget() {
                   return (
                     <div className="mb-3 space-y-2">
                       {attachments.image && (
-                        <div className="p-2 bg-black/50 border border-white/5 rounded-sm flex items-center gap-2 text-[10px] text-accent-green/80 italic w-fit">
+                        <div className="p-2 bg-black/50 border border-white/5 rounded-sm flex items-center gap-2 text-[11px] text-accent-green/80 italic w-fit">
                           <Camera size={10} />
                           <span>[ VISION_BUFFER_ATTACHED ]</span>
                         </div>
@@ -1785,16 +1828,16 @@ export function OpenRouterWidget() {
                       {attachments.files && attachments.files.map((file: any, idx: number) => (
                         <div 
                           key={idx} 
-                          className="bg-black/40 border border-zinc-800 rounded p-2 flex items-center gap-3 text-[10px] font-mono w-[220px]"
+                          className="bg-black/40 border border-zinc-800 rounded p-2 flex items-center gap-3 text-[11px] font-mono w-[240px]"
                         >
                           <Paperclip size={12} className="text-accent-amber" />
                           <div className="overflow-hidden flex flex-col flex-1">
                             <span className="text-zinc-300 font-bold truncate" title={file.name}>{file.name}</span>
-                            <span className="text-zinc-650 text-[9px] uppercase">
+                            <span className="text-zinc-650 text-[10px] uppercase">
                               {(file.size / 1024).toFixed(1)} KB | {file.lines} LINES
                             </span>
                           </div>
-                          <span className="text-accent-green text-[9px] font-bold shrink-0 flex items-center gap-0.5 select-none">[✓ INJECTED]</span>
+                          <span className="text-accent-green text-[10px] font-bold shrink-0 flex items-center gap-0.5 select-none">[✓ INJECTED]</span>
                         </div>
                       ))}
                     </div>
@@ -2029,29 +2072,48 @@ export function OpenRouterWidget() {
             )}
             
             {attachedFiles.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {attachedFiles.map((file, idx) => (
-                  <div 
-                    key={idx} 
-                    className="bg-zinc-950 border border-zinc-800 rounded p-2 flex items-center justify-between gap-3 text-[10px] font-mono w-[180px] relative overflow-hidden"
+              <div className="border border-accent-amber/35 bg-zinc-950/90 rounded p-2.5 mb-1 shadow-[inset_0_0_12px_rgba(255,176,0,0.06)] animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div className="flex items-center justify-between mb-2 pb-1 border-b border-zinc-800/80 text-[10px] font-mono text-zinc-500 font-bold uppercase tracking-widest">
+                  <span className="flex items-center gap-1.5 text-accent-amber">
+                    <Paperclip size={10} className="animate-pulse" />
+                    Attached Payload ({attachedFiles.length})
+                  </span>
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      setAttachedFiles([]);
+                      showToast("🗑️ Attached payload cleared");
+                    }}
+                    className="hover:text-red-400 text-zinc-650 transition-colors uppercase font-bold text-[10px]"
                   >
-                    <div className="overflow-hidden flex flex-col flex-1">
-                      <span className="text-zinc-300 font-bold truncate" title={file.name}>{file.name}</span>
-                      <span className="text-zinc-650 text-[9px] uppercase font-mono">
-                        {(file.size / 1024).toFixed(1)} KB | {file.lines} LINES
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAttachedFiles(prev => prev.filter((_, i) => i !== idx));
-                      }}
-                      className="text-zinc-500 hover:text-red-400 p-1 rounded hover:bg-zinc-900 transition-colors shrink-0"
+                    Clear All
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2 max-h-[120px] overflow-y-auto custom-scrollbar">
+                  {attachedFiles.map((file, idx) => (
+                    <div 
+                      key={idx} 
+                      className="bg-zinc-900/95 border border-accent-amber/45 hover:border-accent-amber/70 shadow-[0_0_8px_rgba(255,176,0,0.12)] rounded p-2 flex items-center justify-between gap-3 text-[11px] font-mono w-[220px] relative overflow-hidden transition-all group animate-in zoom-in-95 duration-200"
                     >
-                      <X size={12} />
-                    </button>
-                  </div>
-                ))}
+                      <span className="absolute top-0 left-0 w-[2px] h-full bg-accent-amber animate-pulse"></span>
+                      <div className="overflow-hidden flex flex-col flex-1 pl-1.5">
+                        <span className="text-zinc-200 font-bold truncate text-xs" title={file.name}>{file.name}</span>
+                        <span className="text-zinc-500 text-[10px] uppercase font-mono mt-0.5">
+                          {(file.size / 1024).toFixed(1)} KB | {file.lines} LINES
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAttachedFiles(attachedFiles.filter((_, i) => i !== idx));
+                        }}
+                        className="text-zinc-500 hover:text-red-400 p-1.5 rounded hover:bg-zinc-800 transition-colors shrink-0"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -2059,12 +2121,61 @@ export function OpenRouterWidget() {
           <div className="flex gap-2 mb-2 relative">
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={async () => {
+                useShellStore.getState().setIgnoreFocusLoss(true);
+                const restoreFocus = () => {
+                  window.removeEventListener('focus', restoreFocus);
+                  setTimeout(() => {
+                    useShellStore.getState().setIgnoreFocusLoss(false);
+                  }, 500);
+                };
+                window.addEventListener('focus', restoreFocus);
+                
+                try {
+                  const paths = await invoke<string[]>('select_attached_files');
+                  if (paths && paths.length > 0) {
+                    let currentFiles = [...attachedFiles];
+                    for (const filePath of paths) {
+                      try {
+                        showToast(`📄 Reading ${filePath.split(/[/\\]/).pop()}...`);
+                        const fileData = await invoke<{
+                          name: string;
+                          path: string;
+                          content: string;
+                          size: number;
+                          lines: number;
+                        }>('read_attached_file_data', { path: filePath });
+                        
+                        const attached: AttachedFile = {
+                          name: fileData.name,
+                          path: fileData.path,
+                          content: fileData.content,
+                          size: fileData.size,
+                          lines: fileData.lines
+                        };
+                        
+                        currentFiles = [...currentFiles, attached];
+                        setAttachedFiles(currentFiles);
+                        showToast(`✓ Attached: ${fileData.name}`);
+                      } catch (err) {
+                        showToast(`❌ Failed to read file: ${getErrorMessage(err)}`);
+                      }
+                    }
+                  }
+                } catch (e) {
+                  fileInputRef.current?.click();
+                }
+              }}
               disabled={isTyping || isRecordingMic || !isOnline}
-              className="px-3 rounded-sm border border-zinc-700/50 bg-zinc-900 text-zinc-400 hover:text-zinc-100 hover:border-zinc-600 transition-all flex items-center justify-center"
+              className="px-3 rounded-sm border border-zinc-700/50 bg-zinc-900 text-zinc-400 hover:text-zinc-100 hover:border-zinc-600 transition-all flex items-center justify-center relative"
               title="Attach documents/files (PDF, TXT, HTML)"
             >
               <Paperclip size={16} />
+              {attachedFiles.length > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-accent-amber text-[9px] font-bold text-black border border-black animate-pulse shadow-[0_0_8px_rgba(255,176,0,0.8)]">
+                  {attachedFiles.length}
+                </span>
+              )}
             </button>
             
             <input
@@ -2107,7 +2218,1358 @@ export function OpenRouterWidget() {
           </button>
         </form>
       </div>
-    </div>
+
+      {/* Settings Drawer Resizer & Panel */}
+      {drawerOpen && (
+        <>
+          <div
+            onMouseDown={handleDrawerMouseDown}
+            className={`w-[3px] hover:w-[5px] bg-zinc-800 hover:bg-accent-amber/50 active:bg-accent-amber/80 cursor-col-resize transition-all h-full shrink-0 z-35 select-none ${aiChatLayoutMode === 'overlay' ? 'absolute top-0 bottom-0' : 'relative'}`}
+            style={aiChatLayoutMode === 'overlay' ? { right: `${drawerWidth}px` } : undefined}
+            title="Drag to resize settings drawer"
+          />
+          <div 
+            ref={drawerRef}
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: `${drawerWidth}px` }}
+            className={`bg-zinc-950/95 border-l border-zinc-800 flex flex-col h-full shrink-0 overflow-hidden select-none ${aiChatLayoutMode === 'overlay' ? 'absolute right-0 top-0 bottom-0 z-30 shadow-2xl h-full' : 'relative'}`}
+          >
+            <div className="p-3 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/40 shrink-0">
+              <span className="text-xs font-bold text-zinc-200 tracking-widest uppercase font-mono">Session settings</span>
+              <button onClick={() => setDrawerOpen(false)} className="text-zinc-500 hover:text-zinc-300">
+                <X size={14} />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4 font-mono text-xs text-zinc-300">
+              {/* Model Override Dropdown */}
+              <div className="space-y-1 relative font-mono" ref={modelSelectRef} role="listbox" aria-label="Session Model">
+                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider font-mono">Session Model</label>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsModelSelectOpen(!isModelSelectOpen)}
+                    className="w-full bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-850/30 transition-all flex items-center justify-between cursor-pointer font-mono"
+                  >
+                    <div className="flex items-center gap-2 min-w-0 mr-2 flex-1">
+                      {/* Provider LED status indicator */}
+                      <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                        (sessionModel || getActiveModelDefault()).includes('gemini') ? 'bg-blue-400 shadow-[0_0_6px_rgba(96,165,250,0.6)]' :
+                        (sessionModel || getActiveModelDefault()).includes('claude') ? 'bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.6)]' :
+                        (sessionModel || getActiveModelDefault()).includes('gpt') ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]' :
+                        (sessionModel || getActiveModelDefault()).includes('deepseek') ? 'bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,0.6)]' :
+                        'bg-zinc-550'
+                      }`} />
+                      <div className="flex flex-col items-start gap-0.5 text-left overflow-hidden flex-1">
+                        <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider font-mono leading-none">
+                          {parseModelOption(getAvailableModels().find(m => m.value === (sessionModel || getActiveModelDefault())) || { value: '', label: 'Unknown Model' }).provider}
+                        </span>
+                        <span className="text-zinc-200 font-bold truncate w-full leading-none">
+                          {parseModelOption(getAvailableModels().find(m => m.value === (sessionModel || getActiveModelDefault())) || { value: '', label: 'Unknown Model' }).name}
+                        </span>
+                      </div>
+                    </div>
+                    <ChevronDown size={14} className={`text-zinc-500 transition-transform shrink-0 ${isModelSelectOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {isModelSelectOpen && (
+                    <div className="absolute left-0 right-0 mt-1 bg-zinc-950 border border-zinc-800 rounded-lg shadow-2xl z-40 max-h-[320px] flex flex-col overflow-hidden animate-fadeIn w-full">
+                      {/* Search bar inside dropdown */}
+                      <div className="p-2 border-b border-zinc-800 bg-zinc-900/40 flex items-center gap-2 shrink-0">
+                        <Search size={12} className="text-zinc-550" />
+                        <input
+                          type="text"
+                          placeholder="Search models..."
+                          value={modelSearchQuery}
+                          onChange={(e) => setModelSearchQuery(e.target.value)}
+                          className="w-full bg-transparent text-xs text-zinc-200 outline-none placeholder:text-zinc-650 font-mono"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        {modelSearchQuery && (
+                          <button 
+                            type="button" 
+                            onClick={(e) => { e.stopPropagation(); setModelSearchQuery(''); }} 
+                            className="text-zinc-500 hover:text-zinc-300"
+                          >
+                            <X size={10} />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Model options list grouped by provider */}
+                      <div className="flex-1 overflow-y-auto custom-scrollbar p-1.5 space-y-2">
+                        {(() => {
+                          const filtered = getAvailableModels()
+                            .map(m => parseModelOption(m))
+                            .filter(m => 
+                              m.name.toLowerCase().includes(modelSearchQuery.toLowerCase()) || 
+                              m.provider.toLowerCase().includes(modelSearchQuery.toLowerCase()) ||
+                              m.tags.some(t => t.toLowerCase().includes(modelSearchQuery.toLowerCase()))
+                            );
+
+                          if (filtered.length === 0) {
+                            return <div className="text-center italic text-xs text-zinc-600 py-4 font-mono">No matching models</div>;
+                          }
+
+                          // Group by provider
+                          const groups: Record<string, typeof filtered> = {};
+                          filtered.forEach(m => {
+                            const prov = m.provider || 'Other';
+                            if (!groups[prov]) groups[prov] = [];
+                            groups[prov].push(m);
+                          });
+
+                           const providerOrder = [
+                            'System Default',
+                            'OpenAI (Direct)',
+                            'Anthropic (Direct)',
+                            'Groq (Direct)',
+                            'OpenRouter'
+                          ];
+
+                          const sortedProviders = Object.keys(groups).sort((a, b) => {
+                            const idxA = providerOrder.findIndex(p => a.includes(p));
+                            const idxB = providerOrder.findIndex(p => b.includes(p));
+                            if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                            if (idxA !== -1) return -1;
+                            if (idxB !== -1) return 1;
+                            return a.localeCompare(b);
+                          });
+
+                          return sortedProviders.map((provider) => (
+                            <div key={provider} className="space-y-1">
+                              <div className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest px-2 py-0.5 border-b border-zinc-900 bg-zinc-950/20 font-mono">
+                                {provider}
+                              </div>
+                              <div className="space-y-1 pl-0.5">
+                                {groups[provider].map((m) => {
+                                  const isSelected = m.value === sessionModel;
+                                  return (
+                                    <button
+                                      key={m.value}
+                                      type="button"
+                                      onClick={() => {
+                                        const newModel = m.value;
+                                        setSessionModel(newModel);
+                                        const modelDefaults = getModelDefaultSettings(newModel);
+                                        const newSettings = {
+                                          ...sessionSettings,
+                                          temperature: modelDefaults.temperature,
+                                          maxTokens: modelDefaults.maxTokens,
+                                          contextSize: modelDefaults.contextSize,
+                                          topK: modelDefaults.topK,
+                                          topP: modelDefaults.topP,
+                                          systemPrompt: masterDefaults.systemPrompt,
+                                          personality: masterDefaults.personality
+                                        };
+                                        setSessionSettings(newSettings);
+                                        saveSessionSettings(currentSessionId, newSettings, newModel);
+                                        setIsModelSelectOpen(false);
+                                        setModelSearchQuery('');
+                                        showToast(`🤖 Switched session model to: ${m.name}`);
+                                      }}
+                                      className={`w-full text-left p-2 rounded border transition-all flex flex-col gap-1 cursor-pointer relative ${
+                                        isSelected 
+                                          ? 'bg-accent-amber/10 border-accent-amber/30 text-white pl-3.5 shadow-[0_0_10px_rgba(255,176,0,0.05)] font-bold' 
+                                          : 'hover:bg-zinc-900 border-transparent hover:border-zinc-800 text-zinc-400 hover:text-zinc-200 pl-3.5'
+                                      }`}
+                                    >
+                                      {/* Selection Indicator Accent Bar */}
+                                      <div className={`absolute left-1.5 top-2.5 bottom-2.5 w-0.5 rounded-full ${
+                                        isSelected 
+                                          ? 'bg-accent-amber shadow-[0_0_8px_rgba(255,176,0,0.6)] animate-pulse' 
+                                          : 'bg-zinc-700/40 group-hover:bg-zinc-500'
+                                      }`} />
+
+                                      <div className="font-bold text-xs font-mono">{m.name}</div>
+                                      
+                                      {m.tags.length > 0 && (
+                                        <div className="flex flex-wrap gap-1 mt-0.5">
+                                          {m.tags.map((tag) => {
+                                            let tagColor = 'bg-zinc-900/40 text-zinc-500 border-zinc-800/40';
+                                            if (tag.toLowerCase().includes('vision')) tagColor = 'bg-blue-500/10 text-blue-400 border-blue-500/30';
+                                            if (tag.toLowerCase().includes('actions')) tagColor = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
+                                            if (tag.toLowerCase().includes('attachments')) tagColor = 'bg-violet-500/10 text-violet-400 border-violet-500/30';
+                                            if (tag.toLowerCase().includes('mcp')) tagColor = 'bg-accent-green/10 text-accent-green border-accent-green/30';
+                                            if (tag.toLowerCase().includes('thinking')) tagColor = 'bg-pink-500/10 text-pink-400 border-pink-500/30';
+                                            if (tag.toLowerCase().includes('search')) tagColor = 'bg-teal-500/10 text-teal-400 border-teal-500/30';
+                                            if (tag.toLowerCase().includes('global')) tagColor = 'bg-primary/10 text-primary border-primary/30';
+                                            
+                                            return (
+                                              <span 
+                                                key={tag} 
+                                                className={`text-[8px] font-bold uppercase px-1 py-0.2 rounded border font-mono ${tagColor}`}
+                                              >
+                                                {tag.replace('File ', '')}
+                                              </span>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+
+              {/* Temperature */}
+              <div className="space-y-1">
+                <div className="flex justify-between items-center text-xs text-zinc-500 uppercase">
+                  <span>Temperature</span>
+                  <span className="text-accent-amber font-bold">{sessionSettings.temperature.toFixed(1)}</span>
+                </div>
+                <input 
+                  type="range" min="0" max="2" step="0.1"
+                  value={sessionSettings.temperature}
+                  onChange={(e) => {
+                     const newSettings = { ...sessionSettings, temperature: parseFloat(e.target.value) };
+                     setSessionSettings(newSettings);
+                     saveSessionSettings(currentSessionId, newSettings, sessionModel);
+                  }}
+                  className="w-full accent-accent-amber cursor-pointer bg-zinc-900 h-1 rounded"
+                />
+              </div>
+
+              {/* Max Tokens */}
+              <div className="space-y-1">
+                <div className="flex justify-between items-center text-xs text-zinc-500 uppercase">
+                  <span>Max Output Tokens</span>
+                  <span className="text-accent-amber font-bold">
+                    {sessionSettings.maxTokens === 0 ? "LIMITLESS" : sessionSettings.maxTokens}
+                  </span>
+                </div>
+                <input 
+                  type="range" min="0" max="8192" step="128"
+                  value={sessionSettings.maxTokens}
+                  onChange={(e) => {
+                     const newSettings = { ...sessionSettings, maxTokens: parseInt(e.target.value) };
+                     setSessionSettings(newSettings);
+                     saveSessionSettings(currentSessionId, newSettings, sessionModel);
+                  }}
+                  className="w-full accent-accent-amber cursor-pointer bg-zinc-900 h-1 rounded"
+                />
+              </div>
+
+              {/* Context Size */}
+              <div className="space-y-1">
+                <div className="flex justify-between items-center text-xs text-zinc-500 uppercase">
+                  <span>Context Budget</span>
+                  <span className="text-accent-amber font-bold">{sessionSettings.contextSize} TK</span>
+                </div>
+                <input 
+                  type="range" min="1024" max="128000" step="1024"
+                  value={sessionSettings.contextSize}
+                  onChange={(e) => {
+                     const newSettings = { ...sessionSettings, contextSize: parseInt(e.target.value) };
+                     setSessionSettings(newSettings);
+                     saveSessionSettings(currentSessionId, newSettings, sessionModel);
+                  }}
+                  className="w-full accent-accent-amber cursor-pointer bg-zinc-900 h-1 rounded"
+                />
+              </div>
+
+              {/* Top-P and Top-K */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center text-xs text-zinc-500 uppercase">
+                    <span>Top-P</span>
+                    <span className="text-accent-amber font-bold">{sessionSettings.topP.toFixed(2)}</span>
+                  </div>
+                  <input 
+                    type="range" min="0" max="1" step="0.05"
+                    value={sessionSettings.topP}
+                    onChange={(e) => {
+                       const newSettings = { ...sessionSettings, topP: parseFloat(e.target.value) };
+                       setSessionSettings(newSettings);
+                       saveSessionSettings(currentSessionId, newSettings, sessionModel);
+                    }}
+                    className="w-full accent-accent-amber cursor-pointer bg-zinc-900 h-1 rounded"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center text-xs text-zinc-500 uppercase">
+                    <span>Top-K</span>
+                    <span className="text-accent-amber font-bold">{sessionSettings.topK}</span>
+                  </div>
+                  <input 
+                    type="range" min="1" max="100" step="1"
+                    value={sessionSettings.topK}
+                    onChange={(e) => {
+                       const newSettings = { ...sessionSettings, topK: parseInt(e.target.value) };
+                       setSessionSettings(newSettings);
+                       saveSessionSettings(currentSessionId, newSettings, sessionModel);
+                    }}
+                    className="w-full accent-accent-amber cursor-pointer bg-zinc-900 h-1 rounded"
+                  />
+                </div>
+              </div>
+
+              {/* Token Ammo Gauge */}
+              {(() => {
+                const estimateTokens = () => {
+                  let charCount = 0;
+                  messages.forEach(msg => {
+                    charCount += (msg.content || '').length;
+                    const attachments = parseImagePath(msg.image_path);
+                    if (attachments) {
+                      if (attachments.image) charCount += 4000;
+                      if (attachments.files) {
+                        attachments.files.forEach((f: any) => {
+                          charCount += (f.content || '').length;
+                        });
+                      }
+                    }
+                  });
+                  attachedFiles.forEach(file => {
+                    charCount += (file.content || '').length;
+                  });
+                  return Math.round(charCount / 4);
+                };
+                const used = estimateTokens();
+                const percentage = Math.min(100, (used / sessionSettings.contextSize) * 100);
+                
+                return (
+                  <div className="space-y-1.5 border-t border-zinc-900 pt-3">
+                    <div className="flex justify-between items-center text-xs text-zinc-550">
+                      <span>Token Ammo Gauge</span>
+                      <span className="text-accent-green font-bold">{used} / {sessionSettings.contextSize} TK</span>
+                    </div>
+                    <div className="h-2.5 bg-zinc-950 border border-zinc-800 rounded p-[1px] flex gap-[2px] overflow-hidden">
+                      {Array.from({ length: 10 }).map((_, idx) => {
+                        const threshold = (idx + 1) * 10;
+                        const isFilled = percentage >= threshold;
+                        let color = 'bg-zinc-850';
+                        if (isFilled) {
+                          if (threshold > 80) color = 'bg-red-500';
+                          else if (threshold > 50) color = 'bg-accent-amber';
+                          else color = 'bg-accent-green';
+                        }
+                        return (
+                          <div 
+                            key={idx} 
+                            className={`flex-1 h-full rounded-sm transition-all duration-300 ${color}`}
+                            style={{ opacity: isFilled ? 1 : 0.15 }}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+              <div className="space-y-1 border-t border-zinc-900 pt-3">
+                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider font-mono">System Prompt Template</label>
+                <select
+                  value={
+                    Object.entries(SYSTEM_PROMPT_TEMPLATES).find(([_, temp]) => temp.text === sessionSettings.systemPrompt)?.[0] ||
+                    customSystemPrompts?.find(p => p.text === sessionSettings.systemPrompt)?.id ||
+                    'custom'
+                  }
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    let nextPrompt = sessionSettings.systemPrompt;
+                    if (val in SYSTEM_PROMPT_TEMPLATES) {
+                      nextPrompt = SYSTEM_PROMPT_TEMPLATES[val as keyof typeof SYSTEM_PROMPT_TEMPLATES].text;
+                    } else {
+                      const matchedCustom = customSystemPrompts?.find(p => p.id === val);
+                      if (matchedCustom) {
+                        nextPrompt = matchedCustom.text;
+                      }
+                    }
+                    const newSettings = { ...sessionSettings, systemPrompt: nextPrompt };
+                    setSessionSettings(newSettings);
+                    saveSessionSettings(currentSessionId, newSettings, sessionModel);
+                  }}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-200 focus:outline-none focus:border-accent-amber/50 cursor-pointer font-mono"
+                >
+                  <option value="custom">CUSTOM PROMPT</option>
+                  {Object.entries(SYSTEM_PROMPT_TEMPLATES)
+                    .filter(([key]) => key !== 'custom')
+                    .map(([key, value]) => (
+                      <option key={key} value={key}>{value.name.toUpperCase()}</option>
+                    ))
+                  }
+                  {customSystemPrompts && customSystemPrompts.length > 0 && (
+                    <optgroup label="MY SAVED TEMPLATES">
+                      {customSystemPrompts.map(p => (
+                        <option key={p.id} value={p.id}>{p.name.toUpperCase()}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
+                
+                <textarea
+                  value={sessionSettings.systemPrompt}
+                  onChange={(e) => {
+                    const newSettings = { ...sessionSettings, systemPrompt: e.target.value };
+                    setSessionSettings(newSettings);
+                    saveSessionSettings(currentSessionId, newSettings, sessionModel);
+                  }}
+                  placeholder="Enter custom instructions..."
+                  className="w-full bg-black/40 border border-zinc-800 rounded px-2.5 py-1.5 text-xs font-mono text-zinc-300 focus:outline-none focus:border-accent-amber/50 resize-y min-h-[100px] mt-1"
+                />
+              </div>
+ 
+              {/* AI Personality Selector */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider font-mono">AI Response Tone</label>
+                <select
+                  value={sessionSettings.personality}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    let nextToneInstructions = "";
+                    if (val in PERSONALITY_PROMPTS) {
+                      nextToneInstructions = PERSONALITY_PROMPTS[val as keyof typeof PERSONALITY_PROMPTS];
+                    } else {
+                      const matched = customTones?.find(t => t.id === val);
+                      if (matched) nextToneInstructions = matched.text;
+                    }
+                    const newSettings = { 
+                      ...sessionSettings, 
+                      personality: val,
+                      personalityPrompt: nextToneInstructions 
+                    };
+                    setSessionSettings(newSettings);
+                    saveSessionSettings(currentSessionId, newSettings, sessionModel);
+                  }}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-200 focus:outline-none focus:border-accent-amber/50 cursor-pointer font-mono"
+                >
+                  <option value="default">DEFAULT NEUTRAL</option>
+                  <option value="tactical">TACTICAL OFFICER</option>
+                  <option value="copilot">GRITTY COPILOT</option>
+                  <option value="operator">SARCASTIC OPERATOR</option>
+                  <option value="scientific">DRY SCIENTIFIC ADVISOR</option>
+                  {customTones && customTones.length > 0 && (
+                    <optgroup label="MY SAVED TONES">
+                      {customTones.map(t => (
+                        <option key={t.id} value={t.id}>{t.name.toUpperCase()}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
+
+                <textarea
+                  value={sessionSettings.personalityPrompt ?? ""}
+                  onChange={(e) => {
+                    const newSettings = { ...sessionSettings, personalityPrompt: e.target.value };
+                    setSessionSettings(newSettings);
+                    saveSessionSettings(currentSessionId, newSettings, sessionModel);
+                  }}
+                  placeholder="Custom tone instructions..."
+                  className="w-full bg-black/40 border border-zinc-800 rounded px-2.5 py-1.5 text-xs font-mono text-zinc-300 focus:outline-none focus:border-accent-amber/50 resize-y min-h-[100px] mt-1"
+                />
+              </div>
+
+              {/* Active Skills Checklist */}
+              <div className="space-y-2 border-t border-zinc-900 pt-3">
+                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider font-mono">Active HUD Skills</label>
+                
+                {/* System Controller */}
+                <div className="bg-zinc-950 border border-zinc-900 p-2 rounded flex flex-col gap-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-zinc-300 text-xs">SYSTEM CONTROLLER</span>
+                    <input
+                      type="checkbox"
+                      checked={sessionSettings.activeSkills.systemController}
+                      onChange={(e) => {
+                        const newSettings = {
+                          ...sessionSettings,
+                          activeSkills: { ...sessionSettings.activeSkills, systemController: e.target.checked }
+                        };
+                        setSessionSettings(newSettings);
+                        saveSessionSettings(currentSessionId, newSettings, sessionModel);
+                      }}
+                      className="accent-accent-amber"
+                    />
+                  </div>
+                  <span className="text-xs text-zinc-650">Controls PC audio volumes, media playback track, stopwatch, timers, and telemetry statistics.</span>
+                </div>
+
+                {/* GitHub Scan */}
+                <div className="bg-zinc-950 border border-zinc-900 p-2 rounded flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-zinc-300 text-xs">GITHUB SCAN</span>
+                    <input
+                      type="checkbox"
+                      checked={sessionSettings.activeSkills.githubScan}
+                      onChange={(e) => {
+                        const newSettings = {
+                          ...sessionSettings,
+                          activeSkills: { ...sessionSettings.activeSkills, githubScan: e.target.checked }
+                        };
+                        setSessionSettings(newSettings);
+                        saveSessionSettings(currentSessionId, newSettings, sessionModel);
+                      }}
+                      className="accent-accent-amber"
+                    />
+                  </div>
+                  <span className="text-xs text-zinc-650">Enables scanning repository commits, monitoring issue lists, and tracking pull requests.</span>
+                  {sessionSettings.activeSkills.githubScan && (
+                    <div className="border border-zinc-800 bg-black/50 p-1.5 rounded text-xs text-zinc-400 space-y-1">
+                      <span className="text-accent-amber block font-bold">⚠️ REQUIRES REPO PERMISSION KEYS</span>
+                      <button
+                        type="button"
+                        onClick={() => toggleSettings()}
+                        className="w-full text-center bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 py-1.5 text-xs font-bold text-accent-amber tracking-wider uppercase rounded"
+                      >
+                        Navigate to Credentials
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Web Search */}
+                <div className="bg-zinc-950 border border-zinc-900 p-2 rounded flex flex-col gap-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-zinc-300 text-xs">WEB SEARCH</span>
+                    <input
+                      type="checkbox"
+                      checked={sessionSettings.activeSkills.webSearch}
+                      onChange={(e) => {
+                        const newSettings = {
+                          ...sessionSettings,
+                          activeSkills: { ...sessionSettings.activeSkills, webSearch: e.target.checked }
+                        };
+                        setSessionSettings(newSettings);
+                        saveSessionSettings(currentSessionId, newSettings, sessionModel);
+                      }}
+                      className="accent-accent-amber"
+                    />
+                  </div>
+                  <span className="text-xs text-zinc-650">Accesses external search tools to pull real-time weather, market indexes, or live documentation.</span>
+                </div>
+
+                {/* Anthropic Search */}
+                <div className="bg-zinc-950 border border-zinc-900 p-2 rounded flex flex-col gap-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-zinc-300 text-xs">ANTHROPIC SEARCH</span>
+                    <input
+                      type="checkbox"
+                      checked={sessionSettings.activeSkills.anthropicSearch}
+                      onChange={(e) => {
+                        const newSettings = {
+                          ...sessionSettings,
+                          activeSkills: { ...sessionSettings.activeSkills, anthropicSearch: e.target.checked }
+                        };
+                        setSessionSettings(newSettings);
+                        saveSessionSettings(currentSessionId, newSettings, sessionModel);
+                      }}
+                      className="accent-accent-amber"
+                    />
+                  </div>
+                  <span className="text-xs text-zinc-650">Use Anthropic web tools integration when utilizing Claude provider models.</span>
+                </div>
+              </div>
+
+               {/* User Custom Skills */}
+              <div className="space-y-2 border-t border-zinc-900 pt-3">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider font-mono">User Custom Skills</label>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddSkillForm(!showAddSkillForm)}
+                    className="text-accent-amber hover:text-white transition-colors text-xs uppercase font-bold flex items-center gap-1"
+                  >
+                    <Plus size={10} /> {showAddSkillForm ? 'Close' : 'Add'}
+                  </button>
+                </div>
+
+                {showAddSkillForm && (
+                  <div className="bg-zinc-900/60 border border-accent-amber/30 rounded p-2.5 space-y-2.5 animate-in slide-in-from-top-1 duration-200">
+                    <div className="space-y-1">
+                      <label className="text-xs text-zinc-500 font-bold uppercase">Skill Name</label>
+                      <input
+                        type="text"
+                        placeholder="E.G. NOTION_ASSISTANT"
+                        value={newSkillName}
+                        onChange={(e) => setNewSkillName(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '_'))}
+                        className="w-full bg-black border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-200 focus:outline-none focus:border-accent-amber/50 font-mono"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-zinc-500 font-bold uppercase">Description</label>
+                      <input
+                        type="text"
+                        placeholder="E.G. Directs AI to summarize databases..."
+                        value={newSkillDesc}
+                        onChange={(e) => setNewSkillDesc(e.target.value)}
+                        className="w-full bg-black border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-200 focus:outline-none focus:border-accent-amber/50 font-mono"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-zinc-500 font-bold uppercase">System Prompt Instructions</label>
+                      <textarea
+                        rows={3}
+                        placeholder="Instructions for the AI..."
+                        value={newSkillInst}
+                        onChange={(e) => setNewSkillInst(e.target.value)}
+                        className="w-full bg-black border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-200 focus:outline-none focus:border-accent-amber/50 font-mono resize-none"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!newSkillName.trim()) {
+                            showToast("⚠️ Skill Name is required");
+                            return;
+                          }
+                          if (!newSkillInst.trim()) {
+                            showToast("⚠️ Instructions are required");
+                            return;
+                          }
+                          const newSkill: CustomSkill = {
+                            id: 'skill_' + Date.now(),
+                            name: newSkillName.trim(),
+                            description: newSkillDesc.trim(),
+                            instructions: newSkillInst.trim(),
+                            isActive: true
+                          };
+                          const updatedSkills = [...(sessionSettings.customSkills || []), newSkill];
+                          const nextSettings = { ...sessionSettings, customSkills: updatedSkills };
+                          setSessionSettings(nextSettings);
+                          saveSessionSettings(currentSessionId, nextSettings, sessionModel);
+                          
+                          // Reset form
+                          setNewSkillName('');
+                          setNewSkillDesc('');
+                          setNewSkillInst('');
+                          setShowAddSkillForm(false);
+                          showToast(`✓ Custom Skill "${newSkill.name}" Added`);
+                        }}
+                        className="flex-1 bg-accent-amber/15 border border-accent-amber/35 hover:bg-accent-amber hover:text-black py-1 text-xs font-bold text-accent-amber uppercase tracking-wider rounded transition-colors"
+                      >
+                        Save Skill
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddSkillForm(false)}
+                        className="flex-1 bg-zinc-950 border border-zinc-800 hover:bg-zinc-900 py-1 text-xs font-bold text-zinc-400 uppercase tracking-wider rounded transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-1.5 max-h-[200px] overflow-y-auto custom-scrollbar pr-1">
+                  {sessionSettings.customSkills && sessionSettings.customSkills.map((skill) => (
+                    <div
+                      key={skill.id}
+                      className={`bg-zinc-950/80 border p-2 rounded flex flex-col gap-1.5 transition-all ${
+                        skill.isActive
+                          ? 'border-accent-green/45 shadow-[0_0_8px_rgba(74,246,38,0.06)]'
+                          : 'border-zinc-900 hover:border-zinc-800'
+                      }`}
+                    >
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <input
+                              type="checkbox"
+                              checked={skill.isActive}
+                              onChange={(e) => {
+                                const updatedSkills = sessionSettings.customSkills.map(s =>
+                                  s.id === skill.id ? { ...s, isActive: e.target.checked } : s
+                                );
+                                const nextSettings = { ...sessionSettings, customSkills: updatedSkills };
+                                setSessionSettings(nextSettings);
+                                saveSessionSettings(currentSessionId, nextSettings, sessionModel);
+                              }}
+                              className="accent-accent-green cursor-pointer h-3.5 w-3.5 rounded border-zinc-800 bg-zinc-900"
+                            />
+                            <span 
+                              className="font-bold text-zinc-200 text-xs truncate font-mono uppercase tracking-wider cursor-pointer flex-1" 
+                              title={skill.name}
+                              onClick={() => {
+                                const updatedSkills = sessionSettings.customSkills.map(s =>
+                                  s.id === skill.id ? { ...s, isActive: !s.isActive } : s
+                                );
+                                const nextSettings = { ...sessionSettings, customSkills: updatedSkills };
+                                setSessionSettings(nextSettings);
+                                saveSessionSettings(currentSessionId, nextSettings, sessionModel);
+                              }}
+                            >
+                              {skill.name}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setExpandedSkillId(expandedSkillId === skill.id ? null : skill.id);
+                                if (confirmDeleteSkillId === skill.id) setConfirmDeleteSkillId(null);
+                              }}
+                              className={`p-1 rounded text-zinc-400 hover:text-accent-amber hover:bg-zinc-900 transition-all ${expandedSkillId === skill.id ? 'bg-zinc-900 text-accent-amber' : ''}`}
+                              title="Toggle skill instructions"
+                            >
+                              <Info size={12} />
+                            </button>
+                            
+                            {confirmDeleteSkillId === skill.id ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updatedSkills = sessionSettings.customSkills.filter(s => s.id !== skill.id);
+                                  const nextSettings = { ...sessionSettings, customSkills: updatedSkills };
+                                  setSessionSettings(nextSettings);
+                                  saveSessionSettings(currentSessionId, nextSettings, sessionModel);
+                                  showToast(`🗑️ Skill "${skill.name}" Deleted`);
+                                  setConfirmDeleteSkillId(null);
+                                }}
+                                className="bg-red-950/80 border border-red-500/50 text-red-400 hover:bg-red-600 hover:text-white px-1.5 py-0.5 rounded text-[10px] font-bold font-mono transition-colors animate-pulse"
+                              >
+                                SURE?
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteSkillId(skill.id)}
+                                className="text-zinc-605 hover:text-red-400 p-1 hover:bg-zinc-900 rounded transition-colors"
+                                title="Delete custom skill"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        {skill.description && (
+                          <div className="text-[11px] text-zinc-500 font-sans pl-[22px] truncate" title={skill.description}>
+                            {skill.description}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Expandable Box */}
+                      {expandedSkillId === skill.id && (
+                        <div className="border-t border-zinc-900/60 pt-2 mt-1 space-y-1.5 animate-in fade-in duration-200 w-full min-w-0">
+                          <div className="bg-black/50 border border-zinc-900 rounded p-3 text-zinc-300 font-mono text-[13px] whitespace-pre-wrap min-h-[140px] max-h-[400px] overflow-auto resize-y custom-scrollbar leading-relaxed w-full block">
+                            <div className="text-[10px] text-zinc-400 uppercase font-bold border-b border-zinc-900/60 pb-1 mb-2 font-mono tracking-wider shrink-0 select-none">Instructions / System Prompt</div>
+                            <div className="font-mono text-[13px] text-zinc-100 select-text leading-relaxed whitespace-pre-wrap break-words">
+                              {skill.instructions}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  {(!sessionSettings.customSkills || sessionSettings.customSkills.length === 0) && (
+                    <div className="text-xs text-zinc-600 italic text-center py-2">No custom skills defined.</div>
+                  )}
+                </div>
+              </div>
+
+              {/* User Custom MCP Connections */}
+              <div className="space-y-2 border-t border-zinc-900 pt-3">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider font-mono">User Custom MCPs</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddMcpForm(!showAddMcpForm);
+                      setNewMcpTools([]);
+                    }}
+                    className="text-accent-amber hover:text-white transition-colors text-xs uppercase font-bold flex items-center gap-1"
+                  >
+                    <Plus size={10} /> {showAddMcpForm ? 'Close' : 'Add'}
+                  </button>
+                </div>
+
+                {showAddMcpForm && (
+                  <div className="bg-zinc-900/60 border border-accent-amber/30 rounded p-2.5 space-y-2.5 animate-in slide-in-from-top-1 duration-200 max-h-[350px] overflow-y-auto custom-scrollbar">
+                    {/* Mode Selector */}
+                    <div className="flex gap-2 p-0.5 bg-black/40 border border-white/5 rounded w-fit shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setDrawerMcpInputMode('fields')}
+                        className={`px-2 py-0.5 rounded text-[10px] font-mono transition-all cursor-pointer ${
+                          drawerMcpInputMode === 'fields'
+                            ? 'bg-accent-amber/20 text-accent-amber border border-accent-amber/30 font-bold'
+                            : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
+                        }`}
+                      >
+                        Fields
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDrawerMcpInputMode('json')}
+                        className={`px-2 py-0.5 rounded text-[10px] font-mono transition-all cursor-pointer ${
+                          drawerMcpInputMode === 'json'
+                            ? 'bg-accent-amber/20 text-accent-amber border border-accent-amber/30 font-bold'
+                            : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
+                        }`}
+                      >
+                        JSON Config
+                      </button>
+                    </div>
+
+                    {drawerMcpInputMode === 'json' ? (
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-zinc-500 font-bold uppercase font-mono">MCP Configuration JSON</label>
+                        <textarea
+                          rows={5}
+                          placeholder={`Paste JSON configuration.\nExample:\n{\n  "command": "node",\n  "args": ["server.js"]\n}`}
+                          value={drawerMcpJsonInput}
+                          onChange={(e) => setDrawerMcpJsonInput(e.target.value)}
+                          className="w-full bg-black border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-200 focus:outline-none focus:border-accent-amber/50 font-mono resize-y min-h-[100px]"
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        <div className="space-y-1">
+                          <label className="text-xs text-zinc-500 font-bold uppercase">Server Name</label>
+                          <input
+                            type="text"
+                            placeholder="E.G. SQLITE_EXPLORER"
+                            value={newMcpName}
+                            onChange={(e) => setNewMcpName(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_'))}
+                            className="w-full bg-black border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-200 focus:outline-none focus:border-accent-amber/50 font-mono"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs text-zinc-500 font-bold uppercase">Description</label>
+                          <input
+                            type="text"
+                            placeholder="E.G. Local DB Explorer..."
+                            value={newMcpDesc}
+                            onChange={(e) => setNewMcpDesc(e.target.value)}
+                            className="w-full bg-black border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-200 focus:outline-none focus:border-accent-amber/50 font-mono"
+                          />
+                        </div>
+                        <div className="space-y-2.5">
+                          <div className="space-y-1">
+                            <label className="text-xs text-zinc-500 font-bold uppercase">Command</label>
+                            <input
+                              type="text"
+                              placeholder="node / npx"
+                              value={newMcpCmd}
+                              onChange={(e) => setNewMcpCmd(e.target.value)}
+                              className="w-full bg-black border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-200 focus:outline-none focus:border-accent-amber/50 font-mono"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-xs text-zinc-500 font-bold uppercase">Arguments</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. index.js"
+                              value={newMcpArgs}
+                              onChange={(e) => setNewMcpArgs(e.target.value)}
+                              className="w-full bg-black border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-200 focus:outline-none focus:border-accent-amber/50 font-mono"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs text-zinc-500 font-bold uppercase">Environment variables</label>
+                          <input
+                            type="text"
+                            placeholder="E.G. KEY=val,PORT=3000"
+                            value={newMcpEnv}
+                            onChange={(e) => setNewMcpEnv(e.target.value)}
+                            className="w-full bg-black border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-200 focus:outline-none focus:border-accent-amber/50 font-mono"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {/* Subform: Adding Tools */}
+                    <div className="border border-zinc-800 bg-black/40 p-2 rounded space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-zinc-400 font-bold uppercase">Server Tools ({newMcpTools.length})</span>
+                        <button
+                          type="button"
+                          onClick={() => setShowAddToolForm(!showAddToolForm)}
+                          className="text-accent-green hover:underline text-xs font-bold uppercase"
+                        >
+                          {showAddToolForm ? 'Hide' : '+ Add Tool'}
+                        </button>
+                      </div>
+
+                      {showAddToolForm && (
+                        <div className="space-y-2 border-t border-zinc-900 pt-2">
+                          <input
+                            type="text"
+                            placeholder="TOOL_NAME"
+                            value={newToolName}
+                            onChange={(e) => setNewToolName(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_'))}
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-0.5 text-xs text-zinc-200 font-mono"
+                          />
+                          <input
+                            type="text"
+                            placeholder="TOOL_DESCRIPTION"
+                            value={newToolDesc}
+                            onChange={(e) => setNewToolDesc(e.target.value)}
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-0.5 text-xs text-zinc-200 font-mono"
+                          />
+                          <textarea
+                            rows={3}
+                            placeholder="PARAMETERS SCHEMA JSON"
+                            value={newToolParams}
+                            onChange={(e) => setNewToolParams(e.target.value)}
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-350 font-mono resize-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!newToolName.trim()) {
+                                showToast("⚠️ Tool Name is required");
+                                return;
+                              }
+                              let parsedParams = {};
+                              try {
+                                parsedParams = JSON.parse(newToolParams);
+                              } catch (err) {
+                                showToast("⚠️ Invalid parameters JSON");
+                                return;
+                              }
+                              const newTool: CustomMcpTool = {
+                                name: newToolName.trim(),
+                                description: newToolDesc.trim(),
+                                parameters: parsedParams
+                              };
+                              setNewMcpTools([...newMcpTools, newTool]);
+                              setNewToolName('');
+                              setNewToolDesc('');
+                              setNewToolParams('{\n  "type": "object",\n  "properties": {}\n}');
+                              setShowAddToolForm(false);
+                              showToast(`✓ Tool "${newTool.name}" added to server config`);
+                            }}
+                            className="w-full bg-accent-green/10 border border-accent-green/30 hover:bg-accent-green hover:text-black py-1 text-xs font-bold text-accent-green uppercase tracking-wider rounded"
+                          >
+                            Add Tool to Config
+                          </button>
+                        </div>
+                      )}
+
+                      <div className="space-y-1">
+                        {newMcpTools.map((t, index) => (
+                          <div key={index} className="flex justify-between items-center text-xs font-mono bg-zinc-950 p-1 rounded text-zinc-400">
+                            <span className="font-bold truncate text-xs">{t.name}</span>
+                            <button
+                              type="button"
+                              onClick={() => setNewMcpTools(newMcpTools.filter((_, idx) => idx !== index))}
+                              className="text-red-400 hover:text-red-500 font-bold px-1"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          let name = '';
+                           let command = '';
+                           let args = '';
+                           let env = '';
+                           let description = '';
+                           let tools = newMcpTools;
+
+                           if (drawerMcpInputMode === 'json') {
+                             if (!drawerMcpJsonInput.trim()) {
+                               showToast("⚠️ Paste MCP JSON configuration first");
+                               return;
+                             }
+                             try {
+                               const parsed = parseMcpJson(drawerMcpJsonInput);
+                               name = parsed.name;
+                               command = parsed.command;
+                               args = parsed.args;
+                               env = parsed.env;
+                               description = parsed.description;
+                               if (parsed.tools && parsed.tools.length > 0) {
+                                 tools = [...parsed.tools, ...newMcpTools];
+                               }
+                             } catch (e: any) {
+                               showToast(`⚠️ JSON parse error: ${e.message}`);
+                               return;
+                             }
+                           } else {
+                             if (!newMcpName.trim()) {
+                               showToast("⚠️ Server Name is required");
+                               return;
+                             }
+                             if (!newMcpCmd.trim()) {
+                               showToast("⚠️ Execution Command is required");
+                               return;
+                             }
+                             name = newMcpName.trim();
+                             command = newMcpCmd.trim();
+                             args = newMcpArgs.trim();
+                             env = newMcpEnv.trim();
+                             description = newMcpDesc.trim();
+                           }
+
+                           const newMcp: CustomMcp = {
+                             id: 'mcp_' + Date.now(),
+                             name,
+                             description,
+                             command,
+                             args,
+                             env,
+                             isActive: true,
+                             tools
+                           };
+                          const updatedMcps = [...(sessionSettings.customMcps || []), newMcp];
+                          const nextSettings = { ...sessionSettings, customMcps: updatedMcps };
+                          setSessionSettings(nextSettings);
+                          saveSessionSettings(currentSessionId, nextSettings, sessionModel);
+
+                          // Reset form
+                          setNewMcpName('');
+                          setNewMcpDesc('');
+                          setNewMcpCmd('');
+                          setNewMcpArgs('');
+                          setNewMcpEnv('');
+                          setNewMcpTools([]);
+                          setDrawerMcpJsonInput('');
+                          setShowAddMcpForm(false);
+                          showToast(`✓ MCP Server "${newMcp.name}" Added`);
+                        }}
+                        className="flex-1 bg-accent-amber/15 border border-accent-amber/35 hover:bg-accent-amber hover:text-black py-1 text-xs font-bold text-accent-amber uppercase tracking-wider rounded transition-colors"
+                      >
+                        Save Config
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddMcpForm(false)}
+                        className="flex-1 bg-zinc-950 border border-zinc-800 hover:bg-zinc-900 py-1 text-xs font-bold text-zinc-400 uppercase tracking-wider rounded transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-1.5 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
+                  {sessionSettings.customMcps && sessionSettings.customMcps.map((mcp) => (
+                    <div
+                      key={mcp.id}
+                      className={`bg-zinc-950/80 border p-2 rounded flex flex-col gap-1.5 transition-all ${
+                        mcp.isActive
+                          ? 'border-accent-green/45 shadow-[0_0_8px_rgba(74,246,38,0.06)]'
+                          : 'border-zinc-900 hover:border-zinc-800'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          {/* Pulse status indicator */}
+                          <div 
+                            className={`w-2 h-2 rounded-full shrink-0 ${
+                              mcpStatuses[mcp.id] === 'online'
+                                ? 'bg-accent-green animate-pulse shadow-[0_0_8px_rgba(74,246,38,0.6)]'
+                                : mcpStatuses[mcp.id] === 'testing'
+                                ? 'bg-accent-amber animate-pulse shadow-[0_0_8px_rgba(245,158,11,0.6)]'
+                                : mcpStatuses[mcp.id] === 'offline'
+                                ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]'
+                                : 'bg-zinc-650'
+                            }`}
+                            title={`Status: ${mcpStatuses[mcp.id] || 'unknown'}`}
+                          />
+                          
+                          <input
+                            type="checkbox"
+                            checked={mcp.isActive}
+                            onChange={(e) => {
+                              const updatedMcps = sessionSettings.customMcps.map(m =>
+                                m.id === mcp.id ? { ...m, isActive: e.target.checked } : m
+                              );
+                              const nextSettings = { ...sessionSettings, customMcps: updatedMcps };
+                              setSessionSettings(nextSettings);
+                              saveSessionSettings(currentSessionId, nextSettings, sessionModel);
+                            }}
+                            className="accent-accent-green cursor-pointer h-3.5 w-3.5 rounded border-zinc-800 bg-zinc-900"
+                          />
+                          <span 
+                            className="font-bold text-zinc-200 text-xs truncate font-mono uppercase tracking-wider cursor-pointer flex-1" 
+                            title={mcp.name}
+                            onClick={() => {
+                              const updatedMcps = sessionSettings.customMcps.map(m =>
+                                m.id === mcp.id ? { ...m, isActive: !m.isActive } : m
+                              );
+                              const nextSettings = { ...sessionSettings, customMcps: updatedMcps };
+                              setSessionSettings(nextSettings);
+                              saveSessionSettings(currentSessionId, nextSettings, sessionModel);
+                            }}
+                          >
+                            {mcp.name}
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {/* Test connection button */}
+                          <button
+                            type="button"
+                            onClick={() => checkMcpStatus(mcp.id, mcp.command, mcp.args)}
+                            className="p-1 rounded text-zinc-500 hover:text-accent-amber hover:bg-zinc-900 transition-colors"
+                            title="Test connection"
+                            disabled={mcpStatuses[mcp.id] === 'testing'}
+                          >
+                            <RefreshCw size={12} className={mcpStatuses[mcp.id] === 'testing' ? 'animate-spin text-accent-amber' : ''} />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setExpandedMcpId(expandedMcpId === mcp.id ? null : mcp.id);
+                              // Reset confirm status when toggling details
+                              if (confirmDeleteMcpId === mcp.id) setConfirmDeleteMcpId(null);
+                            }}
+                            className={`p-1 rounded text-zinc-400 hover:text-accent-amber hover:bg-zinc-900 transition-all ${expandedMcpId === mcp.id ? 'bg-zinc-900 text-accent-amber' : ''}`}
+                            title={`Toggle details (${mcp.tools ? mcp.tools.length : 0} Tools)`}
+                          >
+                            <Terminal size={12} />
+                            {mcp.tools && mcp.tools.length > 0 && (
+                              <span className="ml-0.5 text-[9px] font-bold text-zinc-500">({mcp.tools.length})</span>
+                            )}
+                          </button>
+                          
+                          {confirmDeleteMcpId === mcp.id ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updatedMcps = sessionSettings.customMcps.filter(m => m.id !== mcp.id);
+                                const nextSettings = { ...sessionSettings, customMcps: updatedMcps };
+                                setSessionSettings(nextSettings);
+                                saveSessionSettings(currentSessionId, nextSettings, sessionModel);
+                                showToast(`🗑️ MCP config "${mcp.name}" Deleted`);
+                                setConfirmDeleteMcpId(null);
+                              }}
+                              className="bg-red-950/80 border border-red-500/50 text-red-400 hover:bg-red-600 hover:text-white px-1.5 py-0.5 rounded text-[10px] font-bold font-mono transition-colors animate-pulse"
+                            >
+                              SURE?
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteMcpId(mcp.id)}
+                              className="text-zinc-650 hover:text-red-400 p-1 hover:bg-zinc-900 rounded transition-colors"
+                              title="Delete custom MCP connection"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Expandable MCP Details */}
+                      {expandedMcpId === mcp.id && (
+                        <div className="border-t border-zinc-900/60 pt-2 mt-1 space-y-2 animate-in fade-in duration-200">
+                          <div className="text-zinc-400 font-sans text-xs leading-normal">
+                            {mcp.description || <span className="italic text-zinc-650">No description provided.</span>}
+                          </div>
+                          
+                          <div className="text-[10px] font-mono text-zinc-500 bg-black/40 border border-zinc-900/60 p-1.5 rounded space-y-1">
+                            <div>
+                              <span className="text-zinc-600 uppercase font-bold mr-1">CMD:</span>
+                              <span className="text-zinc-300">{mcp.command} {mcp.args}</span>
+                            </div>
+                            {mcp.env && (
+                              <div>
+                                <span className="text-zinc-600 uppercase font-bold mr-1">ENV:</span>
+                                <span className="text-zinc-400">{mcp.env}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {mcp.tools && mcp.tools.length > 0 && (
+                            <div className="space-y-1">
+                              <div className="text-[9px] text-zinc-550 font-bold uppercase tracking-wider font-mono">Available Tools Checklist:</div>
+                              <div className="space-y-1 max-h-[120px] overflow-y-auto custom-scrollbar pr-1">
+                                {mcp.tools.map((t, idx) => (
+                                  <div key={idx} className="bg-black/50 border border-zinc-900/60 p-1.5 rounded font-mono text-[10px]">
+                                    <div className="font-bold text-accent-green uppercase tracking-wider flex items-center justify-between">
+                                      <span>{t.name}</span>
+                                      <span className="text-[8px] text-zinc-600 font-normal font-sans">Active</span>
+                                    </div>
+                                    <div className="text-zinc-400 font-sans mt-0.5 leading-snug">{t.description || 'No description.'}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  {(!sessionSettings.customMcps || sessionSettings.customMcps.length === 0) && (
+                    <div className="text-xs text-zinc-600 italic text-center py-2">No custom MCP connections.</div>
+                  )}
+                </div>
+              </div>
+
+               {/* Clipboard Attach */}
+               <div className="space-y-1 border-t border-zinc-900 pt-3">
+                 <div className="flex items-center justify-between">
+                   <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider font-mono">Clipboard Auto-Attach</label>
+                   <input
+                     type="checkbox"
+                     checked={sessionSettings.clipboardAttach}
+                     onChange={(e) => {
+                       const newSettings = { ...sessionSettings, clipboardAttach: e.target.checked };
+                       setSessionSettings(newSettings);
+                       saveSessionSettings(currentSessionId, newSettings, sessionModel);
+                     }}
+                     className="accent-accent-amber"
+                   />
+                 </div>
+                 <span className="text-xs text-zinc-650">Automatically appends system clipboard text content to your message prompts on send.</span>
+               </div>
+
+              {/* Profiles management */}
+              <div className="space-y-2 border-t border-zinc-900 pt-3">
+                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider font-mono">Save Custom Profile</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="text"
+                    id="drawer-profile-name"
+                    placeholder="PROFILE NAME..."
+                    className="flex-1 bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-xs font-mono text-zinc-300 placeholder:text-zinc-700 focus:outline-none uppercase"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const el = document.getElementById('drawer-profile-name') as HTMLInputElement;
+                      if (!el || !el.value.trim()) {
+                        showToast("⚠️ Profile name cannot be empty");
+                        return;
+                      }
+                      const name = el.value.trim();
+                      const currentProfile = {
+                        aiChatTemperature: sessionSettings.temperature,
+                        aiChatMaxTokens: sessionSettings.maxTokens,
+                        aiChatContextSize: sessionSettings.contextSize,
+                        aiChatTopK: sessionSettings.topK,
+                        aiChatTopP: sessionSettings.topP,
+                        aiChatSystemPrompt: sessionSettings.systemPrompt,
+                        aiChatPersonality: sessionSettings.personality,
+                      };
+                      const updatedProfiles = {
+                        ...aiSettingsProfiles,
+                        [name]: currentProfile
+                      };
+                      setAiSettingsProfiles(updatedProfiles);
+                      el.value = '';
+                      showToast(`💾 Profile "${name}" saved`);
+                    }}
+                    className="bg-accent-amber/15 border border-accent-amber/35 text-accent-amber px-3 py-1 rounded text-xs font-bold uppercase hover:bg-accent-amber hover:text-black transition-colors"
+                  >
+                    Save
+                  </button>
+                </div>
+                {Object.keys(aiSettingsProfiles).length > 0 && (
+                  <select
+                    onChange={(e) => {
+                      const name = e.target.value;
+                      if (!name) return;
+                      const prof = aiSettingsProfiles[name];
+                      if (prof) {
+                        const newSettings = {
+                          ...sessionSettings,
+                          temperature: prof.aiChatTemperature ?? 0.7,
+                          maxTokens: prof.aiChatMaxTokens ?? 0,
+                          contextSize: prof.aiChatContextSize ?? 4096,
+                          topK: prof.aiChatTopK ?? 40,
+                          topP: prof.aiChatTopP ?? 0.9,
+                          systemPrompt: prof.aiChatSystemPrompt ?? '',
+                          personality: prof.aiChatPersonality ?? 'default'
+                        };
+                        setSessionSettings(newSettings);
+                        saveSessionSettings(currentSessionId, newSettings, sessionModel);
+                        showToast(`📂 Loaded profile: ${name}`);
+                      }
+                    }}
+                    value=""
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-400 focus:outline-none appearance-none cursor-pointer font-mono"
+                  >
+                    <option value="" disabled>LOAD PRESET PROFILE...</option>
+                    {Object.keys(aiSettingsProfiles).map((name) => (
+                      <option key={name} value={name}>{name.toUpperCase()}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Resets */}
+              <div className="flex gap-2 mt-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const modelDefaults = getModelDefaultSettings(sessionModel || getActiveModelDefault());
+                    const newSettings = {
+                      ...sessionSettings,
+                      temperature: modelDefaults.temperature,
+                      maxTokens: modelDefaults.maxTokens,
+                      contextSize: modelDefaults.contextSize,
+                      topK: modelDefaults.topK,
+                      topP: modelDefaults.topP,
+                      systemPrompt: masterDefaults.systemPrompt,
+                      personality: masterDefaults.personality,
+                      clipboardAttach: false,
+                      activeSkills: {
+                        githubScan: false,
+                        webSearch: false,
+                        systemController: true,
+                        anthropicSearch: false
+                      },
+                      customSkills: sessionSettings.customSkills || [],
+                      customMcps: sessionSettings.customMcps || []
+                    };
+                    setSessionSettings(newSettings);
+                    await saveSessionSettings(currentSessionId, newSettings, sessionModel);
+                    showToast("🔄 Reset to Model Defaults");
+                  }}
+                  className="flex-1 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 py-1.5 text-xs font-bold text-zinc-400 hover:text-white tracking-wider uppercase rounded"
+                >
+                  Model Defaults
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const newSettings = {
+                      temperature: masterDefaults.temperature,
+                      maxTokens: masterDefaults.maxTokens,
+                      contextSize: masterDefaults.contextSize,
+                      topK: masterDefaults.topK,
+                      topP: masterDefaults.topP,
+                      systemPrompt: masterDefaults.systemPrompt,
+                      personality: masterDefaults.personality,
+                      personalityPrompt: "",
+                      clipboardAttach: false,
+                      activeSkills: {
+                        githubScan: false,
+                        webSearch: false,
+                        systemController: true,
+                        anthropicSearch: false
+                      },
+                      customSkills: sessionSettings.customSkills || [],
+                      customMcps: sessionSettings.customMcps || []
+                    };
+                    setSessionSettings(newSettings);
+                    await saveSessionSettings(currentSessionId, newSettings, sessionModel);
+                    showToast("🔄 Reset to Master Defaults");
+                  }}
+                  className="flex-1 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 py-1.5 text-xs font-bold text-zinc-400 hover:text-white tracking-wider uppercase rounded"
+                >
+                  Master Defaults
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+      </div>
   );
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "vectorhud"
-version = "1.3.2"
+version = "1.4.0"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -56,6 +56,7 @@ time = "=0.3.36"
 alloc-stdlib = "=0.2.2"
 brotli-decompressor = "=5.0.1"
 pdf-extract = "0.10.0"
+rfd = "0.15"
 
 # Controller & Bluetooth Widget (Session 24)
 vigem-client = "0.1.4"

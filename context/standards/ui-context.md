@@ -38,3 +38,7 @@ Tactical / HUD environment. The overlay feels like a developer tool or an aerona
 - **Widget Container:** A resizable box with a draggable header (only visible when unpinned).
 - **Pinning:** Clicking the "Pin" icon hides the container's border and header, leaving only the data floating on screen.
 - **Solid Backgrounds:** Widgets use solid backgrounds for readability against busy gaming scenes (glassmorphism removed).
+
+## Form & Text Previewer Design Rules
+- **Vertical Form Stacking**: Form input fields inside widgets, drawers, and panels must be stacked vertically (using `flex flex-col` or `space-y-X`) rather than side-by-side grid layouts. This prevents label or input squeezing on narrow or compact viewports.
+- **Resizable Text Previewers**: Dynamic text detail boxes (e.g. system prompts, script instructions, log snippets) must be resizable vertically using `resize-y overflow-auto` classes, constrained by `min-h-[100px]` and `max-h-[350px]` properties to ensure legibility and flexible scrolling.

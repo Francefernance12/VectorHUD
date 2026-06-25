@@ -1,5 +1,9 @@
 # VectorHUD AI Actions & Capabilities 🧠
 
+> [!IMPORTANT]
+> **Experimental / Work-in-Progress (WIP) Notice**:
+> The custom Model Context Protocol (MCP) connections and HUD Skills features are in an active development phase. Some servers and scripts may have connectivity or execution issues. Feedback, bug reports, and suggestions are highly welcome!
+
 VectorHUD's built-in AI chat widget (`OpenRouterWidget`) supports **Function Calling (Tool Use)**. This allows the AI model (Gemini, GPT, Claude, or Llama) to interact directly with the Tauri overlay frontend and Rust backend. 
 
 When you ask the AI to perform a system action or query status information, it translates your request into a structured tool call.

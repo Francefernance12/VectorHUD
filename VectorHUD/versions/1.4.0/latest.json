@@ -1,0 +1,11 @@
+{
+  "version": "1.4.0",
+  "notes": "VectorHUD v1.4.0. Redesigned model dropdown selector with dynamic provider-grouping and premium glowing HUD badges, squeezeless responsive layout cards for MCP & HUD Skills settings, and fixed frontend test assertions.",
+  "pub_date": "2026-06-24T22:45:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTVTRjWmZWTDJBcjB5TEtzQ2VCWDJnWi8ySXJrZzZHRXZFanR4eHlRcWJmM2MraitLeXkxRk5qR1g0a0tHVEpuVTFoOWhUWFRIVUJYWTZ0c0QySFd6bXJGeFRvOS9kSXdvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgyMzU1NDU3CWZpbGU6dmVjdG9yaHVkXzEuNC4wX3g2NC1zZXR1cC5leGUKT1VUbkNCWGFzUDJQQnZ1SUNxQ3RmMzRrNGV3S3ZEbTFJUzRSS05Fb29oL2dLOW52b1ZIdnlMMGgzQ1NGKzBoOXVXaDNORnEvYW1MMElZY3JML2RSQVE9PQo=",
+      "url": "https://github.com/Francefernance12/VectorHUD/releases/download/v1.4.0/vectorhud_1.4.0_x64-setup.exe"
+    }
+  }
+}

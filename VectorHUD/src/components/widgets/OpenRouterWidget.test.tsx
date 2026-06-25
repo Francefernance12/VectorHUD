@@ -13,6 +13,18 @@ const mockInvoke = vi.fn().mockImplementation((cmd: string, args: any) => {
   if (cmd === 'read_attached_file') {
     return Promise.resolve("mocked file content for " + args.path);
   }
+  if (cmd === 'select_attached_files') {
+    return Promise.resolve(['d:/ProgrammingProjects/FrancisGamebar/VectorHUD/src/test_code.py']);
+  }
+  if (cmd === 'read_attached_file_data') {
+    return Promise.resolve({
+      name: 'test_code.py',
+      path: args.path,
+      content: 'code block content',
+      size: 1024,
+      lines: 1
+    });
+  }
   return Promise.resolve(null);
 });
 
@@ -63,7 +75,10 @@ describe('OpenRouterWidget Enhancements Tests', () => {
     onlineSpy.mockReturnValue(true);
     useOpenRouterStore.setState({
       sidebarOpen: true,
-      currentSessionId: 'sess-1'
+      currentSessionId: 'sess-1',
+      attachedFiles: [],
+      input: '',
+      draftImagePath: null
     });
   });
 
@@ -140,12 +155,15 @@ describe('OpenRouterWidget Enhancements Tests', () => {
     const gearBtn = screen.getByTitle(/Session Settings/i);
     fireEvent.click(gearBtn);
 
-    // Get the model select dropdown
-    const modelSelect = screen.getByText('Session Model').parentElement?.querySelector('select') as HTMLSelectElement;
-    expect(modelSelect).toBeTruthy();
+    // Get the model select dropdown button and open it
+    const modelDropdownButton = screen.getByText('Session Model').parentElement?.querySelector('button') as HTMLButtonElement;
+    expect(modelDropdownButton).toBeTruthy();
+    fireEvent.click(modelDropdownButton);
 
-    // Switch model to Claude 3.5 Sonnet
-    fireEvent.change(modelSelect, { target: { value: 'anthropic/claude-3.5-sonnet' } });
+    // Switch model to Claude 3.5 Sonnet by clicking its custom option
+    const sonnetOption = screen.getByText('Claude 3.5 Sonnet');
+    expect(sonnetOption).toBeTruthy();
+    fireEvent.click(sonnetOption);
 
     // Claude 3.5 Sonnet temperature default is 1.0, let's verify temperature is updated
     await waitFor(() => {
@@ -161,5 +179,108 @@ describe('OpenRouterWidget Enhancements Tests', () => {
     await waitFor(() => {
       expect(screen.getByText('1.0')).toBeTruthy();
     });
+  });
+
+  it('should allow adding user custom skills in settings drawer', async () => {
+    render(React.createElement(OpenRouterWidget));
+    
+    // Open settings drawer
+    const gearBtn = screen.getByTitle(/Session Settings/i);
+    fireEvent.click(gearBtn);
+
+    // Find and click the Add button for Custom Skills
+    const addSkillBtn = screen.getByText('User Custom Skills').parentElement?.querySelector('button') as HTMLButtonElement;
+    expect(addSkillBtn).toBeTruthy();
+    fireEvent.click(addSkillBtn);
+
+    // Verify form fields are shown
+    expect(screen.getByPlaceholderText('E.G. NOTION_ASSISTANT')).toBeTruthy();
+    
+    // Fill in values
+    const nameInput = screen.getByPlaceholderText('E.G. NOTION_ASSISTANT') as HTMLInputElement;
+    const descInput = screen.getByPlaceholderText(/E.G. Directs AI to summarize/i) as HTMLInputElement;
+    const instTextarea = screen.getByPlaceholderText('Instructions for the AI...') as HTMLTextAreaElement;
+    
+    fireEvent.change(nameInput, { target: { value: 'TEST_SKILL' } });
+    fireEvent.change(descInput, { target: { value: 'This is a test skill' } });
+    fireEvent.change(instTextarea, { target: { value: 'Always end with TEST_SKILL_SUCCESS' } });
+
+    // Click Save Skill
+    const saveBtn = screen.getByText('Save Skill');
+    fireEvent.click(saveBtn);
+
+    // Verify it is listed in custom skills list
+    await waitFor(() => {
+      expect(screen.getByText('TEST_SKILL')).toBeTruthy();
+      expect(screen.getByText('This is a test skill')).toBeTruthy();
+    });
+  });
+
+  it('should allow adding custom MCP servers and tools in settings drawer', async () => {
+    render(React.createElement(OpenRouterWidget));
+    
+    // Open settings drawer
+    const gearBtn = screen.getByTitle(/Session Settings/i);
+    fireEvent.click(gearBtn);
+
+    // Find and click the Add button for Custom MCPs
+    const addMcpBtn = screen.getByText('User Custom MCPs').parentElement?.querySelector('button') as HTMLButtonElement;
+    expect(addMcpBtn).toBeTruthy();
+    fireEvent.click(addMcpBtn);
+
+    // Verify form fields are shown
+    expect(screen.getByPlaceholderText('E.G. SQLITE_EXPLORER')).toBeTruthy();
+    
+    // Fill in values
+    const nameInput = screen.getByPlaceholderText('E.G. SQLITE_EXPLORER') as HTMLInputElement;
+    const cmdInput = screen.getByPlaceholderText('node / npx') as HTMLInputElement;
+    const argsInput = screen.getByPlaceholderText('e.g. index.js') as HTMLInputElement;
+    
+    fireEvent.change(nameInput, { target: { value: 'test_mcp' } });
+    fireEvent.change(cmdInput, { target: { value: 'node' } });
+    fireEvent.change(argsInput, { target: { value: 'index.js' } });
+
+    // Add tool
+    const addToolLink = screen.getByText('+ Add Tool');
+    expect(addToolLink).toBeTruthy();
+    fireEvent.click(addToolLink);
+
+    const toolNameInput = screen.getByPlaceholderText('TOOL_NAME') as HTMLInputElement;
+    const toolDescInput = screen.getByPlaceholderText('TOOL_DESCRIPTION') as HTMLInputElement;
+    
+    fireEvent.change(toolNameInput, { target: { value: 'test_tool' } });
+    fireEvent.change(toolDescInput, { target: { value: 'Runs a test action' } });
+
+    const addToolBtn = screen.getByText('Add Tool to Config');
+    fireEvent.click(addToolBtn);
+
+    // Verify tool was added to the config list
+    expect(screen.getByText('test_tool')).toBeTruthy();
+
+    // Click Save Config
+    const saveMcpBtn = screen.getByText('Save Config');
+    fireEvent.click(saveMcpBtn);
+
+    // Verify MCP listed
+    await waitFor(() => {
+      expect(screen.getByText('test_mcp')).toBeTruthy();
+    });
+  });
+
+  it('should dynamically include global default and direct provider models in options list', async () => {
+    render(React.createElement(OpenRouterWidget));
+    
+    // Open settings drawer
+    const gearBtn = screen.getByTitle(/Session Settings/i);
+    fireEvent.click(gearBtn);
+
+    // Open the dropdown
+    const modelDropdownButton = screen.getByText('Session Model').parentElement?.querySelector('button') as HTMLButtonElement;
+    expect(modelDropdownButton).toBeTruthy();
+    fireEvent.click(modelDropdownButton);
+
+    // Verify model options are rendered in the custom list
+    expect(screen.getAllByText('Gemini 2.5 Flash').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Claude 3.5 Sonnet')).toBeTruthy();
   });
 });

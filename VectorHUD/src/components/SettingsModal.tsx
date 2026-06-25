@@ -10,14 +10,85 @@ import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { getVersion } from '@tauri-apps/api/app';
 import { openUrl } from '@tauri-apps/plugin-opener';
-import { useSettingsStore } from '../store/settingsStore';
+import { useSettingsStore, CustomTone, CustomSystemPrompt, CustomSkill, CustomMcp } from '../store/settingsStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useToastStore } from '../store/toastStore';
+import { useShellStore } from '../store/shellStore';
 import { invoke } from '@tauri-apps/api/core';
 import { getDb } from '../utils/db';
 import { getErrorMessage } from '../types';
 
+const parseMcpJson = (jsonStr: string) => {
+  const parsed = JSON.parse(jsonStr);
+  let name = 'Imported MCP';
+  let command = '';
+  let args: string[] = [];
+  let envObj: Record<string, string> = {};
+  let description = '';
+
+  const extractFromConfig = (config: any, serverName?: string) => {
+    if (serverName) name = serverName;
+    
+    if (Array.isArray(config.command)) {
+      if (config.command.length > 0) {
+        command = config.command[0];
+        args = [...config.command.slice(1)];
+      }
+    } else if (typeof config.command === 'string') {
+      command = config.command;
+    }
+
+    if (Array.isArray(config.args)) {
+      args = [...args, ...config.args];
+    } else if (typeof config.args === 'string') {
+      args.push(config.args);
+    }
+
+    if (config.env && typeof config.env === 'object') {
+      envObj = { ...envObj, ...config.env };
+    }
+
+    if (typeof config.description === 'string') {
+      description = config.description;
+    }
+  };
+
+  if (parsed.mcpServers && typeof parsed.mcpServers === 'object') {
+    const keys = Object.keys(parsed.mcpServers);
+    if (keys.length > 0) {
+      extractFromConfig(parsed.mcpServers[keys[0]], keys[0]);
+    }
+  } else if (parsed.mcp && typeof parsed.mcp === 'object') {
+    const keys = Object.keys(parsed.mcp);
+    if (keys.length > 0) {
+      extractFromConfig(parsed.mcp[keys[0]], keys[0]);
+    }
+  } else if (parsed.command) {
+    extractFromConfig(parsed);
+  } else {
+    const keys = Object.keys(parsed);
+    if (keys.length === 1 && typeof parsed[keys[0]] === 'object') {
+      extractFromConfig(parsed[keys[0]], keys[0]);
+    } else {
+      throw new Error("Could not find MCP server configuration fields (command/args)");
+    }
+  }
+
+  if (!command) {
+    throw new Error("Executable command is required in the JSON configuration");
+  }
+
+  return {
+    name,
+    command,
+    args: args.join(' '),
+    env: Object.keys(envObj).length > 0 ? JSON.stringify(envObj) : '',
+    description
+  };
+};
+
 export function SettingsModal() {
+  const isOverlayOpen = useShellStore(state => state.isOverlayOpen);
   const { 
     isSettingsOpen, 
     toggleSettings, 
@@ -138,7 +209,17 @@ export function SettingsModal() {
     aiChatPersonality,
     setAiChatPersonality,
     aiSettingsProfiles,
-    setAiSettingsProfiles
+    setAiSettingsProfiles,
+    customTones,
+    setCustomTones,
+    customSystemPrompts,
+    setCustomSystemPrompts,
+    globalCustomSkills,
+    setGlobalCustomSkills,
+    globalCustomMcps,
+    setGlobalCustomMcps,
+    aiChatLayoutMode,
+    setAiChatLayoutMode
   } = useSettingsStore(
     useShallow((state) => ({
       isSettingsOpen: state.isSettingsOpen,
@@ -261,12 +342,23 @@ export function SettingsModal() {
       setAiChatPersonality: state.setAiChatPersonality,
       aiSettingsProfiles: state.aiSettingsProfiles,
       setAiSettingsProfiles: state.setAiSettingsProfiles,
+      customTones: state.customTones,
+      setCustomTones: state.setCustomTones,
+      customSystemPrompts: state.customSystemPrompts,
+      setCustomSystemPrompts: state.setCustomSystemPrompts,
+      globalCustomSkills: state.globalCustomSkills,
+      setGlobalCustomSkills: state.setGlobalCustomSkills,
+      globalCustomMcps: state.globalCustomMcps,
+      setGlobalCustomMcps: state.setGlobalCustomMcps,
+      aiChatLayoutMode: state.aiChatLayoutMode,
+      setAiChatLayoutMode: state.setAiChatLayoutMode,
     }))
   );
 
   const showToast = useToastStore(state => state.showToast);
 
-  const [activeTab, setActiveTab] = useState<'integrations' | 'widgets' | 'hotkeys' | 'audio' | 'general' | 'logs' | 'updates' | 'docs' | 'ai_chat'>('integrations');
+  const activeTab = useSettingsStore(state => state.settingsActiveTab);
+  const setActiveTab = useSettingsStore(state => state.setSettingsActiveTab);
   const [searchQuery, setSearchQuery] = useState('');
   
   // Credentials loaded from SQLite
@@ -364,7 +456,12 @@ export function SettingsModal() {
     aiChatTopP,
     aiChatSystemPrompt,
     aiChatPersonality,
-    aiSettingsProfiles
+    aiSettingsProfiles,
+    customTones,
+    customSystemPrompts,
+    globalCustomSkills,
+    globalCustomMcps,
+    aiChatLayoutMode
   });
 
   // Diagnostics logs state
@@ -378,10 +475,102 @@ export function SettingsModal() {
   const [showConfirmReset, setShowConfirmReset] = useState(false);
   const [showConfirmClearChat, setShowConfirmClearChat] = useState(false);
   const [isClearingChat, setIsClearingChat] = useState(false);
+  const [isResettingDb, setIsResettingDb] = useState(false);
 
   // Keybind Recording state
   const [recordingField, setRecordingField] = useState<keyof typeof localHotkeys | null>(null);
-  const [tempCombo, setTempCombo] = useState<string>('');
+  const [tempCombo, setTempCombo] = useState('');
+
+  // Global custom skills form state
+  const [newSkillName, setNewSkillName] = useState('');
+  const [newSkillDesc, setNewSkillDesc] = useState('');
+  const [newSkillInstructions, setNewSkillInstructions] = useState('');
+
+  // Global custom MCP form state
+  const [newMcpName, setNewMcpName] = useState('');
+  const [newMcpDesc, setNewMcpDesc] = useState('');
+  const [newMcpCommand, setNewMcpCommand] = useState('');
+  const [newMcpArgs, setNewMcpArgs] = useState('');
+  const [newMcpEnv, setNewMcpEnv] = useState('');
+
+  // MCP connection testing state
+  const [testingMcpId, setTestingMcpId] = useState<string | null>(null);
+  const [mcpTestResults, setMcpTestResults] = useState<Record<string, { success: boolean; message: string }>>({});
+  const [isTestingNewMcp, setIsTestingNewMcp] = useState(false);
+  const [newMcpTestResult, setNewMcpTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [mcpInputMode, setMcpInputMode] = useState<'fields' | 'json'>('fields');
+  const [mcpJsonInput, setMcpJsonInput] = useState('');
+
+  const handleOpenAppData = async () => {
+    try {
+      await invoke('open_app_data_folder');
+      showToast("📁 App Configuration folder opened");
+    } catch (err) {
+      showToast(`⚠️ Failed to open configuration folder: ${err}`);
+    }
+  };
+
+  const handleTestMcp = async (mcpId: string, command: string, args: string) => {
+    setTestingMcpId(mcpId);
+    try {
+      const res = await invoke<string>('test_mcp_connection', { command, args });
+      setMcpTestResults(prev => ({
+        ...prev,
+        [mcpId]: { success: true, message: res }
+      }));
+      showToast(`✓ MCP Connection Successful: ${command}`);
+    } catch (err) {
+      setMcpTestResults(prev => ({
+        ...prev,
+        [mcpId]: { success: false, message: String(err) }
+      }));
+      showToast(`✗ MCP Connection Failed: ${err}`);
+    } finally {
+      setTestingMcpId(null);
+    }
+  };
+
+  const handleTestNewMcp = async () => {
+    let cmd = '';
+    let args = '';
+    if (mcpInputMode === 'json') {
+      if (!mcpJsonInput.trim()) {
+        showToast("⚠️ Paste MCP JSON configuration first");
+        return;
+      }
+      try {
+        const parsed = parseMcpJson(mcpJsonInput);
+        cmd = parsed.command;
+        args = parsed.args;
+      } catch (e: any) {
+        showToast(`⚠️ JSON parse error: ${e.message}`);
+        return;
+      }
+    } else {
+      if (!newMcpCommand.trim()) {
+        showToast("⚠️ Executable Command is required to test");
+        return;
+      }
+      cmd = newMcpCommand.trim();
+      args = newMcpArgs.trim();
+    }
+
+    setIsTestingNewMcp(true);
+    setNewMcpTestResult(null);
+    try {
+      const res = await invoke<string>('test_mcp_connection', {
+        command: cmd,
+        args: args
+      });
+      setNewMcpTestResult({ success: true, message: res });
+      showToast("✓ Custom MCP Connection Test Successful");
+    } catch (err) {
+      setNewMcpTestResult({ success: false, message: String(err) });
+      showToast(`✗ Custom MCP Connection Test Failed: ${err}`);
+    } finally {
+      setIsTestingNewMcp(false);
+    }
+  };
 
   // Hydrate credentials and basic parameters on mount / open
   useEffect(() => {
@@ -449,7 +638,12 @@ export function SettingsModal() {
       aiChatTopP,
       aiChatSystemPrompt,
       aiChatPersonality,
-      aiSettingsProfiles
+      aiSettingsProfiles,
+      customTones,
+      customSystemPrompts,
+      globalCustomSkills,
+      globalCustomMcps,
+      aiChatLayoutMode
     });
 
     async function loadAudioDevices() {
@@ -580,6 +774,38 @@ export function SettingsModal() {
     }
   }, [activeTab, isSettingsOpen]);
 
+  // Global Escape key keydown listener when settings is open
+  useEffect(() => {
+    if (!isSettingsOpen || recordingField) return;
+
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        handleClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown, true);
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown, true);
+    };
+  }, [isSettingsOpen, recordingField, localPreferences, localHotkeys]);
+
+  // Close Settings request event listener (dispatched from Dock settings button)
+  useEffect(() => {
+    if (!isSettingsOpen) return;
+
+    const handleCloseRequest = () => {
+      handleClose();
+    };
+
+    window.addEventListener('close-settings-request', handleCloseRequest);
+    return () => {
+      window.removeEventListener('close-settings-request', handleCloseRequest);
+    };
+  }, [isSettingsOpen, localPreferences, localHotkeys]);
+
   // Keybind Recorder keydown listener
   useEffect(() => {
     if (!recordingField) {
@@ -679,12 +905,16 @@ export function SettingsModal() {
 
   // Temporary unregister hotkeys on Settings open to prevent capture conflict
   useEffect(() => {
-    if (isSettingsOpen) {
+    if (isSettingsOpen && isOverlayOpen) {
       invoke('unregister_all_hotkeys').catch(console.error);
     } else {
       useSettingsStore.getState().syncHotkeys().catch(console.error);
     }
-  }, [isSettingsOpen]);
+    return () => {
+      // Re-register hotkeys on unmount/close so they are not left suspended in Rust
+      useSettingsStore.getState().syncHotkeys().catch(console.error);
+    };
+  }, [isSettingsOpen, isOverlayOpen]);
 
   const [isMicTesting, setIsMicTesting] = useState(false);
   const micStreamRef = useRef<MediaStream | null>(null);
@@ -919,6 +1149,12 @@ export function SettingsModal() {
       await setAiChatPersonality(localPreferences.aiChatPersonality);
       await setAiSettingsProfiles(localPreferences.aiSettingsProfiles);
 
+      await setCustomTones(localPreferences.customTones);
+      await setCustomSystemPrompts(localPreferences.customSystemPrompts);
+      await setGlobalCustomSkills(localPreferences.globalCustomSkills);
+      await setGlobalCustomMcps(localPreferences.globalCustomMcps);
+      await setAiChatLayoutMode(localPreferences.aiChatLayoutMode);
+
       // Save keybind configurations
       try {
         await setOverlayHotkey(localHotkeys.overlay);
@@ -934,6 +1170,7 @@ export function SettingsModal() {
         // Note: We do NOT call syncHotkeys() here because hotkeys remain suspended while Settings is open.
         // They will be registered on close.
         setSaveMessage('Saved & loaded configuration successfully!');
+        window.dispatchEvent(new Event('settings-applied'));
         setHotkeyError('');
         
         // Lock in initial keybind configurations to clear dirty warning flag
@@ -1027,7 +1264,12 @@ export function SettingsModal() {
       localPreferences.aiChatTopP !== aiChatTopP ||
       localPreferences.aiChatSystemPrompt !== aiChatSystemPrompt ||
       localPreferences.aiChatPersonality !== aiChatPersonality ||
-      JSON.stringify(localPreferences.aiSettingsProfiles) !== JSON.stringify(aiSettingsProfiles)
+      JSON.stringify(localPreferences.aiSettingsProfiles) !== JSON.stringify(aiSettingsProfiles) ||
+      JSON.stringify(localPreferences.customTones) !== JSON.stringify(customTones) ||
+      JSON.stringify(localPreferences.customSystemPrompts) !== JSON.stringify(customSystemPrompts) ||
+      JSON.stringify(localPreferences.globalCustomSkills) !== JSON.stringify(globalCustomSkills) ||
+      JSON.stringify(localPreferences.globalCustomMcps) !== JSON.stringify(globalCustomMcps) ||
+      localPreferences.aiChatLayoutMode !== aiChatLayoutMode
     );
   };
 
@@ -1110,7 +1352,12 @@ export function SettingsModal() {
       aiChatTopP,
       aiChatSystemPrompt,
       aiChatPersonality,
-      aiSettingsProfiles
+      aiSettingsProfiles,
+      customTones,
+      customSystemPrompts,
+      globalCustomSkills,
+      globalCustomMcps,
+      aiChatLayoutMode
     });
     
     // Restore CSS variables from saved settings
@@ -1141,7 +1388,7 @@ export function SettingsModal() {
       customOpenRouterModel: '',
       useCustomOpenRouterModel: false,
       aiProvider: 'openrouter',
-      globalFontSize: 14,
+      globalFontSize: 18,
       theme: 'default',
       customColor: '#FF0000',
       recordMicrophone: false,
@@ -1183,12 +1430,39 @@ export function SettingsModal() {
       aiChatTopP: 0.9,
       aiChatSystemPrompt: '',
       aiChatPersonality: 'default',
-      aiSettingsProfiles: {}
+      aiSettingsProfiles: {},
+      customTones: [],
+      customSystemPrompts: [],
+      globalCustomSkills: [],
+      globalCustomMcps: [],
+      aiChatLayoutMode: 'overlay'
     });
 
     setShowConfirmReset(false);
     setSaveMessage('Restored local presets. Click Apply to save.');
     setTimeout(() => setSaveMessage(''), 4000);
+  };
+
+  const handleResetDatabase = async () => {
+    // Double confirmation popup to prevent accidental wipes
+    const firstCheck = window.confirm("⚠️ DANGER: This will permanently delete your entire database (vectorhud.db). All chat histories, capture gallery items metadata, and saved credentials will be permanently erased. Proceed?");
+    if (!firstCheck) return;
+
+    const secondCheck = window.confirm("🚨 Are you absolutely sure? This action CANNOT be undone, and the application will immediately restart to rebuild the database.");
+    if (!secondCheck) return;
+
+    setIsResettingDb(true);
+    try {
+      await invoke('wipe_and_reset_database');
+      // Relaunch app to trigger fresh schema creation
+      await relaunch();
+    } catch (err) {
+      console.error("Database wipe failed:", err);
+      setHotkeyError(err instanceof Error ? err.message : String(err));
+      setTimeout(() => setHotkeyError(""), 5000);
+    } finally {
+      setIsResettingDb(false);
+    }
   };
 
   const handleClearChatHistory = async () => {
@@ -1231,7 +1505,7 @@ export function SettingsModal() {
         <div className="flex flex-col gap-1 min-w-0">
           <span className="text-xs font-bold text-zinc-300 tracking-wider uppercase font-mono">{label}</span>
           {isRecording && (
-            <span className="text-[10px] text-zinc-500 font-sans">
+            <span className="text-[11px] text-zinc-500 font-sans">
               Currently assigned: <span className="font-mono text-zinc-400 font-bold bg-white/5 px-1.5 py-0.5 rounded border border-white/10">{displayVal}</span>
             </span>
           )}
@@ -1252,7 +1526,7 @@ export function SettingsModal() {
             {!isRecording && value && (
               <button
                 onClick={() => setLocalHotkeys(s => ({ ...s, [fieldKey]: '' }))}
-                className="text-[10px] font-bold text-zinc-500 hover:text-red-400 transition-colors cursor-pointer shrink-0 ml-2"
+                className="text-[11px] font-bold text-zinc-500 hover:text-red-400 transition-colors cursor-pointer shrink-0 ml-2"
                 title="Clear keybind"
               >
                 Clear
@@ -1351,7 +1625,7 @@ export function SettingsModal() {
                     <option value="openai/gpt-4o">OpenAI GPT-4o [Vision] [Actions] [File Attachments]</option>
                     <option value="deepseek/deepseek-chat">DeepSeek V3 [Actions]</option>
                     <option value="deepseek/deepseek-r1">DeepSeek R1 [Thinking]</option>
-                    <option value="deepseek/deepseek-v4-flash">DeepSeek v4-Flash [Vision] [File Attachments]</option>
+                    <option value="deepseek/deepseek-v4-flash">DeepSeek v4-Flash [Vision] [File Attachments] [Web Search]</option>
                     <option value="moonshotai/kimi-k2-thinking">Kimi K2 Thinking [Thinking]</option>
                     <option value="x-ai/grok-4.3">Grok 4 [Vision] [Actions] [File Attachments]</option>
                   </select>
@@ -1792,6 +2066,20 @@ export function SettingsModal() {
 
                 <button
                   disabled={!!searchQuery}
+                  onClick={() => setActiveTab('mcp_skills')}
+                  className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold tracking-wider uppercase transition-all border ${
+                    searchQuery 
+                      ? 'opacity-40 border-transparent text-zinc-600'
+                      : activeTab === 'mcp_skills' 
+                        ? 'bg-primary/15 border-primary/35 text-primary shadow-[inset_0_0_10px_rgba(var(--accent-green-rgb,74,246,38),0.08)]' 
+                        : 'border-transparent text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
+                  }`}
+                >
+                  <Cpu size={14} /> MCP & HUD Skills
+                </button>
+
+                <button
+                  disabled={!!searchQuery}
                   onClick={() => setActiveTab('widgets')}
                   className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-xs font-semibold tracking-wider uppercase transition-all border ${
                     searchQuery 
@@ -2008,7 +2296,7 @@ export function SettingsModal() {
                                   <option value="openai/gpt-4o">OpenAI GPT-4o [Vision] [Actions] [File Attachments]</option>
                                   <option value="deepseek/deepseek-chat">DeepSeek V3 [Actions]</option>
                                   <option value="deepseek/deepseek-r1">DeepSeek R1 [Thinking]</option>
-                                  <option value="deepseek/deepseek-v4-flash">DeepSeek v4-Flash [Vision] [File Attachments]</option>
+                                  <option value="deepseek/deepseek-v4-flash">DeepSeek v4-Flash [Vision] [File Attachments] [Web Search]</option>
                                   <option value="moonshotai/kimi-k2-thinking">Kimi K2 Thinking [Thinking]</option>
                                   <option value="x-ai/grok-4.3">Grok 4 [Vision] [Actions] [File Attachments]</option>
                                 </select>
@@ -2170,7 +2458,7 @@ export function SettingsModal() {
                               onChange={(e) => setLocalPreferences(s => ({ ...s, aiChatTemperature: parseFloat(e.target.value) }))}
                               className="w-full accent-primary cursor-pointer"
                             />
-                            <p className="text-[10px] text-zinc-500">Higher values produce more creative responses, lower values make responses more factual.</p>
+                            <p className="text-[11px] text-zinc-500">Higher values produce more creative responses, lower values make responses more factual.</p>
                           </div>
 
                           {/* Max Tokens */}
@@ -2187,7 +2475,7 @@ export function SettingsModal() {
                               onChange={(e) => setLocalPreferences(s => ({ ...s, aiChatMaxTokens: parseInt(e.target.value) }))}
                               className="w-full accent-primary cursor-pointer"
                             />
-                            <p className="text-[10px] text-zinc-500">Maximum token count the model will generate. Set to 0 to use model defaults.</p>
+                            <p className="text-[11px] text-zinc-500">Maximum token count the model will generate. Set to 0 to use model defaults.</p>
                           </div>
 
                           {/* Context Size */}
@@ -2202,7 +2490,7 @@ export function SettingsModal() {
                               onChange={(e) => setLocalPreferences(s => ({ ...s, aiChatContextSize: parseInt(e.target.value) }))}
                               className="w-full accent-primary cursor-pointer"
                             />
-                            <p className="text-[10px] text-zinc-500">Maximum window of conversation history and attachment data to feed the model.</p>
+                            <p className="text-[11px] text-zinc-500">Maximum window of conversation history and attachment data to feed the model.</p>
                           </div>
 
                           {/* Personality Selection */}
@@ -2219,7 +2507,7 @@ export function SettingsModal() {
                               <option value="operator">Sarcastic Operator (Witty & Cynical)</option>
                               <option value="scientific">Dry Scientific Advisor (Technical & Formal)</option>
                             </select>
-                            <p className="text-[10px] text-zinc-500 font-sans">Select a pre-baked personality prefix to alter the tone of the AI responses.</p>
+                            <p className="text-[11px] text-zinc-500 font-sans">Select a pre-baked personality prefix to alter the tone of the AI responses.</p>
                           </div>
 
                           {/* Top-P */}
@@ -2261,7 +2549,7 @@ export function SettingsModal() {
                             rows={3}
                             className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-primary resize-none"
                           />
-                          <p className="text-[10px] text-zinc-500 leading-normal">
+                          <p className="text-[11px] text-zinc-500 leading-normal">
                             This prompt acts as the baseline for new chat sessions. You can also override this on individual sessions via the widget drawer.
                           </p>
                         </div>
@@ -2342,7 +2630,7 @@ export function SettingsModal() {
                               <div key={name} className="flex justify-between items-center bg-black/30 border border-white/5 p-3 rounded-lg text-xs font-mono">
                                 <div className="overflow-hidden">
                                   <span className="font-bold text-zinc-200 block truncate">{name}</span>
-                                  <span className="text-[10px] text-zinc-500 font-sans">T={prof.aiChatTemperature} | MaxT={prof.aiChatMaxTokens === 0 ? "0" : prof.aiChatMaxTokens} | P={prof.aiChatPersonality}</span>
+                                  <span className="text-[11px] text-zinc-500 font-sans">T={prof.aiChatTemperature} | MaxT={prof.aiChatMaxTokens === 0 ? "0" : prof.aiChatMaxTokens} | P={prof.aiChatPersonality}</span>
                                 </div>
                                 <div className="flex gap-2 shrink-0">
                                   <button
@@ -2383,6 +2671,684 @@ export function SettingsModal() {
                         ) : (
                           <div className="text-center italic text-xs text-zinc-500 py-4 font-mono">No custom profiles saved yet</div>
                         )}
+                      </div>
+
+                      {/* AI & Voice Assistant PTT Settings */}
+                      <div className="space-y-4 bg-zinc-950/40 p-5 rounded-xl border border-white/5">
+                        <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-2 border-b border-white/10 pb-2">
+                          <Zap size={14} className="text-amber-450" /> Voice Assistant & PTT Settings
+                        </h3>
+                        <div className="space-y-4">
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-zinc-300 font-medium">AI Response Word Limit</span>
+                              <span className="text-primary font-mono font-bold">{localPreferences.pttBrevityLimit} words</span>
+                            </div>
+                            <input 
+                              type="range" min="50" max="800" step="10"
+                              value={localPreferences.pttBrevityLimit}
+                              onChange={(e) => setLocalPreferences(s => ({ ...s, pttBrevityLimit: parseInt(e.target.value) }))}
+                              className="w-full accent-primary"
+                            />
+                            <p className="text-xs text-zinc-500 font-sans">Controls the maximum length of the AI assistant's responses.</p>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Custom System Prompt Override</label>
+                            <textarea 
+                              value={localPreferences.systemPromptOverride}
+                              onChange={(e) => setLocalPreferences(s => ({ ...s, systemPromptOverride: e.target.value }))}
+                              placeholder="e.g. Act as a tactical military hardware computer. Keep answers under 2 sentences and focus on metrics."
+                              rows={3}
+                              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-primary resize-none"
+                            />
+                            <p className="text-xs text-zinc-500">Overrides the default agent prompt template. Useful for roleplays, brevity constraints or custom integrations.</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Layout Configuration */}
+                      <div className="space-y-4 bg-zinc-950/40 p-5 rounded-xl border border-white/5">
+                        <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-2 border-b border-white/10 pb-2 font-mono">
+                          <Sliders size={14} className="text-accent-green" /> Layout Configuration
+                        </h3>
+                        <div className="space-y-3">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider font-mono">Sidebar & Drawer Layout Mode</label>
+                            <select
+                              value={localPreferences.aiChatLayoutMode}
+                              onChange={(e) => setLocalPreferences(s => ({ ...s, aiChatLayoutMode: e.target.value as 'overlay' | 'push' }))}
+                              className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2 text-xs text-zinc-200 focus:outline-none cursor-pointer font-mono"
+                            >
+                              <option value="overlay">OVERLAY (Floating on top of chat - Recommended)</option>
+                              <option value="push">PUSH (Pushes chat container to the side)</option>
+                            </select>
+                            <p className="text-[11px] text-zinc-500 font-sans">
+                              Specify whether the chat sessions list and session settings drawer should overlap the chat screen or adjust its width.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Custom AI Tones */}
+                      <div className="space-y-4 bg-zinc-950/40 p-5 rounded-xl border border-white/5">
+                        <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-2 border-b border-white/10 pb-2 font-mono">
+                          <Palette size={14} className="text-accent-amber" /> Custom AI Response Tones / Personalities
+                        </h3>
+                        <p className="text-xs text-zinc-400 leading-relaxed font-sans">
+                          Create custom personalities and tones that can be applied to any active chat session.
+                        </p>
+                        <div className="space-y-3">
+                          <div className="flex gap-2">
+                            <input 
+                              type="text"
+                              placeholder="Tone Name (e.g. JARVIS, DRILL_SERGEANT)..."
+                              id="new-tone-name"
+                              className="flex-1 bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-primary font-mono uppercase"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const nameEl = document.getElementById('new-tone-name') as HTMLInputElement;
+                                const textEl = document.getElementById('new-tone-text') as HTMLTextAreaElement;
+                                if (!nameEl || !nameEl.value.trim() || !textEl || !textEl.value.trim()) {
+                                  showToast("⚠️ Both Tone Name and Instructions are required");
+                                  return;
+                                }
+                                const name = nameEl.value.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+                                const text = textEl.value.trim();
+                                const newTone = { id: 'tone_' + Date.now(), name, text };
+                                setLocalPreferences(s => ({
+                                  ...s,
+                                  customTones: [...(s.customTones || []), newTone]
+                                }));
+                                nameEl.value = '';
+                                textEl.value = '';
+                                showToast(`✓ Tone "${name}" added`);
+                              }}
+                              className="bg-accent-amber/15 border border-accent-amber/35 text-accent-amber px-4 py-1.5 rounded text-xs font-mono font-bold hover:bg-accent-amber hover:text-black transition-colors cursor-pointer shrink-0"
+                            >
+                              Add Tone
+                            </button>
+                          </div>
+                          <textarea 
+                            placeholder="Enter the tone system instructions here... (e.g. Respond with maximum enthusiasm and use computer science analogies.)"
+                            id="new-tone-text"
+                            rows={2}
+                            className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-primary resize-none"
+                          />
+                          
+                          {localPreferences.customTones && localPreferences.customTones.length > 0 ? (
+                            <div className="grid grid-cols-1 gap-2 pt-2">
+                              {localPreferences.customTones.map((tone: CustomTone) => (
+                                <div key={tone.id} className="bg-black/30 border border-white/5 p-3 rounded-lg text-xs font-mono space-y-1.5">
+                                  <div className="flex justify-between items-center">
+                                    <span className="font-bold text-accent-amber">{tone.name}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setLocalPreferences(s => ({
+                                          ...s,
+                                          customTones: s.customTones.filter((t: CustomTone) => t.id !== tone.id)
+                                        }));
+                                        showToast(`🗑️ Tone "${tone.name}" deleted`);
+                                      }}
+                                      className="p-1 hover:bg-red-500/10 text-zinc-500 hover:text-red-400 rounded transition-colors cursor-pointer flex items-center justify-center"
+                                    >
+                                      <Trash2 size={12} />
+                                    </button>
+                                  </div>
+                                  <p className="text-[11px] text-zinc-400 whitespace-pre-wrap leading-normal font-sans italic">{tone.text}</p>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-center italic text-xs text-zinc-500 py-2 font-mono">No custom tones defined yet</div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Custom System Prompts */}
+                      <div className="space-y-4 bg-zinc-950/40 p-5 rounded-xl border border-white/5">
+                        <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-2 border-b border-white/10 pb-2 font-mono">
+                          <Save size={14} className="text-primary" /> Custom System Prompts
+                        </h3>
+                        <p className="text-xs text-zinc-400 leading-relaxed font-sans">
+                          Create reusable system prompt templates that can be selected in any active chat session.
+                        </p>
+                        <div className="space-y-3">
+                          <div className="flex gap-2">
+                            <input 
+                              type="text"
+                              placeholder="Prompt Title (e.g. Linux Terminal, Math Tutor)..."
+                              id="new-prompt-title"
+                              className="flex-1 bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-primary font-mono"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const titleEl = document.getElementById('new-prompt-title') as HTMLInputElement;
+                                const textEl = document.getElementById('new-prompt-text') as HTMLTextAreaElement;
+                                if (!titleEl || !titleEl.value.trim() || !textEl || !textEl.value.trim()) {
+                                  showToast("⚠️ Both Prompt Title and Content are required");
+                                  return;
+                                }
+                                const name = titleEl.value.trim();
+                                const text = textEl.value.trim();
+                                const newPrompt = { id: 'prompt_' + Date.now(), name, text };
+                                setLocalPreferences(s => ({
+                                  ...s,
+                                  customSystemPrompts: [...(s.customSystemPrompts || []), newPrompt]
+                                }));
+                                titleEl.value = '';
+                                textEl.value = '';
+                                showToast(`✓ Prompt "${name}" added`);
+                              }}
+                              className="bg-primary/15 border border-primary/35 text-primary px-4 py-1.5 rounded text-xs font-mono font-bold hover:bg-primary hover:text-black transition-colors cursor-pointer shrink-0"
+                            >
+                              Add Template
+                            </button>
+                          </div>
+                          <textarea 
+                            placeholder="Enter the system prompt instructions... (e.g. Act as a Linux terminal. I will type commands and you will respond with what the terminal should show.)"
+                            id="new-prompt-text"
+                            rows={3}
+                            className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-primary resize-none"
+                          />
+                          
+                          {localPreferences.customSystemPrompts && localPreferences.customSystemPrompts.length > 0 ? (
+                            <div className="grid grid-cols-1 gap-2 pt-2">
+                              {localPreferences.customSystemPrompts.map((prompt: CustomSystemPrompt) => (
+                                <div key={prompt.id} className="bg-black/30 border border-white/5 p-3 rounded-lg text-xs font-mono space-y-1.5">
+                                  <div className="flex justify-between items-center">
+                                    <span className="font-bold text-zinc-200">{prompt.name}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setLocalPreferences(s => ({
+                                          ...s,
+                                          customSystemPrompts: s.customSystemPrompts.filter((p: CustomSystemPrompt) => p.id !== prompt.id)
+                                        }));
+                                        showToast(`🗑️ Prompt "${prompt.name}" deleted`);
+                                      }}
+                                      className="p-1 hover:bg-red-500/10 text-zinc-500 hover:text-red-400 rounded transition-colors cursor-pointer flex items-center justify-center"
+                                    >
+                                      <Trash2 size={12} />
+                                    </button>
+                                  </div>
+                                  <p className="text-[11px] text-zinc-400 whitespace-pre-wrap leading-normal font-sans italic">{prompt.text}</p>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-center italic text-xs text-zinc-500 py-2 font-mono">No custom templates defined yet</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {activeTab === 'mcp_skills' && (
+                    <div className="space-y-6 animate-fadeIn">
+                      
+                      {/* WIP Notice */}
+                      <div className="bg-accent-amber/10 border border-accent-amber/20 rounded-xl p-4 flex items-start gap-3 w-full">
+                        <AlertTriangle className="text-accent-amber shrink-0 mt-0.5" size={16} />
+                        <div className="space-y-1 text-xs font-sans">
+                          <span className="font-bold text-zinc-200 block">Experimental Feature / Work in Progress</span>
+                          <p className="text-zinc-400 leading-relaxed font-sans">
+                            Model Context Protocol (MCP) connections and Custom HUD Skills templates are currently in an experimental phase. Some endpoints may fail to connect or execute as expected. Feedback and suggestions are highly welcome!
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Top Action Header */}
+                      <div className="flex flex-col items-start gap-3.5 bg-zinc-950/40 p-5 rounded-xl border border-white/5 w-full">
+                        <div className="space-y-1">
+                          <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-2 font-mono">
+                            <Cpu size={14} className="text-primary" /> Global MCP & HUD Skills Baselines
+                          </h3>
+                          <p className="text-xs text-zinc-400 leading-relaxed font-sans">
+                            Pre-configure Model Context Protocol (MCP) server endpoints and custom system skill instructions. These act as default templates automatically loaded into all new chat sessions.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleOpenAppData}
+                          className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 hover:bg-white/10 text-zinc-200 hover:text-white rounded-lg text-xs font-mono font-bold transition-all shadow-md cursor-pointer shrink-0"
+                        >
+                          📁 Open App Configuration Folder
+                        </button>
+                      </div>
+
+                      {/* Global HUD Skills CRUD Manager */}
+                      <div className="space-y-4 bg-zinc-950/40 p-5 rounded-xl border border-white/5">
+                        <h3 className="text-[12px] font-bold text-zinc-200 uppercase tracking-widest flex items-center gap-2 border-b border-white/10 pb-2 font-mono">
+                          <Zap size={14} className="text-accent-amber" /> Global HUD Skills Templates
+                        </h3>
+                        <p className="text-xs text-zinc-400 leading-relaxed font-sans">
+                          Define custom skills (system prompts/instructions) that the AI can trigger/adopt during chat sessions.
+                        </p>
+
+                        <div className="space-y-3">
+                          <div className="flex flex-col gap-3">
+                            <div className="space-y-1">
+                              <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider font-mono">Skill Name</label>
+                              <input 
+                                type="text"
+                                placeholder="e.g. Flight Simulator Assist..."
+                                value={newSkillName}
+                                onChange={(e) => setNewSkillName(e.target.value)}
+                                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-primary"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider font-mono">Short Description / Purpose</label>
+                              <input 
+                                type="text"
+                                placeholder="e.g. Provides telemetry translations..."
+                                value={newSkillDesc}
+                                onChange={(e) => setNewSkillDesc(e.target.value)}
+                                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-primary"
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-1">
+                            <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider font-mono">System Prompt Instructions</label>
+                            <textarea 
+                              placeholder="Describe how the AI should execute this skill..."
+                              value={newSkillInstructions}
+                              onChange={(e) => setNewSkillInstructions(e.target.value)}
+                              rows={3}
+                              className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3.5 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-primary resize-y min-h-[80px]"
+                            />
+                          </div>
+
+                          <div className="flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!newSkillName.trim() || !newSkillInstructions.trim()) {
+                                  showToast("⚠️ Skill Name and Instructions are required");
+                                  return;
+                                }
+                                const newSkill = {
+                                  id: 'skill_' + Date.now(),
+                                  name: newSkillName.trim(),
+                                  description: newSkillDesc.trim(),
+                                  instructions: newSkillInstructions.trim(),
+                                  isActive: true
+                                };
+                                setLocalPreferences(s => ({
+                                  ...s,
+                                  globalCustomSkills: [...(s.globalCustomSkills || []), newSkill]
+                                }));
+                                setNewSkillName('');
+                                setNewSkillDesc('');
+                                setNewSkillInstructions('');
+                                showToast(`✓ Skill "${newSkill.name}" created`);
+                              }}
+                              className="bg-accent-amber/15 border border-accent-amber/35 text-accent-amber px-4 py-2 rounded-lg text-xs font-mono font-bold hover:bg-accent-amber hover:text-black transition-colors cursor-pointer"
+                            >
+                              Add Global Skill Template
+                            </button>
+                          </div>
+
+                          {localPreferences.globalCustomSkills && localPreferences.globalCustomSkills.length > 0 ? (
+                            <div className="grid grid-cols-1 gap-3 pt-2">
+                              {localPreferences.globalCustomSkills.map((skill: CustomSkill) => (
+                                <div key={skill.id} className="bg-black/30 border border-white/5 p-4 rounded-xl text-xs font-mono space-y-3 relative overflow-hidden flex flex-col justify-between w-full min-w-0">
+                                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 w-full min-w-0">
+                                    <div className="space-y-1 flex-1 min-w-0">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <span className="font-bold text-accent-amber text-xs font-mono truncate max-w-full">{skill.name}</span>
+                                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${
+                                          skill.isActive 
+                                            ? 'bg-accent-green/10 text-accent-green border-accent-green/20' 
+                                            : 'bg-zinc-800/40 text-zinc-500 border-zinc-700/40'
+                                        }`}>
+                                          {skill.isActive ? 'Active' : 'Inactive'}
+                                        </span>
+                                      </div>
+                                      {skill.description && <p className="text-xs text-zinc-400 font-sans leading-relaxed truncate max-w-full">{skill.description}</p>}
+                                    </div>
+                                    <div className="flex items-center gap-3 shrink-0 self-end sm:self-auto">
+                                      <label className="relative inline-flex items-center cursor-pointer">
+                                        <input 
+                                          type="checkbox" className="sr-only peer"
+                                          checked={skill.isActive}
+                                          onChange={(e) => {
+                                            const updated = localPreferences.globalCustomSkills.map((s: CustomSkill) => 
+                                              s.id === skill.id ? { ...s, isActive: e.target.checked } : s
+                                            );
+                                            setLocalPreferences(prev => ({ ...prev, globalCustomSkills: updated }));
+                                          }}
+                                        />
+                                        <div className="w-9 h-5 bg-zinc-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-accent-green"></div>
+                                      </label>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setLocalPreferences(s => ({
+                                            ...s,
+                                            globalCustomSkills: s.globalCustomSkills.filter((s_: CustomSkill) => s_.id !== skill.id)
+                                          }));
+                                          showToast(`🗑️ Skill "${skill.name}" deleted`);
+                                        }}
+                                        className="p-1.5 hover:bg-red-500/10 text-zinc-500 hover:text-red-400 rounded-lg transition-colors cursor-pointer flex items-center justify-center border border-white/5 hover:border-red-500/20"
+                                      >
+                                        <Trash2 size={13} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                  <div className="space-y-1 min-w-0">
+                                    <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider font-mono">Prompt Instructions</span>
+                                    <div className="bg-black/40 p-3 rounded-lg border border-white/5 text-[13px] text-zinc-100 font-mono min-h-[120px] max-h-[350px] overflow-auto resize-y custom-scrollbar whitespace-pre-wrap break-words leading-relaxed w-full block">
+                                      {skill.instructions}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-center italic text-xs text-zinc-500 py-4 font-mono border border-dashed border-white/5 rounded-xl">No custom global skills configured yet.</div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Global Custom MCP Servers Manager */}
+                      <div className="space-y-4 bg-zinc-950/40 p-5 rounded-xl border border-white/5">
+                        <h3 className="text-[12px] font-bold text-zinc-200 uppercase tracking-widest flex items-center gap-2 border-b border-white/10 pb-2 font-mono">
+                          <Cpu size={14} className="text-primary" /> Global Model Context Protocol (MCP) Connections
+                        </h3>
+                        <p className="text-xs text-zinc-400 leading-relaxed font-sans">
+                          Define external tools/MCP server endpoints (Node executable, Python commands, binary executables).
+                        </p>
+
+                        <div className="space-y-3">
+                          {/* Mode Selector */}
+                          <div className="flex gap-2 p-0.5 bg-black/40 border border-white/5 rounded-lg w-fit shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setMcpInputMode('fields')}
+                              className={`px-3 py-1 rounded text-xs font-mono transition-all cursor-pointer ${
+                                mcpInputMode === 'fields'
+                                  ? 'bg-accent-amber/20 text-accent-amber border border-accent-amber/35 font-bold shadow-[0_0_10px_rgba(255,176,0,0.15)]'
+                                  : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
+                              }`}
+                            >
+                              Standard Fields
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setMcpInputMode('json')}
+                              className={`px-3 py-1 rounded text-xs font-mono transition-all cursor-pointer ${
+                                mcpInputMode === 'json'
+                                  ? 'bg-accent-amber/20 text-accent-amber border border-accent-amber/35 font-bold shadow-[0_0_10px_rgba(255,176,0,0.15)]'
+                                  : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
+                              }`}
+                            >
+                              JSON Config
+                            </button>
+                          </div>
+
+                          {mcpInputMode === 'json' ? (
+                            <div className="space-y-1">
+                              <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider font-mono">MCP Configuration JSON</label>
+                              <textarea
+                                rows={6}
+                                placeholder={`Paste Claude Desktop config, OpenCode config or single server JSON.\nExamples:\n{\n  "command": "node",\n  "args": ["path/to/server.js"]\n}\nOR\n{\n  "my-mcp-server": {\n    "command": "python",\n    "args": ["server.py"]\n  }\n}`}
+                                value={mcpJsonInput}
+                                onChange={(e) => setMcpJsonInput(e.target.value)}
+                                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-primary resize-y min-h-[140px]"
+                              />
+                            </div>
+                          ) : (
+                            <div className="flex flex-col gap-3">
+                              <div className="space-y-1">
+                                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider font-mono">Server Name</label>
+                                <input 
+                                  type="text"
+                                  placeholder="e.g. Filesystem server..."
+                                  value={newMcpName}
+                                  onChange={(e) => setNewMcpName(e.target.value)}
+                                  className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-primary"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider font-mono">Executable command (binary / script)</label>
+                                <input 
+                                  type="text"
+                                  placeholder="e.g. node, npx, python, git-mcp.exe..."
+                                  value={newMcpCommand}
+                                  onChange={(e) => setNewMcpCommand(e.target.value)}
+                                  className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-primary"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider font-mono">Arguments (space separated)</label>
+                                <input 
+                                  type="text"
+                                  placeholder="e.g. @modelcontextprotocol/server-filesystem C:\\Users"
+                                  value={newMcpArgs}
+                                  onChange={(e) => setNewMcpArgs(e.target.value)}
+                                  className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-primary"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider font-mono">Environment variables (JSON format)</label>
+                                <input 
+                                  type="text"
+                                  placeholder='e.g. {"API_KEY": "secret_abc123"}'
+                                  value={newMcpEnv}
+                                  onChange={(e) => setNewMcpEnv(e.target.value)}
+                                  className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-primary"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider font-mono">Server Description / Notes</label>
+                                <input 
+                                  type="text"
+                                  placeholder="e.g. Connects filesystem to Claude Sonnet in VectorHUD..."
+                                  value={newMcpDesc}
+                                  onChange={(e) => setNewMcpDesc(e.target.value)}
+                                  className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-zinc-200 focus:outline-none focus:border-primary"
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="flex flex-col sm:flex-row justify-end gap-2.5">
+                            <button
+                              type="button"
+                              disabled={isTestingNewMcp}
+                              onClick={handleTestNewMcp}
+                              className="px-4 py-2 border border-white/10 hover:border-white/20 bg-white/5 rounded-lg text-xs font-mono font-bold text-zinc-300 hover:text-white transition-colors cursor-pointer flex items-center gap-1.5"
+                            >
+                              {isTestingNewMcp ? (
+                                <>
+                                  <RefreshCw size={12} className="animate-spin text-accent-amber" /> Testing...
+                                </>
+                              ) : (
+                                "Test Command Connection"
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                let name = '';
+                                let command = '';
+                                let args = '';
+                                let env = '';
+                                let description = '';
+
+                                if (mcpInputMode === 'json') {
+                                  if (!mcpJsonInput.trim()) {
+                                    showToast("⚠️ Paste MCP JSON configuration first");
+                                    return;
+                                  }
+                                  try {
+                                    const parsed = parseMcpJson(mcpJsonInput);
+                                    name = parsed.name;
+                                    command = parsed.command;
+                                    args = parsed.args;
+                                    env = parsed.env;
+                                    description = parsed.description;
+                                  } catch (e: any) {
+                                    showToast(`⚠️ JSON parse error: ${e.message}`);
+                                    return;
+                                  }
+                                } else {
+                                  if (!newMcpName.trim() || !newMcpCommand.trim()) {
+                                    showToast("⚠️ Server Name and Executable Command are required");
+                                    return;
+                                  }
+                                  if (newMcpEnv.trim()) {
+                                    try {
+                                      JSON.parse(newMcpEnv);
+                                    } catch (e) {
+                                      showToast("⚠️ Environment variables must be a valid JSON object or empty");
+                                      return;
+                                    }
+                                  }
+                                  name = newMcpName.trim();
+                                  command = newMcpCommand.trim();
+                                  args = newMcpArgs.trim();
+                                  env = newMcpEnv.trim();
+                                  description = newMcpDesc.trim();
+                                }
+
+                                const newMcp = {
+                                  id: 'mcp_' + Date.now(),
+                                  name,
+                                  description,
+                                  command,
+                                  args,
+                                  env,
+                                  isActive: true,
+                                  tools: []
+                                };
+                                setLocalPreferences(s => ({
+                                  ...s,
+                                  globalCustomMcps: [...(s.globalCustomMcps || []), newMcp]
+                                }));
+                                setNewMcpName('');
+                                setNewMcpDesc('');
+                                setNewMcpCommand('');
+                                setNewMcpArgs('');
+                                setNewMcpEnv('');
+                                setMcpJsonInput('');
+                                setNewMcpTestResult(null);
+                                showToast(`✓ MCP Server "${newMcp.name}" registered`);
+                              }}
+                              className="bg-primary/15 border border-primary/35 text-primary px-4 py-2 rounded-lg text-xs font-mono font-bold hover:bg-primary hover:text-black transition-colors cursor-pointer"
+                            >
+                              Add Global MCP Connection
+                            </button>
+                          </div>
+
+                          {newMcpTestResult && (
+                            <div className={`p-3 rounded-lg border text-xs font-mono whitespace-pre-wrap leading-relaxed break-all ${
+                              newMcpTestResult.success 
+                                ? 'bg-accent-green/10 border-accent-green/30 text-accent-green' 
+                                : 'bg-red-500/10 border-red-500/30 text-red-400'
+                            }`}>
+                              <span className="font-bold block tracking-wider uppercase mb-1 font-mono">
+                                {newMcpTestResult.success ? '✓ Connection Check Output' : '✗ Connection Check Error'}
+                              </span>
+                              {newMcpTestResult.message}
+                            </div>
+                          )}
+
+                          {localPreferences.globalCustomMcps && localPreferences.globalCustomMcps.length > 0 ? (
+                            <div className="grid grid-cols-1 gap-3 pt-2 animate-fadeIn">
+                              {localPreferences.globalCustomMcps.map((mcp: CustomMcp) => {
+                                const isTesting = testingMcpId === mcp.id;
+                                const testRes = mcpTestResults[mcp.id];
+                                return (
+                                  <div key={mcp.id} className="bg-black/30 border border-white/5 p-4 rounded-xl text-xs font-mono space-y-3 relative overflow-hidden flex flex-col justify-between animate-fadeIn w-full min-w-0">
+                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 w-full min-w-0">
+                                      <div className="space-y-1 flex-1 min-w-0">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <span className="font-bold text-primary text-xs font-mono truncate max-w-full">{mcp.name}</span>
+                                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${
+                                            mcp.isActive 
+                                              ? 'bg-accent-green/10 text-accent-green border-accent-green/20' 
+                                              : 'bg-zinc-800/40 text-zinc-500 border-zinc-700/40'
+                                          }`}>
+                                            {mcp.isActive ? 'Active' : 'Inactive'}
+                                          </span>
+                                        </div>
+                                        {mcp.description && <p className="text-xs text-zinc-400 font-sans leading-relaxed truncate max-w-full">{mcp.description}</p>}
+                                      </div>
+                                      <div className="flex items-center gap-3 shrink-0 self-end sm:self-auto">
+                                        <button
+                                          type="button"
+                                          disabled={isTesting}
+                                          onClick={() => handleTestMcp(mcp.id, mcp.command, mcp.args)}
+                                          className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-xs text-zinc-300 hover:text-white rounded-lg border border-white/10 hover:border-white/20 transition-all flex items-center gap-1.5 cursor-pointer font-bold font-mono"
+                                        >
+                                          {isTesting ? (
+                                            <>
+                                              <RefreshCw size={11} className="animate-spin text-accent-amber font-mono" /> Testing
+                                            </>
+                                          ) : (
+                                            "Test"
+                                          )}
+                                        </button>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                          <input 
+                                            type="checkbox" className="sr-only peer"
+                                            checked={mcp.isActive}
+                                            onChange={(e) => {
+                                              const updated = localPreferences.globalCustomMcps.map((m: CustomMcp) => 
+                                                m.id === mcp.id ? { ...m, isActive: e.target.checked } : m
+                                              );
+                                              setLocalPreferences(prev => ({ ...prev, globalCustomMcps: updated }));
+                                            }}
+                                          />
+                                          <div className="w-9 h-5 bg-zinc-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-accent-green font-mono"></div>
+                                        </label>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setLocalPreferences(s => ({
+                                              ...s,
+                                              globalCustomMcps: s.globalCustomMcps.filter((m: CustomMcp) => m.id !== mcp.id)
+                                            }));
+                                            showToast(`🗑️ MCP Server "${mcp.name}" deleted`);
+                                          }}
+                                          className="p-1.5 hover:bg-red-500/10 text-zinc-500 hover:text-red-400 rounded-lg transition-colors cursor-pointer flex items-center justify-center border border-white/5 hover:border-red-500/20"
+                                        >
+                                          <Trash2 size={13} />
+                                        </button>
+                                      </div>
+                                    </div>
+                                    
+                                    <div className="space-y-1 text-xs text-zinc-400 bg-zinc-950 p-3 rounded-lg border border-white/5 font-mono break-all min-w-0">
+                                      <div className="flex items-start gap-1"><span className="text-zinc-500 font-bold shrink-0 uppercase tracking-wider text-[10px] w-20 font-mono">Command:</span><span className="text-zinc-200">{mcp.command}</span></div>
+                                      <div className="flex items-start gap-1"><span className="text-zinc-500 font-bold shrink-0 uppercase tracking-wider text-[10px] w-20 font-mono">Args:</span><span className="text-zinc-200">{mcp.args || 'None'}</span></div>
+                                      {mcp.env && <div className="flex items-start gap-1"><span className="text-zinc-500 font-bold shrink-0 uppercase tracking-wider text-[10px] w-20 font-mono">Env:</span><span className="text-zinc-200">{mcp.env}</span></div>}
+                                    </div>
+ 
+                                    {testRes && (
+                                      <div className={`p-2.5 rounded-lg border text-xs font-mono whitespace-pre-wrap leading-relaxed break-all w-full min-w-0 ${
+                                        testRes.success 
+                                          ? 'bg-accent-green/10 border-accent-green/20 text-accent-green' 
+                                          : 'bg-red-500/10 border-red-500/20 text-red-400'
+                                      }`}>
+                                        {testRes.message}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="text-center italic text-xs text-zinc-555 py-4 font-mono border border-dashed border-white/5 rounded-xl">No custom global MCP servers registered yet.</div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}
@@ -2436,7 +3402,7 @@ export function SettingsModal() {
                                 className="w-full accent-primary"
                               />
                             </div>
-                            <p className="text-[10px] text-zinc-500 md:col-span-2 mt-1">
+                            <p className="text-[11px] text-zinc-500 md:col-span-2 mt-1">
                               Note: CPU temperature monitoring on Windows requires running the application as Administrator. GPU monitoring is supported without admin rights.
                             </p>
                           </div>
@@ -2488,7 +3454,7 @@ export function SettingsModal() {
                                 <option value="auto">Auto (DXGI - GPU Direct)</option>
                                 <option value="gdi">Software (GDI - CPU Fallback)</option>
                               </select>
-                              <p className="text-[10px] text-zinc-500">DXGI requires direct hardware rendering support. GDI works on all laptops/systems.</p>
+                              <p className="text-[11px] text-zinc-500">DXGI requires direct hardware rendering support. GDI works on all laptops/systems.</p>
                             </div>
 
                             <div className="space-y-1.5">
@@ -2503,7 +3469,7 @@ export function SettingsModal() {
                                 <option value="amf">AMD (AMF - GPU)</option>
                                 <option value="qsv">Intel (QSV - GPU)</option>
                               </select>
-                              <p className="text-[10px] text-zinc-500">Select Software if you do not have a discrete NVIDIA/AMD/Intel graphics card.</p>
+                              <p className="text-[11px] text-zinc-500">Select Software if you do not have a discrete NVIDIA/AMD/Intel graphics card.</p>
                             </div>
                           </div>
 
@@ -2696,8 +3662,8 @@ export function SettingsModal() {
                               const digit = slot === 10 ? 0 : slot;
                               return (
                                 <div key={slot} className="bg-black/30 border border-white/5 p-2 rounded-lg text-center flex flex-col items-center justify-center gap-1 hover:border-white/10 transition-colors">
-                                  <span className="text-[10px] font-bold text-zinc-500 font-mono">SLOT {slot}</span>
-                                  <span className="text-[10.5px] font-mono text-accent-green font-bold bg-accent-green/5 border border-accent-green/20 px-1.5 py-0.5 rounded shadow-[0_0_8px_rgba(74,246,38,0.05)]">
+                                  <span className="text-[11px] font-bold text-zinc-500 font-mono">SLOT {slot}</span>
+                                  <span className="text-[11px] font-mono text-accent-green font-bold bg-accent-green/5 border border-accent-green/20 px-1.5 py-0.5 rounded shadow-[0_0_8px_rgba(74,246,38,0.05)]">
                                     CTRL + ALT + {digit}
                                   </span>
                                 </div>
@@ -3062,21 +4028,41 @@ export function SettingsModal() {
                       </div>
 
                       {/* Hard reset controls */}
-                      <div className="bg-red-950/20 border border-red-500/20 rounded-xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div>
-                          <h4 className="text-xs font-bold text-red-400 uppercase tracking-wider flex items-center gap-1.5">
-                            <AlertTriangle size={14} /> Danger Zone / Revert Presets
-                          </h4>
-                          <p className="text-xs text-zinc-500 mt-1">
-                            Resets all local coordinate positions, keyboard shortcuts, themes and widget sliders back to defaults.
-                          </p>
+                      <div className="space-y-4">
+                        <div className="bg-red-950/20 border border-red-500/20 rounded-xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                          <div>
+                            <h4 className="text-xs font-bold text-red-400 uppercase tracking-wider flex items-center gap-1.5">
+                              <AlertTriangle size={14} /> Danger Zone / Revert Presets
+                            </h4>
+                            <p className="text-xs text-zinc-500 mt-1">
+                              Resets all local coordinate positions, keyboard shortcuts, themes and widget sliders back to defaults.
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => setShowConfirmReset(true)}
+                            className="px-4 py-2 border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-lg text-xs font-semibold tracking-wider uppercase transition-colors cursor-pointer self-start md:self-auto"
+                          >
+                            Reset Settings
+                          </button>
                         </div>
-                        <button
-                          onClick={() => setShowConfirmReset(true)}
-                          className="px-4 py-2 border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-lg text-xs font-semibold tracking-wider uppercase transition-colors cursor-pointer self-start md:self-auto"
-                        >
-                          Reset Settings
-                        </button>
+
+                        <div className="bg-red-950/20 border border-red-500/20 rounded-xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                          <div>
+                            <h4 className="text-xs font-bold text-red-400 uppercase tracking-wider flex items-center gap-1.5">
+                              <AlertTriangle size={14} /> Danger Zone / Reset Database
+                            </h4>
+                            <p className="text-xs text-zinc-500 mt-1">
+                              Wipes the SQLite database file on disk and relaunches the app. Rebuilds schema from scratch to resolve schema/migration conflicts.
+                            </p>
+                          </div>
+                          <button
+                            onClick={handleResetDatabase}
+                            disabled={isResettingDb}
+                            className="px-4 py-2 bg-red-600/20 border border-red-500/30 text-red-400 hover:bg-red-600/30 rounded-lg text-xs font-semibold tracking-wider uppercase transition-colors cursor-pointer self-start md:self-auto disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {isResettingDb ? 'Resetting...' : 'Reset Database'}
+                          </button>
+                        </div>
                       </div>
 
                     </div>
